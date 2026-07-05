@@ -1,0 +1,18 @@
+import { cn } from "@/lib/utils";
+
+function Skeleton({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        "shimmer rounded-md bg-surface-2/80",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export { Skeleton };

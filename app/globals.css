@@ -1,0 +1,345 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ----------------------------------------------------------------------------
+   LLM Atlas — "Cartographic Intelligence" design tokens
+   Dark-first. RGB channel triplets so Tailwind `<alpha-value>` works.
+---------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    /* Brand constants — identical across themes (used for gradients on fills) */
+    --cyan: 34 211 238; /* #22D3EE */
+    --violet: 124 58 237; /* #7C3AED */
+    --amber: 245 166 35; /* #F5A623 */
+
+    /* Light theme surfaces */
+    --background: 248 249 252;
+    --surface: 255 255 255;
+    --surface-2: 241 243 248;
+    --surface-3: 232 235 242;
+    --card: 255 255 255;
+    --card-foreground: 12 16 24;
+    --popover: 255 255 255;
+    --popover-foreground: 12 16 24;
+
+    --foreground: 12 16 24;
+    --muted: 241 243 248;
+    --muted-foreground: 90 97 114;
+
+    --border: 226 229 238;
+    --border-strong: 203 208 221;
+    --input: 222 226 235;
+    --ring: 8 145 178;
+
+    --primary: 8 145 178; /* readable cyan on light */
+    --primary-foreground: 255 255 255;
+    --accent: 124 58 237; /* violet */
+    --accent-foreground: 255 255 255;
+
+    --success: 16 159 110;
+    --warning: 176 124 8;
+    --danger: 213 58 62;
+
+    --radius: 0.85rem;
+  }
+
+  .dark {
+    --background: 10 11 15; /* #0A0B0F */
+    --surface: 14 16 24; /* #0E1018 */
+    --surface-2: 20 22 31; /* #14161F */
+    --surface-3: 27 30 41; /* #1B1E29 */
+    --card: 14 16 24;
+    --card-foreground: 231 233 238;
+    --popover: 18 20 29;
+    --popover-foreground: 231 233 238;
+
+    --foreground: 231 233 238; /* #E7E9EE */
+    --muted: 23 26 36;
+    --muted-foreground: 139 145 163; /* #8B91A3 */
+
+    --border: 34 38 51; /* ~white @ 6% on ink */
+    --border-strong: 52 57 73;
+    --input: 40 44 59;
+    --ring: 34 211 238;
+
+    --primary: 34 211 238; /* bright cyan */
+    --primary-foreground: 5 12 18;
+    --accent: 167 139 250; /* lighter violet for dark text */
+    --accent-foreground: 12 14 22;
+
+    --success: 52 199 153;
+    --warning: 234 179 8;
+    --danger: 244 96 96;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(var(--cyan) / 0.25);
+    color: rgb(var(--foreground));
+  }
+
+  /* Focus rings — visible & on-brand */
+  :focus-visible {
+    outline: 2px solid rgb(var(--ring) / 0.7);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border-strong)) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--border-strong) / 0.8);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--muted-foreground) / 0.6);
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* Gradient text — the "intelligence" signal */
+  .text-gradient {
+    @apply bg-gradient-primary bg-clip-text text-transparent;
+  }
+
+  /* Glassmorphism — only where it earns its place */
+  .glass {
+    background: rgb(var(--surface) / 0.6);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+  }
+  .dark .glass {
+    background: rgb(var(--surface) / 0.55);
+  }
+
+  /* Hairline surface card */
+  .surface-card {
+    @apply rounded-2xl border border-border bg-surface shadow-glow;
+  }
+
+  /* Animated gradient border (for primary CTAs / featured cards) */
+  .gradient-border {
+    position: relative;
+    background: rgb(var(--surface));
+    border-radius: var(--radius);
+  }
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      120deg,
+      rgb(var(--cyan)),
+      rgb(var(--violet)),
+      rgb(var(--cyan))
+    );
+    background-size: 200% 200%;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: border-flow 5s ease infinite;
+    pointer-events: none;
+  }
+
+  /* Faint cartographic grid backdrop */
+  .bg-grid-fade {
+    background-image: theme("backgroundImage.grid");
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(
+      ellipse 70% 60% at 50% 0%,
+      #000 10%,
+      transparent 75%
+    );
+    mask-image: radial-gradient(
+      ellipse 70% 60% at 50% 0%,
+      #000 10%,
+      transparent 75%
+    );
+  }
+
+  /* Shimmer skeleton sweep */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: shimmer 1.8s infinite;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .mask-fade-r {
+    -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent);
+    mask-image: linear-gradient(90deg, #000 70%, transparent);
+  }
+  .mask-fade-b {
+    -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent);
+    mask-image: linear-gradient(180deg, #000 60%, transparent);
+  }
+}
+
+/* Accessibility — calm fallback for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Atlas Flow — animated active edges */
+.flow-edge-active {
+  animation: flow-dash 0.6s linear infinite;
+}
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+/* AtlasMark loading variant */
+.atlas-loading-conic {
+  background: conic-gradient(
+    from 0deg,
+    rgb(var(--cyan) / 0) 0%,
+    rgb(var(--cyan) / 0.55) 20%,
+    rgb(var(--violet) / 0.55) 45%,
+    rgb(var(--cyan) / 0) 70%,
+    rgb(var(--cyan) / 0) 100%
+  );
+  filter: blur(4px);
+  animation: atlas-conic-spin 2.6s linear infinite;
+}
+.atlas-loading-orbit {
+  animation: atlas-orbit-spin 1.8s linear infinite;
+  transform-box: fill-box;
+}
+.atlas-loading-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: atlas-node-pulse 1.4s ease-in-out infinite;
+}
+@keyframes atlas-conic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes atlas-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes atlas-node-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+    filter: drop-shadow(0 0 0 rgb(var(--cyan) / 0));
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+    filter: drop-shadow(0 0 3px rgb(var(--cyan) / 0.9));
+  }
+}
+
+/* highlight.js — tuned to the Atlas palette */
+.hljs {
+  color: rgb(var(--foreground));
+  background: transparent;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: rgb(var(--violet));
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-built_in {
+  color: rgb(167 139 250);
+}
+.hljs-string,
+.hljs-attr {
+  color: rgb(var(--success));
+}
+.hljs-number,
+.hljs-literal {
+  color: rgb(var(--amber));
+}
+.hljs-title,
+.hljs-function .hljs-title,
+.hljs-name {
+  color: rgb(var(--cyan));
+}
+.hljs-comment {
+  color: rgb(var(--muted-foreground));
+  font-style: italic;
+}
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: rgb(var(--cyan));
+}
