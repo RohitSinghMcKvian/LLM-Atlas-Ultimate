@@ -9,6 +9,7 @@ import { Terminal } from "@/components/code/terminal";
 import { AgentPanel } from "@/components/code/agent-panel";
 import { ChangesView } from "@/components/code/changes-view";
 import { Button } from "@/components/ui/button";
+import { useShallow } from "zustand/react/shallow";
 import { useCodeStore } from "@/lib/store/code-store";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
 import { cn } from "@/lib/utils";
@@ -57,19 +58,25 @@ function useCrossOriginIsolationReload(): boolean {
 
 export function CodeClient() {
   const keyHeaders = useUserKeyHeaders();
+
+  // Selected field-by-field rather than `useCodeStore()`. The store also holds
+  // the agent `trace`/`events`, which are re-projected every 48ms during a run
+  // — subscribing to the whole store meant every agent token re-rendered the
+  // Monaco editor, the file tree and the terminal. Actions have stable
+  // identities, so useShallow over them never fires.
+  const status = useCodeStore((s) => s.status);
+  const bootNote = useCodeStore((s) => s.bootNote);
+  const wsKind = useCodeStore((s) => s.wsKind);
+  const paths = useCodeStore((s) => s.paths);
+  const changedMap = useCodeStore((s) => s.changedMap);
+  const activePath = useCodeStore((s) => s.activePath);
+  const buffer = useCodeStore((s) => s.buffer);
+  const savedBuffer = useCodeStore((s) => s.savedBuffer);
+  const terminal = useCodeStore((s) => s.terminal);
+  const changes = useCodeStore((s) => s.changes);
+  const running = useCodeStore((s) => s.running);
+  const previewUrl = useCodeStore((s) => s.previewUrl);
   const {
-    status,
-    bootNote,
-    wsKind,
-    paths,
-    changedMap,
-    activePath,
-    buffer,
-    savedBuffer,
-    terminal,
-    changes,
-    running,
-    previewUrl,
     dismissPreview,
     boot,
     selectFile,
@@ -78,7 +85,18 @@ export function CodeClient() {
     runManualCommand,
     clearTerminal,
     revertChange,
-  } = useCodeStore();
+  } = useCodeStore(
+    useShallow((s) => ({
+      dismissPreview: s.dismissPreview,
+      boot: s.boot,
+      selectFile: s.selectFile,
+      setBuffer: s.setBuffer,
+      saveActiveFile: s.saveActiveFile,
+      runManualCommand: s.runManualCommand,
+      clearTerminal: s.clearTerminal,
+      revertChange: s.revertChange,
+    })),
+  );
 
   const [view, setView] = React.useState<"editor" | "changes" | "preview">("editor");
   const [previewNonce, setPreviewNonce] = React.useState(0);

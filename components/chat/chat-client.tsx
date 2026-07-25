@@ -111,7 +111,12 @@ import { useAtlasEvent, announce } from "@/lib/atlas-events";
 import { postSSE, SSEHttpError } from "@/lib/sse-client";
 import { cn, timeAgo } from "@/lib/utils";
 import { buildEscalationPayload, stashEscalation } from "@/lib/chat/escalate";
-import { measureHealth, shouldSuggestSummarize, buildContinuationSummary } from "@/lib/chat/health";
+import {
+  measureHealth,
+  shouldSuggestSummarize,
+  buildContinuationSummary,
+  type ConversationHealth,
+} from "@/lib/chat/health";
 import { isEnabled } from "@/lib/store/flags-store";
 import type { ReasoningEffort } from "@/lib/store/settings-store";
 
@@ -228,9 +233,18 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
 
   useAtlasEvent("new", () => start());
 
+  // `messages` is a new array on every streaming flush (~20x/second), and each
+  // run kicked off a fresh smooth-scroll animation that cancelled the previous
+  // one — the animation never got to finish, which is what made following a
+  // streaming response feel stuttery. Most flushes append text without
+  // changing the scroll height at all, so skip those.
+  const lastScrollHeight = React.useRef(0);
   React.useEffect(() => {
-    if (atBottom)
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el || !atBottom) return;
+    if (el.scrollHeight === lastScrollHeight.current) return;
+    lastScrollHeight.current = el.scrollHeight;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, atBottom]);
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
@@ -248,6 +262,13 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
   }, [messages]);
 
   const sessionCost = React.useMemo(() => sessionCostUsd(messages), [messages]);
+
+  // Computed once and shared with TokenHealthBadge, which used to derive it a
+  // second time from the same inputs.
+  const health = React.useMemo(
+    () => measureHealth(messages, activeModelId),
+    [messages, activeModelId],
+  );
 
   // Sibling lookup for the whole thread, built once per render instead of once
   // per message. `childrenMap` sorts every node in the conversation, so calling
@@ -613,7 +634,7 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
               {formatUsd(sessionCost)} session
             </span>
           )}
-          {!empty && <TokenHealthBadge messages={messages} modelId={activeModelId} />}
+          {!empty && <TokenHealthBadge health={health} />}
           <div className="ml-auto flex items-center gap-1">
             {artifactVersions.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setArtifactOpen((v) => !v)}>
@@ -720,7 +741,7 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
           hasProject={!!activeProject}
           canEscalate={isEnabled("chatEscalation") && messages.length > 0}
           onEscalate={escalateToCode}
-          onSummarize={shouldSuggestSummarize(measureHealth(messages, activeModelId)) ? summarizeAndContinue : undefined}
+          onSummarize={shouldSuggestSummarize(health) ? summarizeAndContinue : undefined}
           onRemoveAttachment={(id) => setPending((p) => p.filter((a) => a.id !== id))}
           onPickFiles={() => fileRef.current?.click()}
           onFiles={handleFiles}
@@ -1633,8 +1654,7 @@ function ReasoningSelector({
 
 // ── Token health badge ────────────────────────────────────────────────────────
 
-function TokenHealthBadge({ messages, modelId }: { messages: ChatMessage[]; modelId: string }) {
-  const health = React.useMemo(() => measureHealth(messages, modelId), [messages, modelId]);
+function TokenHealthBadge({ health }: { health: ConversationHealth }) {
   if (health.status === "ok") return null;
   const pct = Math.round(health.usage * 100);
   return (

@@ -43,8 +43,30 @@ const EXT: Record<ArtifactType, string> = {
   react: "jsx",
 };
 
+// This scans the full message body with a global regex and materializes every
+// code block. It runs once per assistant bubble per render, and again over the
+// whole thread every streaming flush — but it is a pure function of a string,
+// and while a response streams only the last message's content is new, so
+// nearly every call is a repeat of one already answered.
+//
+// Bounded so a long session can't grow this without limit; insertion order
+// makes the oldest key the first one Map iteration yields.
+const artifactCache = new Map<string, Artifact | null>();
+const ARTIFACT_CACHE_MAX = 200;
+
 /** Extract the best renderable artifact from an assistant message. */
 export function extractArtifact(content: string): Artifact | null {
+  if (artifactCache.has(content)) return artifactCache.get(content)!;
+  const result = computeArtifact(content);
+  if (artifactCache.size >= ARTIFACT_CACHE_MAX) {
+    const oldest = artifactCache.keys().next().value;
+    if (oldest !== undefined) artifactCache.delete(oldest);
+  }
+  artifactCache.set(content, result);
+  return result;
+}
+
+function computeArtifact(content: string): Artifact | null {
   const re = /```(\w+)?\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
   const blocks: { lang: string; code: string }[] = [];
