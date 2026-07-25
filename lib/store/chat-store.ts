@@ -179,7 +179,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!cur) return s;
       const merged = withCost({ ...cur, ...patch });
       const tree = patchNode(s.tree, id, merged);
-      return { tree, messages: activePath(tree) };
+
+      // `patchNode` only replaces one node's content — it never changes the
+      // DAG's shape or the `active` pointers, so re-walking the whole tree
+      // would provably return the same sequence of ids. Splicing the one
+      // changed entry instead keeps every *other* ChatMessage's object
+      // identity stable across a streaming flush, which is what lets the
+      // memoized MessageBubble skip re-rendering all the messages that did
+      // not change. This runs ~20x/second while a response streams.
+      const idx = s.messages.findIndex((m) => m.id === id);
+      const messages =
+        idx === -1
+          ? // Patched node isn't on the visible path (a background branch).
+            // Fall back to the full walk so behaviour is unchanged.
+            activePath(tree)
+          : s.messages.map((m, i) => (i === idx ? merged : m));
+
+      return { tree, messages };
     });
   },
 
