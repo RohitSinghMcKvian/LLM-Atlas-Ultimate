@@ -1,17 +1,16 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   ArrowRight,
   Moon,
   Sun,
-  Sparkles,
   GitCompareArrows,
   MessagesSquare,
   Cpu,
-  CornerDownLeft,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
@@ -24,9 +23,21 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { MODULES } from "@/lib/modules";
-import { routableModels, getModelById } from "@/lib/catalog";
 import { useUIStore } from "@/lib/store/ui-store";
-import { cn } from "@/lib/utils";
+
+// The palette is mounted in the workspace layout, so its imports are parsed on
+// every route — including /docs, /datasets and /notebooks, which have nothing
+// to do with models. The module list (from lib/modules.ts) is tiny and stays
+// static so ⌘K is never empty; only the catalog-backed model page is split out.
+// It is prefetched right after hydration so the chunk is warm before first use.
+const ModelsPage = dynamic(
+  () => import("./command-palette-models").then((m) => m.ModelsPage),
+  { ssr: false },
+);
+const ActiveModelName = dynamic(
+  () => import("./command-palette-models").then((m) => m.ActiveModelName),
+  { ssr: false, loading: () => null },
+);
 
 export function CommandPalette() {
   const router = useRouter();
@@ -52,6 +63,22 @@ export function CommandPalette() {
     if (!open) setPage("root");
   }, [open]);
 
+  // Warm the catalog chunk once the page is idle, so the first ⌘K → "Switch
+  // active model" is instant rather than waiting on a network round-trip.
+  // Shared with the topbar's ModelSwitcher, so this pays for both.
+  React.useEffect(() => {
+    const warm = () => void import("./command-palette-models");
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback;
+    if (ric) {
+      const id = ric(warm);
+      return () => (window as unknown as { cancelIdleCallback?: (id: number) => void })
+        .cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(warm, 1200);
+    return () => clearTimeout(t);
+  }, []);
+
   const run = React.useCallback(
     (fn: () => void) => {
       setOpen(false);
@@ -60,8 +87,6 @@ export function CommandPalette() {
     },
     [setOpen],
   );
-
-  const models = routableModels();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -100,7 +125,7 @@ export function CommandPalette() {
                     <Cpu />
                     Switch active model
                     <CommandShortcut>
-                      {getModelById(activeModelId)?.name ?? ""}
+                      <ActiveModelName modelId={activeModelId} />
                     </CommandShortcut>
                   </CommandItem>
                   <CommandItem
@@ -142,32 +167,7 @@ export function CommandPalette() {
             )}
 
             {page === "models" && (
-              <CommandGroup heading="Models">
-                {models.map((m) => (
-                  <CommandItem
-                    key={m.id}
-                    value={`${m.name} ${m.provider}`}
-                    onSelect={() =>
-                      run(() => {
-                        setActiveModel(m.id);
-                      })
-                    }
-                  >
-                    <Sparkles
-                      className={cn(m.id === activeModelId && "text-cyan")}
-                    />
-                    <span>{m.name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {m.provider}
-                    </span>
-                    {m.id === activeModelId && (
-                      <CommandShortcut>
-                        <CornerDownLeft className="size-3.5" /> active
-                      </CommandShortcut>
-                    )}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+              <ModelsPage onPick={(id) => run(() => setActiveModel(id))} />
             )}
           </CommandList>
 

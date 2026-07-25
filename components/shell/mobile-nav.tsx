@@ -48,6 +48,7 @@ export function MobileTabBar() {
             <Link
               key={t.href}
               href={t.href}
+              prefetch={true}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
                 active ? "text-cyan" : "text-muted-foreground",
@@ -101,6 +102,7 @@ export function MobileDrawer() {
                     <Link
                       key={m.id}
                       href={m.href}
+                      prefetch={true}
                       onClick={() => setOpen(false)}
                       className={cn(
                         "flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium transition-colors",

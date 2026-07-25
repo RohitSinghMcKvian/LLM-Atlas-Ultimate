@@ -43,6 +43,13 @@ function NavItem({
   const link = (
     <Link
       href={module.href}
+      // The workspace routes are dynamic (several read searchParams), so the
+      // default "auto" strategy would only prefetch down to the nearest
+      // Suspense boundary. With app/(workspace)/loading.tsx in place that is
+      // already useful; asking for the full payload also warms the target's
+      // client chunks, which is what makes a sidebar click feel instant.
+      // These pages have no server-derived data, so there is nothing to stale.
+      prefetch={true}
       className={cn(
         "group relative flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors",
         collapsed && "justify-center px-0",

@@ -14,6 +14,11 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts", "framer-motion"],
+    // Next 15 defaults dynamic entries to 0s, which expires a sidebar
+    // prefetch before the user can click it — the payload is fetched and
+    // then thrown away. Workspace routes render from the static catalog and
+    // client state, so there is nothing that goes stale in 30s.
+    staleTimes: { dynamic: 30, static: 180 },
   },
   async headers() {
     return [
