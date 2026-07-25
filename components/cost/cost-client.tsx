@@ -1,17 +1,7 @@
 "use client";
 
 import * as React from "react";
-import {
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-  ZAxis,
-} from "recharts";
+import dynamic from "next/dynamic";
 import {
   Coins,
   Cpu,
@@ -51,6 +41,21 @@ import {
   type SelfHostAssumptions,
 } from "@/lib/cost/engine";
 import { cn, formatUSD, formatCompact } from "@/lib/utils";
+
+// recharts is the heaviest dependency on this route and is only needed for the
+// frontier plot, so it gets its own chunk. The wrapper below reserves the
+// height so nothing shifts when it arrives.
+//
+// Note: deliberately NOT `ssr: false`. This chart is rendered during the
+// page's server render, and an ssr:false dynamic in that position makes Next
+// bail the whole route to client-side rendering — which parks the page on the
+// loading skeleton indefinitely. `ssr: false` is only safe for dynamics that
+// are absent from the initial render, like the leaderboard's expand-on-click
+// detail panel.
+const FrontierChart = dynamic(
+  () => import("@/components/cost/frontier-chart").then((m) => m.FrontierChart),
+  { loading: () => null },
+);
 
 const DEFAULT_SELECTION = [
   "claude-sonnet-4-5",
@@ -95,21 +100,29 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
     : null;
 
   // Frontier: every routable model with the chosen benchmark.
+  //
+  // A slider drag replaces `workload` on every tick, and this recomputes
+  // apiMonthlyCost across all 97 models and then re-lays-out a recharts
+  // scatter plot. Deferring it lets the slider and its numeric readouts (which
+  // use the immediate `workload` above) stay at pointer speed while the chart
+  // catches up — the settled result is identical.
+  const deferredWorkload = React.useDeferredValue(workload);
   const frontier = React.useMemo(() => {
     return MODELS.filter(
       (m) => m.status !== "upcoming" && getBenchmark(m, axis) !== undefined,
     ).map((m) => ({
       id: m.id,
       name: m.name,
-      x: apiMonthlyCost(m, workload).total,
+      x: apiMonthlyCost(m, deferredWorkload).total,
       y: getBenchmark(m, axis)!,
       open: m.license === "open",
       selected: selected.includes(m.id),
     }));
-  }, [axis, workload, selected]);
+  }, [axis, deferredWorkload, selected]);
 
-  const available = MODELS.filter(
-    (m) => m.status !== "upcoming" && !selected.includes(m.id),
+  const available = React.useMemo(
+    () => MODELS.filter((m) => m.status !== "upcoming" && !selected.includes(m.id)),
+    [selected],
   );
 
   function exportCSV() {
@@ -136,7 +149,10 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
     URL.revokeObjectURL(url);
   }
 
-  const maxCost = Math.max(...rows.map((r) => r.cost.total), 1);
+  const maxCost = React.useMemo(
+    () => rows.reduce((max, r) => Math.max(max, r.cost.total), 1),
+    [rows],
+  );
 
   return (
     <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:py-10">
@@ -356,66 +372,14 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
                 </SelectContent>
               </Select>
             </div>
+            {/* Height is reserved by the wrapper so the lazily-loaded chart
+                can't shift the page when it arrives, and the local Suspense
+                boundary keeps its loading state from bubbling up to the route
+                boundary — otherwise the entire page waits on the chart chunk. */}
             <div className="h-[340px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 10, right: 16, bottom: 24, left: 4 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-                  <XAxis
-                    type="number"
-                    dataKey="x"
-                    name="Monthly cost"
-                    scale="log"
-                    domain={[10, 1000000]}
-                    ticks={[10, 100, 1000, 10000, 100000, 1000000]}
-                    allowDataOverflow
-                    tick={{ fill: "#8B91A3", fontSize: 11 }}
-                    tickFormatter={(v) => formatUSD(v)}
-                    label={{
-                      value: "Monthly cost (log) →",
-                      position: "insideBottom",
-                      offset: -12,
-                      fill: "#8B91A3",
-                      fontSize: 11,
-                    }}
-                  />
-                  <YAxis
-                    type="number"
-                    dataKey="y"
-                    name="Score"
-                    domain={["dataMin - 4", "dataMax + 4"]}
-                    allowDecimals={false}
-                    tick={{ fill: "#8B91A3", fontSize: 11 }}
-                  />
-                  <ZAxis range={[60, 60]} />
-                  <Tooltip
-                    cursor={{ strokeDasharray: "3 3", stroke: "#33394a" }}
-                    contentStyle={{
-                      background: "rgb(18 20 29)",
-                      border: "1px solid rgb(52 57 73)",
-                      borderRadius: 12,
-                      fontSize: 12,
-                    }}
-                    formatter={(value: number, name: string) =>
-                      name === "Monthly cost"
-                        ? [formatUSD(value), "Cost/mo"]
-                        : [value, "Score"]
-                    }
-                    labelFormatter={() => ""}
-                    content={<FrontierTooltip />}
-                  />
-                  <Scatter data={frontier}>
-                    {frontier.map((p) => (
-                      <Cell
-                        key={p.id}
-                        fill={p.open ? "#22D3EE" : "#A78BFA"}
-                        fillOpacity={p.selected ? 1 : 0.45}
-                        stroke={p.selected ? "#fff" : "none"}
-                        strokeWidth={p.selected ? 1.5 : 0}
-                      />
-                    ))}
-                  </Scatter>
-                </ScatterChart>
-              </ResponsiveContainer>
+              <React.Suspense fallback={null}>
+                <FrontierChart data={frontier} />
+              </React.Suspense>
             </div>
             <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
@@ -447,19 +411,6 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function FrontierTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0].payload;
-  return (
-    <div className="rounded-xl border border-border-strong bg-popover p-2.5 text-xs shadow-float">
-      <div className="font-medium">{p.name}</div>
-      <div className="mt-1 text-muted-foreground">
-        {formatUSD(p.x)}/mo · score {p.y}
-      </div>
     </div>
   );
 }

@@ -94,7 +94,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const all = routableModels();
+  const all = React.useMemo(() => routableModels(), []);
 
   const {
     config,

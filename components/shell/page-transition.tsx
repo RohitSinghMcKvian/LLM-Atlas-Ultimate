@@ -16,9 +16,12 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
     // feeling sluggish. Fading is composited and costs nothing.
     <motion.div
       key={pathname}
-      initial={{ opacity: 0 }}
+      // `initial={false}` starts at the animate state — no animation at all,
+      // rather than a zero-duration one (framer-motion treats duration 0 as a
+      // no-op and would leave the page pinned at opacity 0).
+      initial={reduce ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: reduce ? 0 : 0.18, ease: EASE }}
+      transition={{ duration: 0.18, ease: EASE }}
     >
       {children}
     </motion.div>

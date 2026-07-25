@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import "highlight.js/styles/github-dark.css";
+// The highlight.js theme lives in components/markdown.tsx, next to the
+// rehype-highlight plugin that needs it, so it ships only with the routes that
+// actually render markdown rather than on every page including the landing.
 import { Providers } from "@/components/providers";
 import { cn } from "@/lib/utils";
 
