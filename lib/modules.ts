@@ -266,10 +266,31 @@ export const MODULE_GROUPS: ModuleGroup[] = [
   "Learn",
 ];
 
+// `MODULES` is static, so both lookups are precomputed once. `modulesByGroup`
+// runs inside the sidebar's render loop (once per group, every render) and
+// previously allocated a fresh array each time, which defeated memoization in
+// anything downstream.
+
+const MODULE_INDEX: Map<string, ModuleDef> = new Map(
+  MODULES.map((m) => [m.id, m]),
+);
+
+const MODULES_BY_GROUP: Record<ModuleGroup, ModuleDef[]> = MODULES.reduce(
+  (acc, m) => {
+    (acc[m.group] ??= []).push(m);
+    return acc;
+  },
+  {} as Record<ModuleGroup, ModuleDef[]>,
+);
+
+// Every group in MODULE_GROUPS resolves to an array, even if it holds no
+// modules — callers `.map` the result unconditionally.
+for (const group of MODULE_GROUPS) MODULES_BY_GROUP[group] ??= [];
+
 export function getModule(id: string): ModuleDef | undefined {
-  return MODULES.find((m) => m.id === id);
+  return MODULE_INDEX.get(id);
 }
 
 export function modulesByGroup(group: ModuleGroup): ModuleDef[] {
-  return MODULES.filter((m) => m.group === group);
+  return MODULES_BY_GROUP[group] ?? [];
 }

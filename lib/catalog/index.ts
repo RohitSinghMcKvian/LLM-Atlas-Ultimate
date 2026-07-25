@@ -6,8 +6,38 @@ import type { CatalogModel, ModelAccess, ProviderId } from "./types";
 export { MODELS, BENCHMARKS, BENCHMARK_MAP, benchmarkLabel, PROVIDERS, PROVIDER_LIST };
 export * from "./types";
 
+// --- Derivation caches ----------------------------------------------------
+//
+// `MODELS` is a static module constant, so everything derived from it without
+// a time or argument dependency is invariant for the life of the process.
+// These helpers are called inside render loops (per message, per row, per
+// keystroke), where an unindexed `find` over 97 entries or a fresh `filter`
+// allocation is the difference between a smooth frame and a dropped one.
+//
+// Cached arrays are shared, so callers must not mutate them. Every in-repo
+// caller either reads or copies first; `freezeInDev` turns a future violation
+// into a loud error in development instead of silent cross-component
+// corruption, while costing nothing in production.
+
+const DEV = process.env.NODE_ENV !== "production";
+
+function freezeInDev<T>(arr: T[]): T[] {
+  return DEV ? Object.freeze(arr) as T[] : arr;
+}
+
+/** Memoize a zero-argument, catalog-derived array. */
+function derived<T>(compute: () => T[]): () => T[] {
+  let cache: T[] | undefined;
+  return () => (cache ??= freezeInDev(compute()));
+}
+
+let modelIndex: Map<string, CatalogModel> | undefined;
+
 export function getModelById(id: string): CatalogModel | undefined {
-  return MODELS.find((m) => m.id === id);
+  if (!modelIndex) {
+    modelIndex = new Map(MODELS.map((m) => [m.id, m]));
+  }
+  return modelIndex.get(id);
 }
 
 /**
@@ -24,26 +54,26 @@ export function isFree(m: CatalogModel): boolean {
 }
 
 /** Models that can actually be called through at least one provider. */
-export function routableModels(): CatalogModel[] {
-  return MODELS.filter((m) => m.routes.length > 0 && m.status !== "upcoming");
-}
+export const routableModels: () => CatalogModel[] = derived(() =>
+  MODELS.filter((m) => m.routes.length > 0 && m.status !== "upcoming"),
+);
 
 // --- Hub rails ------------------------------------------------------------
 
 /** Free, openly-served models (open weights on an operator key). */
-export function freeModels(): CatalogModel[] {
-  return MODELS.filter((m) => modelAccess(m) === "free" && m.status !== "upcoming");
-}
+export const freeModels: () => CatalogModel[] = derived(() =>
+  MODELS.filter((m) => modelAccess(m) === "free" && m.status !== "upcoming"),
+);
 
 /** Closed/paid models reachable with the user's own OpenRouter key. */
-export function byokModels(): CatalogModel[] {
-  return MODELS.filter((m) => modelAccess(m) === "byok" && m.status !== "upcoming");
-}
+export const byokModels: () => CatalogModel[] = derived(() =>
+  MODELS.filter((m) => modelAccess(m) === "byok" && m.status !== "upcoming"),
+);
 
 /** Hand-curated "hot right now" set for the Trending rail. */
-export function trendingModels(): CatalogModel[] {
-  return MODELS.filter((m) => m.trending && m.status !== "upcoming");
-}
+export const trendingModels: () => CatalogModel[] = derived(() =>
+  MODELS.filter((m) => m.trending && m.status !== "upcoming"),
+);
 
 /**
  * Recently-added models for the "New & Notable" rail. Uses `addedAt` when set,
@@ -62,9 +92,9 @@ export function newModels(days = 60): CatalogModel[] {
 }
 
 /** Distinct brand/family owners (Anthropic, Meta, …). */
-export function brandProviders(): string[] {
-  return Array.from(new Set(MODELS.map((m) => m.provider))).sort();
-}
+export const brandProviders: () => string[] = derived(() =>
+  Array.from(new Set(MODELS.map((m) => m.provider))).sort(),
+);
 
 export function getBenchmark(model: CatalogModel, key: string): number | undefined {
   return model.benchmarks.find((s) => s.key === key)?.score;
@@ -76,22 +106,37 @@ export function blendedPrice(model: CatalogModel): number {
   return (inputPerM * 3 + outputPerM) / 4;
 }
 
+const INTELLIGENCE_KEYS = ["mmlu", "gpqa", "humaneval", "math"] as const;
+
+// Catalog models are stable singletons, so a WeakMap keyed on the object is a
+// safe permanent cache. The leaderboard calls this O(n log n) times per sort
+// and once more per rendered row.
+const intelligenceCache = new WeakMap<CatalogModel, number>();
+
 /** A coarse "intelligence index" (0–100) from available benchmarks for sorting. */
 export function intelligenceIndex(model: CatalogModel): number {
-  const keys = ["mmlu", "gpqa", "humaneval", "math"];
-  const vals = keys
-    .map((k) => getBenchmark(model, k))
-    .filter((v): v is number => v !== undefined);
+  const hit = intelligenceCache.get(model);
+  if (hit !== undefined) return hit;
+
+  const vals = INTELLIGENCE_KEYS.map((k) => getBenchmark(model, k)).filter(
+    (v): v is number => v !== undefined,
+  );
+  let score: number;
   if (vals.length === 0) {
     // fall back to arena elo normalized
     const elo = getBenchmark(model, "arena");
-    return elo ? Math.round(((elo - 1100) / 300) * 100) : 0;
+    score = elo ? Math.round(((elo - 1100) / 300) * 100) : 0;
+  } else {
+    score = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
   }
-  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+
+  intelligenceCache.set(model, score);
+  return score;
 }
 
-/** Headline ecosystem stats for the landing proof strip. */
-export function catalogStats() {
+let statsCache: ReturnType<typeof computeCatalogStats> | undefined;
+
+function computeCatalogStats() {
   const providers = brandProviders().length;
   const routeProviders = PROVIDER_LIST.length;
   return {
@@ -103,6 +148,11 @@ export function catalogStats() {
     benchmarks: BENCHMARKS.length,
     upcoming: MODELS.filter((m) => m.status === "upcoming").length,
   };
+}
+
+/** Headline ecosystem stats for the landing proof strip. */
+export function catalogStats() {
+  return (statsCache ??= computeCatalogStats());
 }
 
 export function providersForModel(model: CatalogModel): ProviderId[] {
