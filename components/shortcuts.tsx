@@ -35,6 +35,20 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
     ],
   },
   {
+    group: "Atlas News",
+    items: [
+      { keys: ["J", "K"], label: "Move between stories" },
+      { keys: ["⏎"], label: "Open the deep dive" },
+      { keys: ["⇧", "⏎"], label: "Open the source article" },
+      { keys: ["S"], label: "Save story" },
+      { keys: ["/"], label: "Search" },
+      { keys: ["1", "–", "9"], label: "Toggle a topic" },
+      { keys: ["V"], label: "Verified only" },
+      { keys: ["G"], label: "Cycle layout" },
+      { keys: ["R"], label: "Sync now" },
+    ],
+  },
+  {
     group: "Atlas Code",
     items: [
       { keys: ["⌘", "⏎"], label: "Run / approve diff" },

@@ -68,8 +68,14 @@ export function ConfigDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const { toolPolicy, setToolDecision, hooks, setHooks, costCeilingUsd, setCostCeiling } =
-    useCodeStore();
+  // Field selectors, not the whole store: this dialog stays mounted while an
+  // agent runs, and the store's trace/events churn every 48ms.
+  const toolPolicy = useCodeStore((s) => s.toolPolicy);
+  const hooks = useCodeStore((s) => s.hooks);
+  const costCeilingUsd = useCodeStore((s) => s.costCeilingUsd);
+  const setToolDecision = useCodeStore((s) => s.setToolDecision);
+  const setHooks = useCodeStore((s) => s.setHooks);
+  const setCostCeiling = useCodeStore((s) => s.setCostCeiling);
 
   const [event, setEvent] = React.useState<"pre" | "post">("post");
   const [toolMatch, setToolMatch] = React.useState("write_file|edit_file");

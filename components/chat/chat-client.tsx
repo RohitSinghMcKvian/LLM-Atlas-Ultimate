@@ -97,7 +97,7 @@ import { useProjectsStore, projectContext } from "@/lib/store/projects-store";
 import { recallMemories, extractMemory } from "@/lib/chat/memory";
 import { sessionCostUsd, messageCostUsd, formatUsd } from "@/lib/chat/cost";
 import { toMarkdown, toJSON, downloadText, slugify } from "@/lib/chat/export";
-import { siblingsOf } from "@/lib/chat/tree";
+import { siblingsOf, childrenMap, ROOT } from "@/lib/chat/tree";
 import { parseAttachment, attachmentsToPromptText } from "@/lib/chat/attachments";
 import {
   uuid,
@@ -111,7 +111,12 @@ import { useAtlasEvent, announce } from "@/lib/atlas-events";
 import { postSSE, SSEHttpError } from "@/lib/sse-client";
 import { cn, timeAgo } from "@/lib/utils";
 import { buildEscalationPayload, stashEscalation } from "@/lib/chat/escalate";
-import { measureHealth, shouldSuggestSummarize, buildContinuationSummary } from "@/lib/chat/health";
+import {
+  measureHealth,
+  shouldSuggestSummarize,
+  buildContinuationSummary,
+  type ConversationHealth,
+} from "@/lib/chat/health";
 import { isEnabled } from "@/lib/store/flags-store";
 import type { ReasoningEffort } from "@/lib/store/settings-store";
 
@@ -228,9 +233,18 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
 
   useAtlasEvent("new", () => start());
 
+  // `messages` is a new array on every streaming flush (~20x/second), and each
+  // run kicked off a fresh smooth-scroll animation that cancelled the previous
+  // one — the animation never got to finish, which is what made following a
+  // streaming response feel stuttery. Most flushes append text without
+  // changing the scroll height at all, so skip those.
+  const lastScrollHeight = React.useRef(0);
   React.useEffect(() => {
-    if (atBottom)
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el || !atBottom) return;
+    if (el.scrollHeight === lastScrollHeight.current) return;
+    lastScrollHeight.current = el.scrollHeight;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, atBottom]);
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
@@ -248,6 +262,43 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
   }, [messages]);
 
   const sessionCost = React.useMemo(() => sessionCostUsd(messages), [messages]);
+
+  // Computed once and shared with TokenHealthBadge, which used to derive it a
+  // second time from the same inputs.
+  const health = React.useMemo(
+    () => measureHealth(messages, activeModelId),
+    [messages, activeModelId],
+  );
+
+  // Sibling lookup for the whole thread, built once per render instead of once
+  // per message. `childrenMap` sorts every node in the conversation, so calling
+  // it inside the message loop made rendering O(N² log N).
+  const childrenByParent = React.useMemo(() => childrenMap(tree.nodes), [tree.nodes]);
+
+  // Handlers passed to the memoized MessageBubbles must keep a stable identity
+  // or the memo never hits. They close over streaming state, settings and the
+  // live tree, so rather than hand-maintaining dependency arrays (where a
+  // missed dep silently freezes a stale closure), they read through a ref that
+  // is refreshed on every render. Identity is permanently stable; the value
+  // behind it is always current.
+  const latest = React.useRef({ tree, regenerate, editUser, patchMessage, selectSibling });
+  latest.current = { tree, regenerate, editUser, patchMessage, selectSibling };
+
+  const handleSibling = React.useCallback((id: string, dir: -1 | 1) => {
+    const sib = siblingsOf(latest.current.tree, id);
+    const next = sib.index + dir;
+    if (next >= 0 && next < sib.ids.length) latest.current.selectSibling(sib.ids[next]);
+  }, []);
+  const handlePin = React.useCallback((id: string, pinned: boolean) => {
+    latest.current.patchMessage(id, { pinned: !pinned });
+  }, []);
+  const handleRegenerate = React.useCallback((id: string, modelId?: string) => {
+    latest.current.regenerate(id, modelId);
+  }, []);
+  const handleEdit = React.useCallback((id: string, text: string) => {
+    latest.current.editUser(id, text);
+  }, []);
+  const handleOpenArtifact = React.useCallback(() => setArtifactOpen(true), []);
 
   function onScroll() {
     const el = scrollRef.current;
@@ -583,7 +634,7 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
               {formatUsd(sessionCost)} session
             </span>
           )}
-          {!empty && <TokenHealthBadge messages={messages} modelId={activeModelId} />}
+          {!empty && <TokenHealthBadge health={health} />}
           <div className="ml-auto flex items-center gap-1">
             {artifactVersions.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setArtifactOpen((v) => !v)}>
@@ -635,25 +686,22 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
             ) : (
               <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
                 {messages.map((m, i) => {
-                  const sib = siblingsOf(tree, m.id);
+                  const sibIds = childrenByParent.get(m.parentId ?? ROOT);
                   return (
                     <MessageBubble
                       key={m.id}
                       message={m}
                       modelName={model?.name ?? "Atlas"}
                       streaming={streaming && i === messages.length - 1 && m.role === "assistant"}
-                      siblingCount={sib.ids.length}
-                      siblingIndex={sib.index}
-                      onSibling={(dir) => {
-                        const next = sib.index + dir;
-                        if (next >= 0 && next < sib.ids.length) selectSibling(sib.ids[next]);
-                      }}
+                      siblingCount={sibIds?.length ?? 1}
+                      siblingIndex={Math.max(0, sibIds?.indexOf(m.id) ?? 0)}
+                      onSibling={handleSibling}
                       tts={tts}
                       canAct={!streaming}
-                      onPin={() => patchMessage(m.id, { pinned: !m.pinned })}
-                      onOpenArtifact={() => setArtifactOpen(true)}
-                      onRegenerate={(modelId) => regenerate(m.id, modelId)}
-                      onEdit={(text) => editUser(m.id, text)}
+                      onPin={handlePin}
+                      onOpenArtifact={handleOpenArtifact}
+                      onRegenerate={handleRegenerate}
+                      onEdit={handleEdit}
                     />
                   );
                 })}
@@ -693,7 +741,7 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
           hasProject={!!activeProject}
           canEscalate={isEnabled("chatEscalation") && messages.length > 0}
           onEscalate={escalateToCode}
-          onSummarize={shouldSuggestSummarize(measureHealth(messages, activeModelId)) ? summarizeAndContinue : undefined}
+          onSummarize={shouldSuggestSummarize(health) ? summarizeAndContinue : undefined}
           onRemoveAttachment={(id) => setPending((p) => p.filter((a) => a.id !== id))}
           onPickFiles={() => fileRef.current?.click()}
           onFiles={handleFiles}
@@ -957,7 +1005,11 @@ function RailAction({
 
 // ── Message bubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({
+// Memoized: while a response streams, the store patches only the last message,
+// so every other bubble receives an identical `message` reference and skips
+// re-rendering entirely. All callbacks are id-taking and stable by contract —
+// keep them that way, or this memo silently stops working.
+const MessageBubble = React.memo(function MessageBubble({
   message,
   modelName,
   streaming,
@@ -976,13 +1028,13 @@ function MessageBubble({
   streaming: boolean;
   siblingCount: number;
   siblingIndex: number;
-  onSibling: (dir: -1 | 1) => void;
+  onSibling: (id: string, dir: -1 | 1) => void;
   tts: ReturnType<typeof useTTS>;
   canAct: boolean;
-  onPin: () => void;
+  onPin: (id: string, pinned: boolean) => void;
   onOpenArtifact: () => void;
-  onRegenerate: (modelId?: string) => void;
-  onEdit: (text: string) => void;
+  onRegenerate: (id: string, modelId?: string) => void;
+  onEdit: (id: string, text: string) => void;
 }) {
   const isUser = message.role === "user";
   const hasArtifact = !isUser && !!extractArtifact(message.content);
@@ -1012,7 +1064,7 @@ function MessageBubble({
           {siblingCount > 1 && (
             <span className="inline-flex items-center gap-0.5 rounded-md border border-border px-1 py-0.5">
               <button
-                onClick={() => onSibling(-1)}
+                onClick={() => onSibling(message.id, -1)}
                 disabled={siblingIndex === 0}
                 className="disabled:opacity-30"
                 title="Previous version"
@@ -1023,7 +1075,7 @@ function MessageBubble({
                 {siblingIndex + 1}/{siblingCount}
               </span>
               <button
-                onClick={() => onSibling(1)}
+                onClick={() => onSibling(message.id, 1)}
                 disabled={siblingIndex === siblingCount - 1}
                 className="disabled:opacity-30"
                 title="Next version"
@@ -1065,7 +1117,7 @@ function MessageBubble({
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   setEditing(false);
-                  onEdit(editText);
+                  onEdit(message.id, editText);
                 } else if (e.key === "Escape") {
                   setEditing(false);
                   setEditText(message.content);
@@ -1087,7 +1139,7 @@ function MessageBubble({
               <button
                 onClick={() => {
                   setEditing(false);
-                  onEdit(editText);
+                  onEdit(message.id, editText);
                 }}
                 className="rounded-md bg-gradient-primary px-2.5 py-1 text-primary-foreground"
               >
@@ -1179,9 +1231,11 @@ function MessageBubble({
                     </ActionBtn>
                   )}
                   {canAct && (
-                    <RegenControl onRegenerate={onRegenerate} />
+                    <RegenControl
+                      onRegenerate={(modelId) => onRegenerate(message.id, modelId)}
+                    />
                   )}
-                  <ActionBtn onClick={onPin}>
+                  <ActionBtn onClick={() => onPin(message.id, !!message.pinned)}>
                     <Pin className="size-3.5" /> Pin
                   </ActionBtn>
                   {isEnabled("chatEscalation") && hasArtifact && (
@@ -1207,7 +1261,7 @@ function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 /** Regenerate button with an optional model-swap picker. */
 function RegenControl({ onRegenerate }: { onRegenerate: (modelId?: string) => void }) {
@@ -1600,8 +1654,7 @@ function ReasoningSelector({
 
 // ── Token health badge ────────────────────────────────────────────────────────
 
-function TokenHealthBadge({ messages, modelId }: { messages: ChatMessage[]; modelId: string }) {
-  const health = React.useMemo(() => measureHealth(messages, modelId), [messages, modelId]);
+function TokenHealthBadge({ health }: { health: ConversationHealth }) {
   if (health.status === "ok") return null;
   const pct = Math.round(health.usage * 100);
   return (

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Example Lab Blog</title>
+    <link>https://example-lab.com/blog</link>
+    <description>Announcements from Example Lab.</description>
+    <item>
+      <title>Example Lab introduces Nova 3, its most capable model</title>
+      <link>https://example-lab.com/blog/nova-3?utm_source=rss&amp;utm_medium=feed</link>
+      <guid isPermaLink="false">urn:example-lab:nova-3</guid>
+      <pubDate>Tue, 15 Jul 2025 10:30:00 GMT</pubDate>
+      <dc:creator>research@example-lab.com (Ada Lovelace)</dc:creator>
+      <category>Models</category>
+      <category>Research</category>
+      <description><![CDATA[<p>Nova 3 is available today in the API at <strong>$3 per million input tokens</strong>. It scores 92.4 on SWE-bench Verified and supports a 1M token context window.</p>]]></description>
+      <content:encoded><![CDATA[<p>Nova 3 is available today in the API at <strong>$3 per million input tokens</strong>.</p><img src="https://cdn.example-lab.com/nova-3-hero.jpg" width="1200" height="630" /><script>tracking()</script>]]></content:encoded>
+      <media:content url="https://cdn.example-lab.com/nova-3-card.jpg" medium="image" width="1600" height="900" type="image/jpeg" />
+    </item>
+    <item>
+      <title>Pricing update: Nova 2 drops to $0.80 per million tokens</title>
+      <link>https://example-lab.com/blog/nova-2-pricing</link>
+      <pubDate>Mon, 14 Jul 2025 09:00:00 GMT</pubDate>
+      <description>We are reducing the price of Nova 2 by 60 percent.</description>
+      <enclosure url="https://cdn.example-lab.com/pricing.png" type="image/png" length="48211" />
+    </item>
+    <item>
+      <title>An item with a tracking pixel and no real image</title>
+      <link>https://example-lab.com/blog/pixel</link>
+      <pubDate>Sun, 13 Jul 2025 08:00:00 GMT</pubDate>
+      <description><![CDATA[Short note.<img src="https://track.example-lab.com/p.gif" width="1" height="1" />]]></description>
+      <media:thumbnail url="https://cdn.example-lab.com/tiny.png" width="16" height="16" />
+    </item>
+    <item>
+      <title>An item with no date at all</title>
+      <link>https://example-lab.com/blog/undated</link>
+      <description>No pubDate element here.</description>
+    </item>
+  </channel>
+</rss>

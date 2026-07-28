@@ -4,8 +4,9 @@
 .pnp.*
 
 # next.js
-/.next/
-/.next-preview/
+# Glob covers any NEXT_DIST_DIR override (see next.config.mjs), not just the
+# two build dirs the npm scripts happen to use today.
+/.next*
 /out/
 next-env.d.ts
 

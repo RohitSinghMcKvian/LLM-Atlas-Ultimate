@@ -10,6 +10,9 @@ import { Check, Copy, Hash } from "lucide-react";
 import { MermaidBlock } from "@/components/mermaid";
 import { cn } from "@/lib/utils";
 import "katex/dist/katex.min.css";
+// Scoped here rather than in the root layout: only routes that render markdown
+// need the syntax-highlighting theme.
+import "highlight.js/styles/github-dark.css";
 
 function extractText(node: React.ReactNode): string {
   if (node == null) return "";

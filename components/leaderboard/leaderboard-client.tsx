@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
+import { useInfiniteReveal } from "@/lib/hooks/use-infinite-reveal";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, LayoutGroup } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
   SlidersHorizontal,
@@ -47,10 +49,11 @@ const ModelDetail = dynamic(
   },
 );
 import {
-  MODELS,
+  allModels,
   brandProviders,
   intelligenceIndex,
   getBenchmark,
+  getModelById,
   modelAccess,
 } from "@/lib/catalog";
 import type { CatalogModel } from "@/lib/catalog/types";
@@ -165,17 +168,44 @@ export function LeaderboardClient({
   const set = (patch: Partial<FilterState>) =>
     setFilters((f) => ({ ...f, ...patch }));
 
-  const results = React.useMemo(() => {
-    const filtered = MODELS.filter((m) => matches(m, filters));
-    return sortModels(filtered, sort);
-  }, [filters, sort]);
+  // The input stays bound to `filters.search` so typing is never held up, but
+  // the 97-row filter/sort/render pass runs against a deferred copy. React
+  // keeps the keystroke responsive and catches the list up when it can — the
+  // final output is identical, only the intermediate frames differ.
+  const deferredSearch = React.useDeferredValue(filters.search);
+  // Subscribing keeps every derived list correct across a catalog sync: a new
+  // snapshot is a new object identity, so these memos recompute.
+  const snapshot = useCatalogSnapshot();
+  const deferredFilters = React.useMemo(
+    () => ({ ...filters, search: deferredSearch }),
+    [filters, deferredSearch],
+  );
 
-  const toggleCompare = (id: string) =>
+  const results = React.useMemo(() => {
+    const filtered = allModels().filter((m) => matches(m, deferredFilters));
+    return sortModels(filtered, sort);
+  }, [snapshot, deferredFilters, sort]);
+
+  // The catalog is ~400 models. Render the first chunk and reveal more as the
+  // user scrolls, so a filter change commits ~50 rows instead of all of them.
+  const { limit, sentinelRef, hasMore, revealMore } = useInfiniteReveal(results.length, {
+    resetKey: `${JSON.stringify(deferredFilters)}|${sort}`,
+  });
+  const visible = React.useMemo(() => results.slice(0, limit), [results, limit]);
+
+  // Stable identities so the memoized rows aren't invalidated on every
+  // keystroke in the search box.
+  const toggleCompare = React.useCallback((id: string) => {
     setCompare((s) => {
       const next = new Set(s);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }, []);
+
+  const toggleExpanded = React.useCallback((id: string) => {
+    setExpanded((e) => (e === id ? null : id));
+  }, []);
 
   const activeFilterCount =
     (filters.access !== "all" ? 1 : 0) +
@@ -288,25 +318,34 @@ export function LeaderboardClient({
             <span />
           </div>
 
-          <LayoutGroup>
-            <motion.div layout className="divide-y divide-border/70">
-              <AnimatePresence initial={false}>
-                {results.map((m, i) => (
-                  <ModelRow
-                    key={m.id}
-                    model={m}
-                    rank={i + 1}
-                    expanded={expanded === m.id}
-                    onToggle={() =>
-                      setExpanded((e) => (e === m.id ? null : m.id))
-                    }
-                    inCompare={compare.has(m.id)}
-                    onCompare={() => toggleCompare(m.id)}
-                  />
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          </LayoutGroup>
+          {/* No `layout` / <LayoutGroup> here. Every row was a layout element, so
+              each commit forced a layout measurement per row — 400 of them per
+              keystroke. The only thing it animated was reflow when a row expands,
+              which the detail panel's own AnimatePresence height animation
+              already covers. Opacity alone is composited and effectively free. */}
+          <div className="divide-y divide-border/70">
+            <AnimatePresence initial={false}>
+              {visible.map((m, i) => (
+                <ModelRow
+                  key={m.id}
+                  model={m}
+                  rank={i + 1}
+                  expanded={expanded === m.id}
+                  onToggle={toggleExpanded}
+                  inCompare={compare.has(m.id)}
+                  onCompare={toggleCompare}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-6">
+              <Button variant="secondary" size="sm" onClick={revealMore}>
+                Show more ({results.length - visible.length} remaining)
+              </Button>
+            </div>
+          )}
 
           {results.length === 0 && (
             <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -339,7 +378,8 @@ export function LeaderboardClient({
               </span>
               <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
                 {[...compare].map((id) => {
-                  const m = MODELS.find((x) => x.id === id)!;
+                  const m = getModelById(id);
+                  if (!m) return null;
                   return (
                     <Badge key={id} variant="primary" className="gap-1">
                       {m.name}
@@ -370,7 +410,10 @@ export function LeaderboardClient({
   );
 }
 
-function ModelRow({
+// Memoized: the catalog is ~400 models, and even chunked the list renders
+// dozens of animated rows. All props are primitives or stable identities — keep
+// them that way, or this memo silently stops working.
+const ModelRow = React.memo(function ModelRow({
   model,
   rank,
   expanded,
@@ -381,15 +424,16 @@ function ModelRow({
   model: CatalogModel;
   rank: number;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (id: string) => void;
   inCompare: boolean;
-  onCompare: () => void;
+  onCompare: (id: string) => void;
 }) {
   const intel = intelligenceIndex(model);
   const elo = getBenchmark(model, "arena");
   return (
     <motion.div
-      layout
+      // No `layout`: opacity is composited, whereas a layout animation forces a
+      // measurement of every mounted row on each commit.
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -402,8 +446,8 @@ function ModelRow({
       <div
         role="button"
         tabIndex={0}
-        onClick={onToggle}
-        onKeyDown={(e) => e.key === "Enter" && onToggle()}
+        onClick={() => onToggle(model.id)}
+        onKeyDown={(e) => e.key === "Enter" && onToggle(model.id)}
         className={cn(
           "group grid cursor-pointer grid-cols-[1.6rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 transition-colors hover:bg-surface-2/40 md:grid-cols-[1.6rem_minmax(0,1fr)_8rem_5rem_7.5rem_4.5rem_1.6rem]",
         )}
@@ -415,7 +459,7 @@ function ModelRow({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onCompare();
+              onCompare(model.id);
             }}
             className={cn(
               "grid size-5 shrink-0 place-items-center rounded-md border transition-colors",
@@ -518,7 +562,7 @@ function ModelRow({
       </AnimatePresence>
     </motion.div>
   );
-}
+});
 
 function FilterControls({
   filters,

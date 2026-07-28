@@ -2,7 +2,6 @@
 // summarize-and-continue for long conversations.
 
 import type { ChatMessage } from "./types";
-import { estimateTokens } from "@/lib/engine/context";
 import { getModelById } from "@/lib/catalog";
 
 export interface ConversationHealth {
@@ -16,8 +15,18 @@ export function measureHealth(
   messages: ChatMessage[],
   modelId: string,
 ): ConversationHealth {
-  const text = messages.map((m) => m.content).join("\n");
-  const estimatedTokens = estimateTokens(text);
+  // Deliberately arithmetic rather than `estimateTokens(contents.join("\n"))`:
+  // this runs on every chat render, and materializing the whole conversation
+  // as one string was allocating megabytes per keystroke on long threads.
+  //
+  // `estimateTokens` is chars/4, and the joined length is the sum of the parts
+  // plus one separator between each — so this is the same integer, exactly.
+  // `health.test.ts` pins the two against each other.
+  let chars = 0;
+  for (const m of messages) chars += m.content.length;
+  if (messages.length > 1) chars += messages.length - 1;
+  const estimatedTokens = Math.ceil(chars / 4);
+
   const model = getModelById(modelId);
   const contextWindow = model?.contextWindow ?? 128_000;
   const usage = estimatedTokens / contextWindow;

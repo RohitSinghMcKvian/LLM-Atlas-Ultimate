@@ -20,12 +20,27 @@ export async function* postSSE<T = any>(
   signal?: AbortSignal,
   extraHeaders?: Record<string, string>,
 ): AsyncGenerator<T, void, unknown> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...extraHeaders },
-    body: JSON.stringify(body),
-    signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...extraHeaders },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (e) {
+    // A user abort must stay an abort — callers key off the name.
+    if (signal?.aborted || (e as Error).name === "AbortError") throw e;
+    // Otherwise the request never reached a server: the dev server is down, the
+    // tab is on a stale port, or the network dropped. `fetch` reports all of
+    // those as a bare `TypeError: Failed to fetch`, which surfaced verbatim in
+    // the chat bubble and read like a model failure. Say what actually happened.
+    throw new SSEHttpError(
+      0,
+      "Can't reach the Atlas server — the request never left the browser. Check that the dev server is running and that this tab is on the right port.",
+      "network_unreachable",
+    );
+  }
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;

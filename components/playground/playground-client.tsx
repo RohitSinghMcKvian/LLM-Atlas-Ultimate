@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { defaultPlaygroundModels } from "@/lib/catalog/defaults";
+import { resolveModelIds } from "@/lib/catalog/resolve";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import {
   Play,
   Square,
@@ -94,7 +97,8 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const all = routableModels();
+  const snapshot = useCatalogSnapshot();
+  const all = React.useMemo(() => routableModels(), [snapshot]);
 
   const {
     config,
@@ -139,6 +143,19 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt]);
+
+  // A persisted config can name models the daily sync retired. `migrate` cannot
+  // fix this — the catalog is not loaded at rehydration time — so the repair
+  // happens here, once the snapshot is installed.
+  React.useEffect(() => {
+    if (snapshot.models.length === 0) return;
+    const live = resolveModelIds(config.models);
+    if (live.length === config.models.length && live.every((id, i) => id === config.models[i])) {
+      return;
+    }
+    setConfig({ models: live.length ? live : defaultPlaygroundModels() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot]);
 
   const { system, turns, params, models, toolsJson, variables } = config;
 

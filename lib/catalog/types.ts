@@ -45,8 +45,19 @@ export interface CatalogModel {
   provider: string;
   family: string;
   license: License;
-  /** Free (operator-funded open model) vs BYOK (user's OpenRouter key for closed/paid). */
-  access: ModelAccess;
+  /**
+   * @deprecated Legacy hand-audited tier. Never written by the sync and never
+   * read by application code — call `modelAccess()` from `lib/catalog/stats.ts`,
+   * or `modelAvailability()` from `lib/catalog/availability.ts` when you need to
+   * know whether the current user can actually run the model.
+   *
+   * It is kept only as an input on the curated overlay in `models.ts`. The field
+   * went stale as soon as the daily sync began attaching live OpenRouter routes:
+   * 38 entries still claimed `"free"` while their only live route was a metered
+   * endpoint that answers 402 on a zero-credit key. Access is now derived from
+   * `routes`, so there is exactly one thing that can be wrong.
+   */
+  access?: ModelAccess;
   /** Hand-curated "hot right now" flag that powers the Trending rail. */
   trending?: boolean;
   status: ModelStatus;
@@ -73,6 +84,17 @@ export interface CatalogModel {
   blurb: string;
   routes: ModelRoute[];
   tags?: string[];
+  /**
+   * How much of this entry's metadata is attested by the provider.
+   *
+   * `"verified"` — the numbers came from a provider API or were hand-audited.
+   * `"derived"`  — reconstructed from the model id because the provider list
+   *                supplied nothing but the id (NVIDIA NIM returns only
+   *                `{ id, object, created, owned_by }`). Surfaced in the UI
+   *                rather than hidden: a heuristic context window must not be
+   *                presented as a measurement.
+   */
+  metaConfidence?: "verified" | "derived";
 }
 
 export interface BenchmarkDef {

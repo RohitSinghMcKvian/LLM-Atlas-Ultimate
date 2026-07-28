@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { debouncedLocalStorage } from "@/lib/store/debounced-storage";
 import { playgroundRepo } from "@/lib/playground/repo";
 import {
   defaultConfig,
@@ -229,7 +230,16 @@ export const usePlaygroundStore = create<PlaygroundState>()(
     }),
     {
       name: "atlas-playground-config",
+      // v2: a persisted `config.models` can name models the daily sync retired.
+      // The catalog is not available inside `migrate`, so this only marks the
+      // version; `PlaygroundClient` filters the list through `resolveModelIds`
+      // once the snapshot is installed.
+      version: 2,
       partialize: (s) => ({ config: s.config }),
+      // The config is edited keystroke by keystroke (system prompt, turn
+      // bodies, tool JSON), and persist writes on every set(). Coalesce the
+      // writes; reads stay synchronous so rehydration is unchanged.
+      storage: debouncedLocalStorage(),
     },
   ),
 );

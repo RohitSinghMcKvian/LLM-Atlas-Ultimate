@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { defaultCompareModels } from "@/lib/catalog/defaults";
+import { resolveModelIds } from "@/lib/catalog/resolve";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Plus,
@@ -50,8 +53,6 @@ interface Column {
   error?: string;
 }
 
-const DEFAULTS = ["claude-sonnet-4-5", "deepseek-v4-pro", "gpt-oss-120b"];
-
 function parseSynthesis(raw: string) {
   const sec = (name: string) => {
     const re = new RegExp(`##\\s*${name}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, "i");
@@ -77,11 +78,23 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const all = routableModels();
+  const snapshot = useCatalogSnapshot();
+  const all = React.useMemo(() => routableModels(), [snapshot]);
   const [selected, setSelected] = React.useState<string[]>(() => {
-    const init = (initialIds ?? []).filter((id) => getModelById(id));
-    return init.length ? init : DEFAULTS;
+    const init = resolveModelIds(initialIds ?? []);
+    return init.length ? init : defaultCompareModels();
   });
+
+  // A model can be delisted by the daily sync while a link, a bookmark, or this
+  // very tab still names it. Drop the dead ones rather than rendering a column
+  // for a model that no longer exists.
+  React.useEffect(() => {
+    setSelected((current) => {
+      const live = resolveModelIds(current);
+      if (live.length === current.length && live.every((id, i) => id === current[i])) return current;
+      return live.length ? live : defaultCompareModels();
+    });
+  }, [snapshot]);
   const [query, setQuery] = React.useState("");
   const [webRetrieval, setWebRetrieval] = React.useState(false);
   const [running, setRunning] = React.useState(false);
@@ -128,6 +141,49 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    // Every model streams concurrently, so a setState per token meant N
+    // interleaved re-renders of the whole page per response token. Accumulate
+    // into refs and commit on a 48ms timer — the same coalescing chat and
+    // playground already do. Terminal events flush synchronously first, so no
+    // trailing text can be dropped.
+    // `modelText` holds each column's full text (the run above reset every
+    // column to ""); `dirty` is which ones changed since the last commit.
+    const modelText = new Map<string, string>();
+    const dirty = new Set<string>();
+    let synthText = "";
+    let synthDirty = false;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      flushTimer = null;
+      if (dirty.size) {
+        const ids = Array.from(dirty);
+        dirty.clear();
+        setColumns((c) => {
+          const next = { ...c };
+          for (const id of ids) {
+            next[id] = { ...next[id], id, status: "streaming", text: modelText.get(id) ?? "" };
+          }
+          return next;
+        });
+      }
+      if (synthDirty) {
+        synthDirty = false;
+        const text = synthText;
+        setSynth((s) => (s.status === "streaming" ? { ...s, text } : s));
+      }
+    };
+    const schedule = () => {
+      if (flushTimer == null) flushTimer = setTimeout(flush, 48);
+    };
+    const flushNow = () => {
+      if (flushTimer != null) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      flush();
+    };
+
     try {
       for await (const ev of postSSE<any>(
         "/api/v1/compare",
@@ -143,22 +199,19 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
             }));
             break;
           case "model_delta":
-            setColumns((c) => ({
-              ...c,
-              [ev.id]: {
-                ...c[ev.id],
-                status: "streaming",
-                text: (c[ev.id]?.text ?? "") + ev.text,
-              },
-            }));
+            modelText.set(ev.id, (modelText.get(ev.id) ?? "") + ev.text);
+            dirty.add(ev.id);
+            schedule();
             break;
           case "model_done":
+            flushNow();
             setColumns((c) => ({
               ...c,
               [ev.id]: { ...c[ev.id], status: "done" },
             }));
             break;
           case "model_error":
+            flushNow();
             if (ev.code === "key_required") setKeyModalOpen(true);
             setColumns((c) => ({
               ...c,
@@ -166,20 +219,28 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
             }));
             break;
           case "synthesis_start":
+            synthText = "";
+            synthDirty = false;
             setSynth({ status: "streaming", text: "" });
             break;
           case "synthesis_delta":
-            setSynth((s) => ({ status: "streaming", text: s.text + ev.text }));
+            synthText += ev.text;
+            synthDirty = true;
+            schedule();
             break;
           case "synthesis_done":
+            flushNow();
             setSynth((s) => ({ ...s, status: "done" }));
             break;
           case "synthesis_error":
+            flushNow();
             setSynth((s) => ({ ...s, status: "error" }));
             break;
         }
       }
+      flushNow();
     } catch (e) {
+      flushNow();
       if (e instanceof SSEHttpError) {
         if (e.code === "key_required" || e.status === 402) setKeyModalOpen(true);
         setRunError(e.message);
@@ -196,7 +257,7 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
     setRunning(false);
   }
 
-  const parsed = parseSynthesis(synth.text);
+  const parsed = React.useMemo(() => parseSynthesis(synth.text), [synth.text]);
   const hasResults = Object.keys(columns).length > 0;
 
   return (
@@ -231,7 +292,8 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
         />
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           {selected.map((id) => {
-            const m = getModelById(id)!;
+            const m = getModelById(id);
+            if (!m) return null;
             return (
               <Badge key={id} variant="primary" className="gap-1.5 py-1">
                 <Sparkles className="size-3" />
@@ -420,8 +482,8 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
           <div className="flex snap-x gap-4 overflow-x-auto pb-2 no-scrollbar">
             {selected.map((id) => {
               const col = columns[id];
-              const m = getModelById(id)!;
-              if (!col) return null;
+              const m = getModelById(id);
+              if (!col || !m) return null;
               return (
                 <div
                   key={id}

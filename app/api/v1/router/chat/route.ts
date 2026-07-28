@@ -8,6 +8,7 @@ import {
   type UserKeys,
 } from "@/lib/router";
 import { sse, SSE_HEADERS } from "@/lib/router/sse";
+import { getCatalogSnapshot } from "@/lib/catalog/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,10 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // The catalog is a runtime snapshot, so it must be loaded before the router
+  // resolves an id — otherwise every model added by the daily sync 404s here.
+  await getCatalogSnapshot();
 
   // BYOK: user's OpenRouter key arrives per-request. Do NOT log or persist it.
   const orKey = req.headers.get("x-openrouter-key") ?? undefined;

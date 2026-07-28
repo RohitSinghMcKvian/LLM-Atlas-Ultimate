@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { defaultBenchModels } from "@/lib/catalog/defaults";
+import { resolveModelIds } from "@/lib/catalog/resolve";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Gauge,
@@ -47,17 +50,26 @@ interface CaseResult {
   ms: number;
 }
 
-const DEFAULT_MODELS = ["gpt-oss-120b", "llama-3-3-70b", "qwen3-32b"];
-
 export function BenchClient() {
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const all = routableModels();
+  const snapshot = useCatalogSnapshot();
+  const all = React.useMemo(() => routableModels(), [snapshot]);
   const [suites, setSuites] = React.useState<Set<string>>(
     new Set(SUITES.map((s) => s.id)),
   );
-  const [models, setModels] = React.useState<string[]>(DEFAULT_MODELS);
+  const [models, setModels] = React.useState<string[]>(() => defaultBenchModels());
+
+  // The daily sync can retire a selected model mid-session; drop it rather than
+  // dispatching a run against an id no provider serves.
+  React.useEffect(() => {
+    setModels((current) => {
+      const live = resolveModelIds(current);
+      if (live.length === current.length && live.every((id, i) => id === current[i])) return current;
+      return live.length ? live : defaultBenchModels();
+    });
+  }, [snapshot]);
   const [results, setResults] = React.useState<Record<string, CaseResult>>({});
   const [running, setRunning] = React.useState(false);
   const [progress, setProgress] = React.useState({ done: 0, total: 0, current: "" });
@@ -119,7 +131,8 @@ export function BenchClient() {
 
     try {
       for (const modelId of models) {
-        const m = getModelById(modelId)!;
+        const m = getModelById(modelId);
+        if (!m) continue;
         for (const { c } of activeCases) {
           if (ctrl.signal.aborted) throw new DOMException("aborted", "AbortError");
           setProgress({ done, total, current: `${m.name} · ${c.id}` });
@@ -165,21 +178,38 @@ export function BenchClient() {
     return { pass, ran, total: suite.cases.length };
   }
 
-  function overall(modelId: string) {
-    let pass = 0;
-    let ran = 0;
-    activeCases.forEach(({ c }) => {
-      const r = results[`${modelId}:${c.id}`];
-      if (r) {
-        ran++;
-        if (r.pass) pass++;
+  // Score every model once, then sort against the table. The comparator used
+  // to call `overall()` twice per comparison, and each call walks every active
+  // case — so a run's result updates were re-scoring the whole matrix
+  // O(models · log models · cases) times per render.
+  const overallByModel = React.useMemo(() => {
+    const table: Record<string, { pass: number; ran: number }> = {};
+    for (const id of models) {
+      let pass = 0;
+      let ran = 0;
+      for (const { c } of activeCases) {
+        const r = results[`${id}:${c.id}`];
+        if (r) {
+          ran++;
+          if (r.pass) pass++;
+        }
       }
-    });
-    return { pass, ran };
-  }
+      table[id] = { pass, ran };
+    }
+    return table;
+  }, [models, activeCases, results]);
 
-  const ranked = [...models].sort((a, b) => overall(b).pass - overall(a).pass);
-  const activeSuites = SUITES.filter((s) => suites.has(s.id));
+  const ranked = React.useMemo(
+    () =>
+      [...models].sort(
+        (a, b) => (overallByModel[b]?.pass ?? 0) - (overallByModel[a]?.pass ?? 0),
+      ),
+    [models, overallByModel],
+  );
+  const activeSuites = React.useMemo(
+    () => SUITES.filter((s) => suites.has(s.id)),
+    [suites],
+  );
   const hasResults = Object.keys(results).length > 0;
 
   return (
@@ -228,7 +258,8 @@ export function BenchClient() {
             <p className="mb-2 text-sm font-medium">Models</p>
             <div className="flex flex-wrap gap-1.5">
               {models.map((id) => {
-                const m = getModelById(id)!;
+                const m = getModelById(id);
+                if (!m) return null;
                 return (
                   <Badge key={id} variant="primary" className="gap-1">
                     {m.name}
@@ -344,8 +375,9 @@ export function BenchClient() {
 
               <div className="divide-y divide-border/70">
                 {ranked.map((id, i) => {
-                  const m = getModelById(id)!;
-                  const ov = overall(id);
+                  const m = getModelById(id);
+                  if (!m) return null;
+                  const ov = overallByModel[id] ?? { pass: 0, ran: 0 };
                   const pct = ov.ran ? Math.round((ov.pass / ov.ran) * 100) : 0;
                   const open = expanded === id;
                   return (

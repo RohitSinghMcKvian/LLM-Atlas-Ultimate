@@ -19,8 +19,28 @@ export const emptyTree = (): Tree => ({ nodes: {}, active: {} });
 
 const keyOf = (m: ChatMessage): string => m.parentId ?? ROOT;
 
+// `childrenMap` sorts every node in the conversation. Both `activePath` and
+// `siblingsOf` call it, and the chat view calls `siblingsOf` once per rendered
+// message — which made a render O(N² log N), re-paid on every keystroke and
+// every streaming flush.
+//
+// Keying the cache on the `nodes` object itself keeps the module referentially
+// pure: `putNode`, `patchNode`, and `treeFromList` all allocate a fresh `nodes`
+// literal, so any mutation is a new identity and therefore a cache miss. The
+// cache can go cold but never stale, and a WeakMap lets dropped conversations
+// be collected.
+const childrenCache = new WeakMap<
+  Record<string, ChatMessage>,
+  Map<string, string[]>
+>();
+
+const DEV = process.env.NODE_ENV !== "production";
+
 /** parentKey → child ids, ordered oldest→newest by createdAt. */
 export function childrenMap(nodes: Record<string, ChatMessage>): Map<string, string[]> {
+  const cached = childrenCache.get(nodes);
+  if (cached) return cached;
+
   const map = new Map<string, string[]>();
   const ids = Object.keys(nodes).sort(
     (a, b) => nodes[a].createdAt - nodes[b].createdAt || (a < b ? -1 : 1),
@@ -31,6 +51,12 @@ export function childrenMap(nodes: Record<string, ChatMessage>): Map<string, str
     if (arr) arr.push(id);
     else map.set(k, [id]);
   }
+
+  // Callers now share these arrays (`siblingsOf` hands one straight back), so
+  // freeze them in development to catch a mutating caller immediately.
+  if (DEV) for (const arr of map.values()) Object.freeze(arr);
+
+  childrenCache.set(nodes, map);
   return map;
 }
 

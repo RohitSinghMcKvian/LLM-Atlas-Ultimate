@@ -4,6 +4,7 @@ import { MobileTabBar, MobileDrawer } from "@/components/shell/mobile-nav";
 import { CommandPalette } from "@/components/command-palette";
 import { Shortcuts } from "@/components/shortcuts";
 import { PageTransition } from "@/components/shell/page-transition";
+import { CatalogHeal } from "@/components/catalog/catalog-heal-mount";
 
 export default function WorkspaceLayout({
   children,
@@ -23,6 +24,7 @@ export default function WorkspaceLayout({
       <MobileDrawer />
       <CommandPalette />
       <Shortcuts />
+      <CatalogHeal />
     </div>
   );
 }

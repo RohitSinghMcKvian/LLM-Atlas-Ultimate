@@ -1,17 +1,19 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   ArrowRight,
   Moon,
   Sun,
-  Sparkles,
   GitCompareArrows,
   MessagesSquare,
   Cpu,
-  CornerDownLeft,
+  Newspaper,
+  ShieldCheck,
+  Bookmark,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
@@ -24,9 +26,28 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { MODULES } from "@/lib/modules";
-import { routableModels, getModelById } from "@/lib/catalog";
 import { useUIStore } from "@/lib/store/ui-store";
-import { cn } from "@/lib/utils";
+
+// The palette is mounted in the workspace layout, so its imports are parsed on
+// every route — including /docs, /datasets and /notebooks, which have nothing
+// to do with models. The module list (from lib/modules.ts) is tiny and stays
+// static so ⌘K is never empty; only the catalog-backed model page is split out.
+// It is prefetched right after hydration so the chunk is warm before first use.
+const ModelsPage = dynamic(
+  () => import("./command-palette-models").then((m) => m.ModelsPage),
+  { ssr: false },
+);
+const ActiveModelName = dynamic(
+  () => import("./command-palette-models").then((m) => m.ActiveModelName),
+  { ssr: false, loading: () => null },
+);
+// Same reasoning as the model page: the static News items below keep ⌘K useful
+// immediately, and only the live-headline fetch is deferred — so opening the
+// palette on /chat never costs a request to the news API.
+const NewsCommandItems = dynamic(
+  () => import("./news/news-command-items").then((m) => m.NewsCommandItems),
+  { ssr: false, loading: () => null },
+);
 
 export function CommandPalette() {
   const router = useRouter();
@@ -36,6 +57,15 @@ export function CommandPalette() {
   const setActiveModel = useUIStore((s) => s.setActiveModel);
   const activeModelId = useUIStore((s) => s.activeModelId);
   const [page, setPage] = React.useState<"root" | "models">("root");
+  // Controlled so the models page can run its own scored search over the full
+  // catalog instead of relying on cmdk filtering every mounted item.
+  const [query, setQuery] = React.useState("");
+
+  // Switching pages starts a new search; carrying the old text over would show
+  // a filtered model list the moment the page opens.
+  React.useEffect(() => {
+    setQuery("");
+  }, [page]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -52,6 +82,22 @@ export function CommandPalette() {
     if (!open) setPage("root");
   }, [open]);
 
+  // Warm the catalog chunk once the page is idle, so the first ⌘K → "Switch
+  // active model" is instant rather than waiting on a network round-trip.
+  // Shared with the topbar's ModelSwitcher, so this pays for both.
+  React.useEffect(() => {
+    const warm = () => void import("./command-palette-models");
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback;
+    if (ric) {
+      const id = ric(warm);
+      return () => (window as unknown as { cancelIdleCallback?: (id: number) => void })
+        .cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(warm, 1200);
+    return () => clearTimeout(t);
+  }, []);
+
   const run = React.useCallback(
     (fn: () => void) => {
       setOpen(false);
@@ -61,16 +107,20 @@ export function CommandPalette() {
     [setOpen],
   );
 
-  const models = routableModels();
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
         hideClose
         className="max-w-xl gap-0 overflow-hidden p-0 shadow-float"
       >
-        <Command loop>
+        {/* The models page filters itself (see command-palette-models.tsx): the
+            catalog is ~400 entries, so it renders a capped result set rather than
+            handing every model to cmdk to re-score on each keystroke. The root
+            page is small and keeps cmdk's built-in filtering. */}
+        <Command loop shouldFilter={page !== "models"}>
           <CommandInput
+            value={query}
+            onValueChange={setQuery}
             placeholder={
               page === "models"
                 ? "Switch active model…"
@@ -100,7 +150,7 @@ export function CommandPalette() {
                     <Cpu />
                     Switch active model
                     <CommandShortcut>
-                      {getModelById(activeModelId)?.name ?? ""}
+                      <ActiveModelName modelId={activeModelId} />
                     </CommandShortcut>
                   </CommandItem>
                   <CommandItem
@@ -114,6 +164,29 @@ export function CommandPalette() {
                     Toggle theme
                   </CommandItem>
                 </CommandGroup>
+
+                <CommandGroup heading="News">
+                  <CommandItem onSelect={() => run(() => router.push("/news"))}>
+                    <Newspaper />
+                    Latest AI news
+                  </CommandItem>
+                  <CommandItem
+                    value="verified news provenance sources"
+                    onSelect={() => run(() => router.push("/news?verified=1"))}
+                  >
+                    <ShieldCheck />
+                    Verified stories only
+                  </CommandItem>
+                  <CommandItem
+                    value="saved news bookmarks reading list"
+                    onSelect={() => run(() => router.push("/news?saved=1"))}
+                  >
+                    <Bookmark />
+                    Saved stories
+                  </CommandItem>
+                </CommandGroup>
+
+                <NewsCommandItems onSelect={run} />
 
                 <CommandGroup heading="Navigate">
                   {MODULES.map((m) => (
@@ -142,32 +215,10 @@ export function CommandPalette() {
             )}
 
             {page === "models" && (
-              <CommandGroup heading="Models">
-                {models.map((m) => (
-                  <CommandItem
-                    key={m.id}
-                    value={`${m.name} ${m.provider}`}
-                    onSelect={() =>
-                      run(() => {
-                        setActiveModel(m.id);
-                      })
-                    }
-                  >
-                    <Sparkles
-                      className={cn(m.id === activeModelId && "text-cyan")}
-                    />
-                    <span>{m.name}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {m.provider}
-                    </span>
-                    {m.id === activeModelId && (
-                      <CommandShortcut>
-                        <CornerDownLeft className="size-3.5" /> active
-                      </CommandShortcut>
-                    )}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+              <ModelsPage
+                query={query}
+                onPick={(id) => run(() => setActiveModel(id))}
+              />
             )}
           </CommandList>
 

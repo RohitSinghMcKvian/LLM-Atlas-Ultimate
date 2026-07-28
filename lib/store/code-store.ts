@@ -1247,6 +1247,15 @@ export const useCodeStore = create<CodeState>()(
     },
     {
       name: "atlas-code",
+      // v2: the catalog is now a daily-synced snapshot, so a persisted agent
+      // model can name something no provider serves. Clearing it hands the
+      // choice back to the post-hydration self-heal in
+      // `components/code/agent-panel.tsx`.
+      version: 2,
+      migrate: (state, version) => {
+        const s = (state ?? {}) as Record<string, unknown>;
+        return (version < 2 ? { ...s, modelId: "" } : s) as never;
+      },
       partialize: (s) => ({
         modelId: s.modelId,
         mode: s.mode,

@@ -1,3 +1,5 @@
+import { defaultPlaygroundModels } from "@/lib/catalog/defaults";
+
 // Atlas Playground domain types (§5). A "config" is everything needed to
 // reproduce a run: conversation turns, parameters, models, tools, and template
 // variable values. Runs capture real per-model metrics from the typed event
@@ -110,7 +112,7 @@ export function defaultConfig(): PlaygroundConfig {
       },
     ],
     params: { ...DEFAULT_PARAMS },
-    models: ["deepseek-v4-pro", "llama-3-3-70b"],
+    models: defaultPlaygroundModels(),
     toolsJson: "",
     variables: {},
   };

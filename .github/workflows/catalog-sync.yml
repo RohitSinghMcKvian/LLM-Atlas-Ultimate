@@ -1,0 +1,38 @@
+# Daily model-catalog sync.
+#
+# One of three layered triggers, for deployments that are not on Vercel Cron:
+#   1. On-read  — lib/catalog/store.ts refreshes in the background when the
+#                 served snapshot is older than the interval. Needs no setup.
+#   2. Vercel   — vercel.json `crons`.
+#   3. This.
+#
+# Requires two repository secrets:
+#   ATLAS_BASE_URL        e.g. https://llmatlas.xyz
+#   CATALOG_SYNC_SECRET   must match the deployment's env var
+name: catalog-sync
+
+on:
+  schedule:
+    # 04:10 UTC, deliberately off the hour to avoid the provider-API rush.
+    - cron: "10 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger catalog sync
+        env:
+          BASE_URL: ${{ secrets.ATLAS_BASE_URL }}
+          SYNC_SECRET: ${{ secrets.CATALOG_SYNC_SECRET }}
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$SYNC_SECRET" ]; then
+            echo "ATLAS_BASE_URL / CATALOG_SYNC_SECRET not configured — skipping."
+            exit 0
+          fi
+          response=$(curl -fsS --max-time 120 \
+            -X POST "$BASE_URL/api/v1/catalog/sync" \
+            -H "Authorization: Bearer $SYNC_SECRET")
+          echo "$response"
+          # The endpoint returns ok:false when the sanity gates rejected the run.
+          echo "$response" | grep -q '"ok":true'

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { MODELS, getModelById } from "@/lib/catalog";
+import { allModels, getModelById, type CatalogModel } from "@/lib/catalog";
+import { getCatalogSnapshot } from "@/lib/catalog/store";
 import {
   apiMonthlyCost,
   DEFAULT_WORKLOAD,
@@ -21,13 +22,15 @@ export async function POST(req: NextRequest) {
   } catch {
     /* use defaults */
   }
+  await getCatalogSnapshot();
+
   const workload: Workload = { ...DEFAULT_WORKLOAD, ...(body.workload ?? {}) };
   const models =
     body.modelIds && body.modelIds.length
       ? body.modelIds.map(getModelById).filter(Boolean)
-      : MODELS.filter((m) => m.status !== "upcoming");
+      : allModels().filter((m) => m.status !== "upcoming");
 
-  const results = (models as typeof MODELS)
+  const results = (models as CatalogModel[])
     .map((m) => ({
       id: m.id,
       name: m.name,

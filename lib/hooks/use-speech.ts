@@ -119,5 +119,15 @@ export function useTTS() {
 
   React.useEffect(() => () => { if (supported) window.speechSynthesis.cancel(); }, [supported]);
 
-  return { supported, speakingId, speak, cancel, toggle: (id: string, text: string) => (speakingId === id ? cancel() : speak(id, text)) };
+  const toggle = React.useCallback(
+    (id: string, text: string) => (speakingId === id ? cancel() : speak(id, text)),
+    [speakingId, cancel, speak],
+  );
+
+  // Memoized because this object is passed down to every message bubble; a
+  // fresh literal on each render would defeat their React.memo.
+  return React.useMemo(
+    () => ({ supported, speakingId, speak, cancel, toggle }),
+    [supported, speakingId, speak, cancel, toggle],
+  );
 }
