@@ -6,6 +6,7 @@ import {
   type UserKeys,
 } from "@/lib/router";
 import { getModelById } from "@/lib/catalog";
+import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { sse, SSE_HEADERS } from "@/lib/router/sse";
 
 export const runtime = "nodejs";
@@ -34,6 +35,10 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // The catalog is a runtime snapshot, so it must be loaded before any model
+  // id is resolved — otherwise every model added by the daily sync 404s here.
+  await getCatalogSnapshot();
 
   // BYOK: forwarded per-request, never logged or persisted. A mixed fan-out of
   // free + closed models is fine — each model resolves independently below, and

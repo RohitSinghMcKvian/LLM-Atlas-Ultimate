@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sloppy Feed & Co</title>
+    <item>
+      <title>Report: inference costs fall 40% as capacity grows</title>
+      <link>https://sloppy.example.com/post?id=1&ref=rss&utm_source=x</link>
+      <pubDate>Not a date</pubDate>
+      <description>Costs are down.<br>Capacity is up.</description>
+    <item>
+      <title>Second item, first was never closed</title>
+      <link>https://sloppy.example.com/post?id=2</link>
+      <pubDate>Wed, 16 Jul 2025 07:00:00 GMT</pubDate>
+      <description>Nesting is wrong here.</description>
+    </item>
+  </channel>
+</rss>

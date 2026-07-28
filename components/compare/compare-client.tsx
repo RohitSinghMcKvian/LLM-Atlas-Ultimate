@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { defaultCompareModels } from "@/lib/catalog/defaults";
+import { resolveModelIds } from "@/lib/catalog/resolve";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Plus,
@@ -50,8 +53,6 @@ interface Column {
   error?: string;
 }
 
-const DEFAULTS = ["claude-sonnet-4-5", "deepseek-v4-pro", "gpt-oss-120b"];
-
 function parseSynthesis(raw: string) {
   const sec = (name: string) => {
     const re = new RegExp(`##\\s*${name}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, "i");
@@ -77,11 +78,23 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const all = React.useMemo(() => routableModels(), []);
+  const snapshot = useCatalogSnapshot();
+  const all = React.useMemo(() => routableModels(), [snapshot]);
   const [selected, setSelected] = React.useState<string[]>(() => {
-    const init = (initialIds ?? []).filter((id) => getModelById(id));
-    return init.length ? init : DEFAULTS;
+    const init = resolveModelIds(initialIds ?? []);
+    return init.length ? init : defaultCompareModels();
   });
+
+  // A model can be delisted by the daily sync while a link, a bookmark, or this
+  // very tab still names it. Drop the dead ones rather than rendering a column
+  // for a model that no longer exists.
+  React.useEffect(() => {
+    setSelected((current) => {
+      const live = resolveModelIds(current);
+      if (live.length === current.length && live.every((id, i) => id === current[i])) return current;
+      return live.length ? live : defaultCompareModels();
+    });
+  }, [snapshot]);
   const [query, setQuery] = React.useState("");
   const [webRetrieval, setWebRetrieval] = React.useState(false);
   const [running, setRunning] = React.useState(false);
@@ -279,7 +292,8 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
         />
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           {selected.map((id) => {
-            const m = getModelById(id)!;
+            const m = getModelById(id);
+            if (!m) return null;
             return (
               <Badge key={id} variant="primary" className="gap-1.5 py-1">
                 <Sparkles className="size-3" />
@@ -468,8 +482,8 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
           <div className="flex snap-x gap-4 overflow-x-auto pb-2 no-scrollbar">
             {selected.map((id) => {
               const col = columns[id];
-              const m = getModelById(id)!;
-              if (!col) return null;
+              const m = getModelById(id);
+              if (!col || !m) return null;
               return (
                 <div
                   key={id}

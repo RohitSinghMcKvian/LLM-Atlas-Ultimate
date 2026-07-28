@@ -182,9 +182,9 @@ export const MODULES: ModuleDef[] = [
     id: "news",
     label: "News",
     name: "Atlas News",
-    tagline: "Hourly-syncing AI news",
+    tagline: "Verified AI news, hourly",
     description:
-      "A de-duplicated, hourly-updating feed of AI news with neutral summaries and 'what changed' model-diff cards.",
+      "Live AI news from ~30 first-party, research and press sources. De-duplicated across publishers, scored for provenance, and re-synced every hour — every story links to the original.",
     href: "/news",
     icon: Newspaper,
     group: "Catalog",

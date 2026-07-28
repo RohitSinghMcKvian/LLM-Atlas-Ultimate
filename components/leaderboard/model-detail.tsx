@@ -281,6 +281,19 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
           </Button>
         </div>
 
+        {/* Transparency over authority: NVIDIA NIM's model list returns only
+            `{id, owned_by, created}`, so for NIM-only models the context window,
+            max output and capability flags are reconstructed from the id. That is
+            a useful guess, not a measurement, and must not be presented as one. */}
+        {model.metaConfidence === "derived" && (
+          <p className="rounded-xl border border-border bg-surface-2/50 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Specs inferred.</span> This
+            model&apos;s provider publishes only an id, so its context window and
+            capabilities are derived from naming conventions and may be imprecise.
+            Pricing is exact — it runs on the operator&apos;s key at no cost.
+          </p>
+        )}
+
         {chartData.length > 0 && (
           <details className="text-sm">
             <summary className="cursor-pointer text-muted-foreground hover:text-foreground">

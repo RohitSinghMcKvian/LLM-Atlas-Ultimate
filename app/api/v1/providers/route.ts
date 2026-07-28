@@ -20,6 +20,10 @@ export async function GET() {
     freeReady,
     servePaid,
     configured,
+    // The client needs this to reach the same free/metered verdict the server
+    // does — see `lib/catalog/availability.ts`. It is an operator policy knob,
+    // not a secret.
+    freeCeilingPerM: Number(process.env.ATLAS_FREE_OPEN_CEILING_PER_M ?? 0) || 0,
     providers: PROVIDER_LIST.map((p) => ({
       id: p.id,
       name: p.name,

@@ -1,0 +1,50 @@
+# Hourly AI news sync.
+#
+# One of four layered triggers, for deployments that are not on Vercel — or that
+# are on Vercel's Hobby plan, where cron frequency is capped:
+#   1. On-read  — lib/news/store.ts refreshes in the background when the served
+#                 corpus is older than ATLAS_NEWS_SYNC_INTERVAL_MINUTES. Needs
+#                 no setup at all, and is why the feature works out of the box.
+#   2. Vercel   — vercel.json `crons`, at 7 past the hour.
+#   3. This.
+#   4. The Refresh button in the UI, via the public, rate-limited
+#      /api/v1/news/refresh. Not this endpoint — a browser holds no secret.
+#
+# Requires two repository secrets:
+#   ATLAS_BASE_URL     e.g. https://llmatlas.xyz
+#   NEWS_SYNC_SECRET   must match the deployment's env var
+#                      (CATALOG_SYNC_SECRET or CRON_SECRET also work)
+name: news-sync
+
+on:
+  schedule:
+    # 17 past the hour: clear of the top-of-hour publisher CDN rush, and clear of
+    # the Vercel cron at :07 so the two never collide on the same corpus.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+# A slow sweep must not stack up behind the next hour's run.
+concurrency:
+  group: news-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger news sync
+        env:
+          BASE_URL: ${{ secrets.ATLAS_BASE_URL }}
+          SYNC_SECRET: ${{ secrets.NEWS_SYNC_SECRET }}
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$SYNC_SECRET" ]; then
+            echo "ATLAS_BASE_URL / NEWS_SYNC_SECRET not configured — skipping."
+            exit 0
+          fi
+          response=$(curl -fsS --max-time 120 \
+            -X POST "$BASE_URL/api/v1/news/sync" \
+            -H "Authorization: Bearer $SYNC_SECRET")
+          echo "$response"
+          # The endpoint returns ok:false when a sanity gate rejected the run,
+          # which is how a silently-stalled corpus becomes a red build.
+          echo "$response" | grep -q '"ok":true'

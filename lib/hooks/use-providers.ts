@@ -10,6 +10,8 @@ interface ProvidersInfo {
   /** Operator key also serves closed/paid models (no user key required). */
   servePaid: boolean;
   configured: ProviderId[];
+  /** `ATLAS_FREE_OPEN_CEILING_PER_M` — needed to match the server's cost verdict. */
+  freeCeilingPerM: number;
   providers: { id: ProviderId; name: string; configured: boolean }[];
   loading: boolean;
 }
@@ -19,6 +21,7 @@ const IDLE: ProvidersInfo = {
   freeReady: false,
   servePaid: false,
   configured: [],
+  freeCeilingPerM: 0,
   providers: [],
   loading: true,
 };

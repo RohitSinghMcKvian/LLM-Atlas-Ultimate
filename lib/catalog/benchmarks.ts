@@ -78,6 +78,54 @@ export const BENCHMARKS: BenchmarkDef[] = [
     higherBetter: true,
     max: 1500,
   },
+
+  // --- Synced from the provider catalog -----------------------------------
+  //
+  // OpenRouter publishes Artificial Analysis' composite indices alongside its
+  // model list, which is the only benchmark signal either provider exposes. It
+  // covers roughly half the synced catalog and is what stops newly-added models
+  // from ranking at zero on the leaderboard.
+  //
+  // `design-arena` is deliberately separate from `arena` above: Design Arena Elo
+  // and LMSYS Arena Elo are different populations on different scales, so folding
+  // them into one column would corrupt both it and the intelligence-index
+  // fallback that reads it.
+  {
+    key: "aa-intelligence",
+    label: "AA Intelligence",
+    about: "Artificial Analysis composite intelligence index across its eval suite.",
+    category: "overall",
+    unit: "%",
+    higherBetter: true,
+    max: 100,
+  },
+  {
+    key: "aa-coding",
+    label: "AA Coding",
+    about: "Artificial Analysis composite coding index.",
+    category: "coding",
+    unit: "%",
+    higherBetter: true,
+    max: 100,
+  },
+  {
+    key: "aa-agentic",
+    label: "AA Agentic",
+    about: "Artificial Analysis composite agentic / tool-use index.",
+    category: "agentic",
+    unit: "%",
+    higherBetter: true,
+    max: 100,
+  },
+  {
+    key: "design-arena",
+    label: "Design Arena Elo",
+    about: "Human-preference Elo for UI and data-visualization generation.",
+    category: "overall",
+    unit: "elo",
+    higherBetter: true,
+    max: 1500,
+  },
 ];
 
 export const BENCHMARK_MAP: Record<string, BenchmarkDef> = Object.fromEntries(

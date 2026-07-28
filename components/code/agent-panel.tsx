@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import {
   Play,
   Pause,
@@ -123,6 +124,8 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
   const [configOpen, setConfigOpen] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = React.useState(true);
+  const snapshot = useCatalogSnapshot();
+
 
   // Default the model to the first free tool-capable one — but only once the
   // persisted store has rehydrated, so a valid saved choice never gets
@@ -142,8 +145,10 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
       return;
     }
     return p.onFinishHydration(applyDefault);
+    // Re-runs on a catalog swap too: the daily sync can retire the selected
+    // agent model mid-session, and an agent run against a dead id just fails.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [snapshot]);
 
   React.useEffect(() => {
     if (atBottom)

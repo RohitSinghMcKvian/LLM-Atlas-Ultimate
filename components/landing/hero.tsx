@@ -9,6 +9,8 @@ import { Magnetic } from "@/components/motion/magnetic";
 import { Button } from "@/components/ui/button";
 import { EASE } from "@/lib/motion";
 
+// Fallback only. The real names come from the live snapshot via the server
+// component, so the constellation never advertises a model that was delisted.
 const LABELS = [
   "Claude Opus 4.8",
   "GPT-5.5",
@@ -27,14 +29,17 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE } },
 };
 
-export function Hero() {
+export function Hero({ labels }: { labels?: string[] } = {}) {
+  // `Constellation` re-seeds its layout when `labels` changes identity, so the
+  // array must be stable for the life of the document.
+  const names = React.useMemo(() => labels ?? LABELS, [labels]);
   return (
     <section className="relative isolate overflow-hidden">
       {/* Backdrops */}
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-aurora" />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-grid-fade opacity-60" />
       <div className="absolute inset-0 -z-10">
-        <Constellation labels={LABELS} className="size-full" />
+        <Constellation labels={names} className="size-full" />
       </div>
       {/* fade to page bottom */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-b from-transparent to-background" />

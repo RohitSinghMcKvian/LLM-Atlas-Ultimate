@@ -28,7 +28,7 @@ A professional, fully responsive, animation-rich Next.js 15 application realizin
 | Module | Highlights |
 |---|---|
 | **Code** | A **real browser-side coding agent**: Node 20 via WebContainer + Python via Pyodide, three-pane IDE (file tree · Monaco · live terminal). Seven-tool agent loop (read/write/edit/delete/run/python/**subagent**), **plan mode** (propose → approve → execute), per-tool **allow/ask/deny policy + hooks**, `ATLAS.md` project memory, auto-checkpoints with restore, per-change diffs with revert, persistent sessions, and a **dev-server preview** pane via WebContainer `server-ready` |
-| **News** | Hourly-syncing, de-duplicated masonry feed with neutral summaries, source attribution, and distinct "what changed" model-diff cards |
+| **News** | Live AI news from ~30 first-party, research and press feeds. Re-synced hourly with no API key, de-duplicated into cross-publisher clusters, scored for provenance (`verified` / `corroborated` / `reported`), and always linked to the original |
 | **Playground** | Multi-turn conversation editor streamed across models side-by-side — full parameter surface (top-k, penalties, stop, seed, reasoning effort, JSON mode), **function-calling tools**, `{{variables}}`, presets, starred run history, and **export as cURL/TypeScript/Python** with real TTFT/tokens/cost metrics |
 | **Learn** | Model-connected lessons with a live "Run this live" cell, auto-graded quizzes, a learning-path constellation, and a self-branded certificate |
 | **Flow** | An interactive multi-agent builder — draggable nodes, drag-to-connect ports, an inspector, and a Run that animates execution through the graph (parallel branches) |

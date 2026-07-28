@@ -11,6 +11,19 @@ export interface ProviderMeta {
   apiKeyEnv: string;
   docsUrl: string;
   accent: "cyan" | "violet" | "amber" | "blue" | "orange";
+  /**
+   * Who pays, at point of use.
+   *
+   * `"operator-funded"` — the operator's key covers it, so it is free to the
+   * end user. Every provider here either has a genuinely free tier (NVIDIA NIM,
+   * Google AI Studio, Groq) or runs on the user's own hardware (local).
+   *
+   * `"metered"` — billed per token against whoever's key is used. OpenRouter is
+   * metered *as a provider*; its `:free` model variants are the exception and
+   * are recognised by the route id, not by this field. See
+   * `lib/catalog/availability.ts`.
+   */
+  billing: "operator-funded" | "metered";
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
@@ -24,6 +37,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     apiKeyEnv: "NVIDIA_API_KEY",
     docsUrl: "https://build.nvidia.com/",
     accent: "cyan",
+    billing: "operator-funded",
   },
   openrouter: {
     id: "openrouter",
@@ -35,6 +49,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     apiKeyEnv: "OPENROUTER_API_KEY",
     docsUrl: "https://openrouter.ai/docs",
     accent: "violet",
+    billing: "metered",
   },
   google: {
     id: "google",
@@ -46,6 +61,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     apiKeyEnv: "GOOGLE_API_KEY",
     docsUrl: "https://ai.google.dev/gemini-api/docs",
     accent: "blue",
+    billing: "operator-funded",
   },
   groq: {
     id: "groq",
@@ -57,6 +73,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     apiKeyEnv: "GROQ_API_KEY",
     docsUrl: "https://console.groq.com/docs",
     accent: "orange",
+    billing: "operator-funded",
   },
   local: {
     id: "local",
@@ -68,6 +85,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     apiKeyEnv: "LOCAL_API_KEY",
     docsUrl: "https://ollama.com",
     accent: "amber",
+    billing: "operator-funded",
   },
 };
 

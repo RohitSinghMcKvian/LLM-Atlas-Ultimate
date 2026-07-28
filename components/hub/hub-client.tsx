@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -17,7 +18,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  MODELS,
   freeModels,
   byokModels,
   trendingModels,
@@ -33,25 +33,33 @@ export function HubClient() {
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
   const hasKey = useKeysStore((s) => s.openrouterKey.length > 0);
 
-  const trending = trendingModels();
-  const fresh = newModels(120);
+  // One subscription drives every rail: a synced snapshot is a new object
+  // identity, so all five memos below recompute exactly once when it lands.
+  const snapshot = useCatalogSnapshot();
+
+  // Memoized, not called inline: at ~400 models `newModels` sorts the whole
+  // catalog, and these rails re-render on every key-modal toggle.
+  const trending = React.useMemo(() => trendingModels(), [snapshot]);
+  const fresh = React.useMemo(() => newModels(120), [snapshot]);
   const free = React.useMemo(
     () => byIntelligence(freeModels()).slice(0, 12),
-    [],
+    [snapshot],
   );
   const frontier = React.useMemo(
     () => byIntelligence(byokModels()).slice(0, 12),
-    [],
+    [snapshot],
   );
 
-  const stats = React.useMemo(() => {
-    const live = MODELS.filter((m) => m.status !== "upcoming");
-    return {
-      total: live.length,
-      free: live.filter((m) => modelAccess(m) === "free").length,
-      byok: live.filter((m) => modelAccess(m) === "byok").length,
-    };
-  }, []);
+  // Straight off the snapshot rather than re-scanning the catalog: the sync
+  // already computed these.
+  const stats = React.useMemo(
+    () => ({
+      total: snapshot.stats.models - snapshot.stats.upcoming,
+      free: snapshot.stats.free,
+      byok: snapshot.stats.byok,
+    }),
+    [snapshot],
+  );
 
   return (
     <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:py-10">

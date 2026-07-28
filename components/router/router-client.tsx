@@ -26,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { CountUp } from "@/components/motion/count-up";
 import {
-  MODELS,
+  modelCountByRouteProvider,
   PROVIDER_LIST,
   PROVIDERS,
   routableModels,
@@ -70,6 +70,10 @@ export function RouterClient() {
   const [log, setLog] = React.useState<LogEntry[]>(SEED_LOG);
   const [testing, setTesting] = React.useState(false);
   const [testResult, setTestResult] = React.useState<string | null>(null);
+
+  // Indexed once per snapshot rather than rescanning every model's routes for
+  // each of the provider cards on every render.
+  const routeCounts = modelCountByRouteProvider();
 
   // simulated live traffic
   React.useEffect(() => {
@@ -192,9 +196,7 @@ export function RouterClient() {
         {PROVIDER_LIST.map((p) => {
           const configured =
             providers.providers.find((x) => x.id === p.id)?.configured ?? false;
-          const count = MODELS.filter((m) =>
-            m.routes.some((r) => r.provider === p.id),
-          ).length;
+          const count = routeCounts.get(p.id) ?? 0;
           return (
             <Card key={p.id} className="p-4">
               <div className="flex items-start justify-between">

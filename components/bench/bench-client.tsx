@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { defaultBenchModels } from "@/lib/catalog/defaults";
+import { resolveModelIds } from "@/lib/catalog/resolve";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Gauge,
@@ -47,17 +50,26 @@ interface CaseResult {
   ms: number;
 }
 
-const DEFAULT_MODELS = ["gpt-oss-120b", "llama-3-3-70b", "qwen3-32b"];
-
 export function BenchClient() {
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const all = React.useMemo(() => routableModels(), []);
+  const snapshot = useCatalogSnapshot();
+  const all = React.useMemo(() => routableModels(), [snapshot]);
   const [suites, setSuites] = React.useState<Set<string>>(
     new Set(SUITES.map((s) => s.id)),
   );
-  const [models, setModels] = React.useState<string[]>(DEFAULT_MODELS);
+  const [models, setModels] = React.useState<string[]>(() => defaultBenchModels());
+
+  // The daily sync can retire a selected model mid-session; drop it rather than
+  // dispatching a run against an id no provider serves.
+  React.useEffect(() => {
+    setModels((current) => {
+      const live = resolveModelIds(current);
+      if (live.length === current.length && live.every((id, i) => id === current[i])) return current;
+      return live.length ? live : defaultBenchModels();
+    });
+  }, [snapshot]);
   const [results, setResults] = React.useState<Record<string, CaseResult>>({});
   const [running, setRunning] = React.useState(false);
   const [progress, setProgress] = React.useState({ done: 0, total: 0, current: "" });
@@ -119,7 +131,8 @@ export function BenchClient() {
 
     try {
       for (const modelId of models) {
-        const m = getModelById(modelId)!;
+        const m = getModelById(modelId);
+        if (!m) continue;
         for (const { c } of activeCases) {
           if (ctrl.signal.aborted) throw new DOMException("aborted", "AbortError");
           setProgress({ done, total, current: `${m.name} · ${c.id}` });
@@ -245,7 +258,8 @@ export function BenchClient() {
             <p className="mb-2 text-sm font-medium">Models</p>
             <div className="flex flex-wrap gap-1.5">
               {models.map((id) => {
-                const m = getModelById(id)!;
+                const m = getModelById(id);
+                if (!m) return null;
                 return (
                   <Badge key={id} variant="primary" className="gap-1">
                     {m.name}
@@ -361,7 +375,8 @@ export function BenchClient() {
 
               <div className="divide-y divide-border/70">
                 {ranked.map((id, i) => {
-                  const m = getModelById(id)!;
+                  const m = getModelById(id);
+                  if (!m) return null;
                   const ov = overallByModel[id] ?? { pass: 0, ran: 0 };
                   const pct = ov.ran ? Math.round((ov.pass / ov.ran) * 100) : 0;
                   const open = expanded === id;

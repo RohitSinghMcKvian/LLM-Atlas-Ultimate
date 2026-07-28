@@ -12,6 +12,13 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:preview"],
       "port": 3105
+    },
+    {
+      "name": "atlas-verify",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:verify"],
+      "port": 3110,
+      "autoPort": true
     }
   ]
 }

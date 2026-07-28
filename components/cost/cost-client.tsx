@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { defaultCostModels } from "@/lib/catalog/defaults";
+import { resolveModelId } from "@/lib/catalog/resolve";
 import dynamic from "next/dynamic";
 import {
   Coins,
@@ -26,10 +28,11 @@ import {
 } from "@/components/ui/select";
 import { Reveal } from "@/components/motion/reveal";
 import {
-  MODELS,
+  allModels,
   getModelById,
   BENCHMARKS,
   getBenchmark,
+  type CatalogModel,
 } from "@/lib/catalog";
 import {
   apiMonthlyCost,
@@ -57,22 +60,14 @@ const FrontierChart = dynamic(
   { loading: () => null },
 );
 
-const DEFAULT_SELECTION = [
-  "claude-sonnet-4-5",
-  "gpt-5",
-  "gpt-5-mini",
-  "deepseek-v4-pro",
-  "llama-3-3-70b",
-  "gemini-2-5-flash",
-];
-
 export function CostClient({ initialModelId }: { initialModelId?: string }) {
   const [workload, setWorkload] = React.useState<Workload>(DEFAULT_WORKLOAD);
   const [selfhost, setSelfhost] = React.useState<SelfHostAssumptions>(DEFAULT_SELFHOST);
   const [selected, setSelected] = React.useState<string[]>(() => {
-    const base = [...DEFAULT_SELECTION];
-    if (initialModelId && !base.includes(initialModelId)) base.unshift(initialModelId);
-    return base.filter((id) => getModelById(id));
+    const base = defaultCostModels();
+    const requested = resolveModelId(initialModelId);
+    if (requested && !base.includes(requested)) base.unshift(requested);
+    return base;
   });
   const [axis, setAxis] = React.useState<string>("mmlu");
 
@@ -108,20 +103,26 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
   // catches up — the settled result is identical.
   const deferredWorkload = React.useDeferredValue(workload);
   const frontier = React.useMemo(() => {
-    return MODELS.filter(
-      (m) => m.status !== "upcoming" && getBenchmark(m, axis) !== undefined,
-    ).map((m) => ({
-      id: m.id,
-      name: m.name,
-      x: apiMonthlyCost(m, deferredWorkload).total,
-      y: getBenchmark(m, axis)!,
-      open: m.license === "open",
-      selected: selected.includes(m.id),
-    }));
+    // Capped: the catalog is ~400 models, and a scatter plot of every one of
+    // them is both unreadable and expensive for recharts to lay out on each
+    // slider tick. The strongest 120 on the chosen axis is the interesting part
+    // of the frontier anyway.
+    return allModels()
+      .filter((m) => m.status !== "upcoming" && getBenchmark(m, axis) !== undefined)
+      .sort((a, b) => (getBenchmark(b, axis) ?? 0) - (getBenchmark(a, axis) ?? 0))
+      .slice(0, 120)
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        x: apiMonthlyCost(m, deferredWorkload).total,
+        y: getBenchmark(m, axis)!,
+        open: m.license === "open",
+        selected: selected.includes(m.id),
+      }));
   }, [axis, deferredWorkload, selected]);
 
   const available = React.useMemo(
-    () => MODELS.filter((m) => m.status !== "upcoming" && !selected.includes(m.id)),
+    () => allModels().filter((m) => m.status !== "upcoming" && !selected.includes(m.id)),
     [selected],
   );
 
@@ -508,7 +509,7 @@ function AddModel({
   available,
   onAdd,
 }: {
-  available: typeof MODELS;
+  available: CatalogModel[];
   onAdd: (id: string) => void;
 }) {
   return (

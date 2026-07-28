@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { defaultFlowModel } from "@/lib/catalog/defaults";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Play,
@@ -135,7 +136,7 @@ export function FlowClient() {
     const y = (sc?.scrollTop ?? 0) + 80;
     setNodes((ns) => [
       ...ns,
-      { id, kind, x, y, label: def.defaultLabel, sub: def.sub, model: kind === "agent" ? "llama-3-3-70b" : undefined },
+      { id, kind, x, y, label: def.defaultLabel, sub: def.sub, model: kind === "agent" ? defaultFlowModel() : undefined },
     ]);
     setSelected(id);
   }
