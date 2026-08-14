@@ -24,10 +24,11 @@ export const dynamic = "force-dynamic";
  * model that stopped talking — the partial answer is kept and presented as
  * finished.
  *
- * 800 s is the current Vercel maximum. Nothing about the local dev server needs
- * this; it exists so the deployed app can do what the local one already can.
+ * 300 s is the Vercel Hobby plan's ceiling (800 s needs Pro or higher). A run
+ * that legitimately needs longer than this still gets cut off client-side, same
+ * as before — the ceiling just moved down with the plan.
  */
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 interface Body {
   modelId: string;
