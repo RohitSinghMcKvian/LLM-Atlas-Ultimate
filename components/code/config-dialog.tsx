@@ -185,7 +185,7 @@ export function ConfigDialog({
                   className={cn(
                     "rounded-lg border px-2 py-1 text-2xs",
                     event === v
-                      ? "border-cyan/40 bg-surface-3 text-foreground"
+                      ? "border-action/40 bg-surface-3 text-foreground"
                       : "border-border text-muted-foreground hover:bg-surface-2",
                   )}
                 >

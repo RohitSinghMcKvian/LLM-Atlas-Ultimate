@@ -177,7 +177,7 @@ export function RagViz() {
               className={cn(
                 "rounded-full border px-2 py-0.5 transition-colors",
                 i === stage
-                  ? "border-cyan/50 bg-cyan/10 font-semibold text-cyan"
+                  ? "border-action/50 bg-action/10 font-semibold text-action"
                   : i < stage
                     ? "border-border bg-surface-2 text-muted-foreground"
                     : "border-border text-muted-foreground/50",
@@ -220,7 +220,7 @@ export function RagViz() {
                 )}
               >
                 <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-2xs text-cyan">
+                  <span className="font-mono text-2xs text-action">
                     [{row.chunk.id}]
                   </span>
                   <span className="truncate text-2xs text-muted-foreground">
@@ -245,10 +245,10 @@ export function RagViz() {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-3 rounded-lg border border-cyan/30 bg-gradient-primary-soft px-2.5 py-2 text-xs"
+          className="mt-3 rounded-lg border border-action/30 bg-action/10 px-2.5 py-2 text-xs"
         >
           The prompt now carries {reranked.length} chunks —{" "}
-          <span className="font-mono text-cyan">
+          <span className="font-mono text-action">
             {reranked.map((r) => r.chunk.id).join(", ")}
           </span>{" "}
           — instead of all {CHUNKS.length}. Fewer tokens, less noise, and every

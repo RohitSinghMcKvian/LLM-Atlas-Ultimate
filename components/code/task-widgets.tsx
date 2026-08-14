@@ -41,11 +41,11 @@ const PHASE_LABEL: Record<Phase, string> = {
 };
 
 const PHASE_TONE: Partial<Record<Phase, string>> = {
-  explore: "text-cyan",
-  plan: "text-cyan",
+  explore: "text-action",
+  plan: "text-action",
   verify: "text-amber",
   self_correct: "text-amber",
-  review: "text-violet",
+  review: "text-accent",
   done: "text-success",
   stopped: "text-muted-foreground",
 };
@@ -110,7 +110,7 @@ export function TaskStatusStrip({
 
 const TODO_ICON: Record<Todo["status"], React.ReactNode> = {
   pending: <CircleDashed className="size-3.5 text-muted-foreground" />,
-  active: <Loader2 className="size-3.5 animate-spin text-cyan" />,
+  active: <Loader2 className="size-3.5 animate-spin text-action" />,
   done: <CheckCircle2 className="size-3.5 text-success" />,
   failed: <XCircle className="size-3.5 text-danger" />,
   skipped: <CircleDashed className="size-3.5 text-muted-foreground/50" />,
@@ -212,9 +212,9 @@ export function ClarifyCard({
 }) {
   const [text, setText] = React.useState("");
   return (
-    <div role="alert" className="border-t border-cyan/30 bg-cyan/5 px-3 py-2.5">
+    <div role="alert" className="border-t border-action/30 bg-action/5 px-3 py-2.5">
       <div className="flex items-start gap-2">
-        <MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-cyan" />
+        <MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-action" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium">Quick questions before building (asked once):</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
@@ -228,7 +228,7 @@ export function ClarifyCard({
             rows={2}
             autoFocus
             placeholder="Answers (free-form)…"
-            className="mt-2 w-full resize-none rounded-lg border border-border bg-surface/80 p-2 text-xs outline-none focus:border-cyan/40"
+            className="mt-2 w-full resize-none rounded-lg border border-border bg-surface/80 p-2 text-xs outline-none focus:border-action/40"
           />
           <div className="mt-1.5 flex gap-1.5">
             <Button size="sm" variant="primary" disabled={!text.trim()} onClick={() => onAnswer(text)}>
@@ -254,9 +254,9 @@ export function TodosApprovalCard({
 }) {
   const [kept, setKept] = React.useState(todos);
   return (
-    <div className="border-t border-cyan/30 bg-cyan/5 px-3 py-2.5">
+    <div className="border-t border-action/30 bg-action/5 px-3 py-2.5">
       <div className="flex items-start gap-2">
-        <ClipboardList className="mt-0.5 size-4 shrink-0 text-cyan" />
+        <ClipboardList className="mt-0.5 size-4 shrink-0 text-action" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium">
             Plan ready — {kept.length} todo{kept.length === 1 ? "" : "s"}. Drop any you don't
@@ -316,7 +316,7 @@ export function ReportCardView({ report }: { report: ReportCard }) {
                   className={cn(
                     "mr-1.5 inline-block w-14 text-right",
                     f.kind === "new" && "text-success",
-                    f.kind === "modified" && "text-cyan",
+                    f.kind === "modified" && "text-action",
                     f.kind === "deleted" && "text-danger",
                   )}
                 >

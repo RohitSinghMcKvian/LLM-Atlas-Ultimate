@@ -89,19 +89,27 @@ export async function fetchFeed(
   const parsed = parseFeed(body, { now, maxItems: maxItems * 3 });
 
   if (!parsed.items.length) {
-    // The failure mode that otherwise looks like health. A source serving an
-    // error page with HTTP 200, or one whose URL now redirects to a landing
-    // page, contributes nothing while reporting success — so it is reported as a
-    // failure and named in the UI's warning strip.
+    // Zero items has two very different causes, and conflating them cries wolf.
+    //
+    // A source serving an error page with HTTP 200, or one whose URL now
+    // redirects to a landing page, contributes nothing while reporting success —
+    // that is the failure mode that otherwise looks like health, and it is named
+    // in the UI's warning strip.
+    //
+    // But a well-formed feed with an empty channel is a publisher who has not
+    // published. arXiv declares `<skipDays>` for Saturday and Sunday and serves
+    // exactly that all weekend; reporting its three categories as failures put a
+    // permanent "3 of 32 sources failed" banner over the feed every weekend.
+    const recognized = parsed.recognized;
     return {
       feed,
       result: {
-        status: "failed",
+        status: recognized ? "skipped" : "failed",
         items: 0,
         fresh: 0,
         ms: Date.now() - started,
         httpStatus,
-        error: "no items parsed",
+        error: recognized ? "feed published no items" : "no items parsed",
       },
       articles: [],
       etag: nextEtag,

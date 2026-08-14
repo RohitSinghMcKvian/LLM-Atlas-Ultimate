@@ -4,10 +4,12 @@ import { EcosystemMap } from "@/components/landing/ecosystem-map";
 import { FeatureSections } from "@/components/landing/feature-sections";
 import { OpenSource } from "@/components/landing/open-source";
 import { Architecture } from "@/components/landing/architecture";
-import { SocialProof } from "@/components/landing/social-proof";
+import { SocialProof, type CoverageData } from "@/components/landing/social-proof";
 import { ClosingCTA } from "@/components/landing/closing-cta";
 import { modelAvailability } from "@/lib/catalog/availability";
 import { isSelectable } from "@/lib/catalog";
+import { BENCHMARKS } from "@/lib/catalog/benchmarks";
+import { PROVIDER_LIST } from "@/lib/catalog/providers";
 import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { routeEnv } from "@/lib/router";
 
@@ -44,6 +46,19 @@ export default async function LandingPage() {
     .slice(0, 10)
     .map((m) => m.name);
 
+  // Coverage replaces the invented GitHub stats and testimonials that used to
+  // sit here. Every figure is read off the same snapshot the rest of the page
+  // uses, so the section cannot outrun what the catalog holds.
+  const coverage: CoverageData = {
+    brands: [...brands].sort((a, b) => a.localeCompare(b)),
+    providers: PROVIDER_LIST.map((p) => p.name),
+    benchmarks: BENCHMARKS.map((b) => b.label),
+    modelCount: selectable.length,
+    byok: snapshot.stats.byok,
+    openWeights: selectable.filter((m) => m.license === "open").length,
+    upcoming: snapshot.stats.upcoming,
+  };
+
   return (
     <>
       <Hero labels={labels.length >= 6 ? labels : undefined} />
@@ -52,7 +67,7 @@ export default async function LandingPage() {
       <FeatureSections />
       <OpenSource />
       <Architecture />
-      <SocialProof />
+      <SocialProof coverage={coverage} />
       <ClosingCTA />
     </>
   );

@@ -186,6 +186,17 @@ export function isNewModel(m: CatalogModel, days = 14): boolean {
   return !Number.isNaN(when) && when >= Date.now() - days * 24 * 60 * 60 * 1000;
 }
 
+/**
+ * Whether the model can return images.
+ *
+ * Absent `outputModalities` means text, deliberately: every snapshot written
+ * before image output existed omits the field, and reading that as "unknown"
+ * would make every old entry ambiguous.
+ */
+export function producesImages(m: CatalogModel | undefined | null): boolean {
+  return !!m?.outputModalities?.includes("image");
+}
+
 /** Distinct brand/family owners (Anthropic, Meta, …). */
 export function brandProviders(): string[] {
   const s = snap();

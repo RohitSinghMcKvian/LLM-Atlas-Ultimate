@@ -162,6 +162,8 @@ export async function getNewsSnapshot(): Promise<NewsSnapshot> {
     }
   }
 
+  // Deliberately NOT truncated here: `/api/v1/news` pages over this and would
+  // have no tail to serve. The page-level cap lives in the news route segment.
   const snapshot: NewsSnapshot = record ? toWireNews(record) : BASELINE_NEWS_SNAPSHOT;
 
   if (isStale(snapshot)) scheduleBackgroundSync(record);

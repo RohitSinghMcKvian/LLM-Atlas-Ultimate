@@ -62,10 +62,10 @@ export function QuizBlock({ block }: { block: QuizBlock }) {
   return (
     <div className="not-prose rounded-2xl border border-border bg-surface/60 p-4 shadow-glow">
       <div className="mb-1 flex items-center gap-1.5 text-2xs uppercase tracking-wider text-muted-foreground">
-        <HelpCircle className="size-3.5 text-cyan" />
+        <HelpCircle className="size-3.5 text-action" />
         {multi ? "Select all that apply" : "Check your understanding"}
         {record?.correct && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] normal-case tracking-normal text-success">
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-2xs normal-case tracking-normal text-success">
             <Check className="size-3" /> answered
           </span>
         )}
@@ -91,7 +91,7 @@ export function QuizBlock({ block }: { block: QuizBlock }) {
               onClick={() => toggle(i)}
               className={cn(
                 "flex w-full items-start gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition-colors",
-                !checked && isPicked && "border-cyan/50 bg-cyan/10",
+                !checked && isPicked && "border-action/50 bg-action/10",
                 !checked &&
                   !isPicked &&
                   "border-border hover:border-border-strong hover:bg-surface-2/50",
@@ -102,10 +102,10 @@ export function QuizBlock({ block }: { block: QuizBlock }) {
             >
               <span
                 className={cn(
-                  "mt-0.5 grid size-5 shrink-0 place-items-center border text-[10px] font-semibold",
+                  "mt-0.5 grid size-5 shrink-0 place-items-center border text-2xs font-semibold",
                   multi ? "rounded" : "rounded-full",
                   isPicked
-                    ? "border-cyan bg-cyan/15 text-cyan"
+                    ? "border-action bg-action/15 text-action"
                     : "border-border-strong text-muted-foreground",
                   reveal && isAnswer && "border-success bg-success/15 text-success",
                   reveal &&

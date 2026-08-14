@@ -119,6 +119,51 @@ export function patchNode(
   return { ...tree, nodes: { ...tree.nodes, [id]: { ...cur, ...patch } } };
 }
 
+/**
+ * Rebuild the `active` pointer map from a single remembered leaf id.
+ *
+ * Persisting one leaf is enough to restore the whole visible path: walking
+ * parent links from it names exactly one child at every level. That is why the
+ * conversation stores `activeLeafId` rather than the full pointer map — one id
+ * syncs across devices cleanly, where a map would need merging.
+ *
+ * Returns {} for an unknown or dangling leaf, which makes `activePath` fall back
+ * to "newest child" — the same behaviour as a conversation never opened before.
+ */
+export function activeFromLeaf(
+  nodes: Record<string, ChatMessage>,
+  leafId: string | null | undefined,
+): Record<string, string> {
+  if (!leafId || !nodes[leafId]) return {};
+  const active: Record<string, string> = {};
+  const seen = new Set<string>();
+  let cur: ChatMessage | undefined = nodes[leafId];
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    active[keyOf(cur)] = cur.id;
+    const parentId: string | null | undefined = cur.parentId;
+    cur = parentId ? nodes[parentId] : undefined;
+  }
+  return active;
+}
+
+/**
+ * The messages from the root down to `id` inclusive, along its own branch.
+ * Used by fork, which copies a prefix of the conversation into a new one.
+ */
+export function pathTo(nodes: Record<string, ChatMessage>, id: string): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  const seen = new Set<string>();
+  let cur: ChatMessage | undefined = nodes[id];
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    out.push(cur);
+    const parentId: string | null | undefined = cur.parentId;
+    cur = parentId ? nodes[parentId] : undefined;
+  }
+  return out.reverse();
+}
+
 /** Build a tree from a flat, chronological message list (migration / load). */
 export function treeFromList(list: ChatMessage[]): Tree {
   const nodes: Record<string, ChatMessage> = {};

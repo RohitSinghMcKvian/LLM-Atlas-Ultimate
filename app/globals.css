@@ -3,75 +3,109 @@
 @tailwind utilities;
 
 /* ----------------------------------------------------------------------------
-   LLM Atlas — "Cartographic Intelligence" design tokens
+   LLM Atlas — "Terrain" design tokens
    Dark-first. RGB channel triplets so Tailwind `<alpha-value>` works.
+
+   The system: chrome is achromatic warm grey and carries exactly one hue —
+   `--action` — reserved for the primary action and live state. Everything
+   plural-coloured is data, and data draws from `--elev-0..5`, an elevation
+   ramp running deep water → shelf → lowland → upland → ridge → summit.
+   Colour means something here because there is almost none of it in the
+   chrome, so resist adding a second chrome hue.
 ---------------------------------------------------------------------------- */
 
 @layer base {
   :root {
-    /* Brand constants — identical across themes (used for gradients on fills) */
-    --cyan: 34 211 238; /* #22D3EE */
-    --violet: 124 58 237; /* #7C3AED */
-    --amber: 245 166 35; /* #F5A623 */
-
     /* Light theme surfaces */
-    --background: 248 249 252;
+    --background: 247 246 244; /* #F7F6F4 */
     --surface: 255 255 255;
-    --surface-2: 241 243 248;
-    --surface-3: 232 235 242;
+    --surface-2: 240 239 236; /* #F0EFEC */
+    --surface-3: 231 229 225; /* #E7E5E1 */
     --card: 255 255 255;
-    --card-foreground: 12 16 24;
+    --card-foreground: 23 24 26;
     --popover: 255 255 255;
-    --popover-foreground: 12 16 24;
+    --popover-foreground: 23 24 26;
+    --code: 251 250 248; /* #FBFAF8 — the code/terminal ground */
 
-    --foreground: 12 16 24;
-    --muted: 241 243 248;
-    --muted-foreground: 90 97 114;
+    --foreground: 23 24 26; /* #17181A */
+    --muted: 240 239 236;
+    --muted-foreground: 94 96 102; /* #5E6066 — 5.9:1 on background */
 
-    --border: 226 229 238;
-    --border-strong: 203 208 221;
-    --input: 222 226 235;
-    --ring: 8 145 178;
+    --border: 226 224 220; /* #E2E0DC */
+    --border-strong: 207 204 199; /* #CFCCC7 */
+    --input: 222 220 215;
+    --ring: 176 82 26;
 
-    --primary: 8 145 178; /* readable cyan on light */
+    /* The one chrome hue. Primary buttons, active nav, focus, live state. */
+    --action: 176 82 26; /* #B0521A — 5.2:1 on background */
+    --action-foreground: 255 255 255;
+    --primary: 176 82 26;
     --primary-foreground: 255 255 255;
-    --accent: 124 58 237; /* violet */
+    --accent: 31 115 112; /* #1F7370 — the shelf, for secondary accents */
     --accent-foreground: 255 255 255;
+    --amber: 150 112 11; /* #96700B */
 
-    --success: 16 159 110;
-    --warning: 176 124 8;
-    --danger: 213 58 62;
+    --success: 53 112 44; /* #35702C */
+    --warning: 138 106 10; /* #8A6A0A */
+    --danger: 184 29 51; /* #B81D33 */
+
+    /* Elevation ramp — the only place colour is allowed to be plural.
+       Bands double as text colour in Learn and in the composer's mode pills,
+       so every one of them is darkened until it clears 4.5:1 on `--background`,
+       not just the 3:1 a chart fill would need. */
+    --elev-0: 31 76 114; /* deep    #1F4C72 — 8.3:1 */
+    --elev-1: 31 115 112; /* shelf   #1F7370 — 5.2:1 */
+    --elev-2: 53 112 44; /* lowland #35702C — 5.5:1 */
+    --elev-3: 138 106 10; /* upland  #8A6A0A — 4.7:1 */
+    --elev-4: 176 82 26; /* ridge   #B0521A — 4.8:1 */
+    --elev-5: 107 98 85; /* summit  #6B6255 — 5.6:1 */
 
     --radius: 0.85rem;
   }
 
   .dark {
-    --background: 10 11 15; /* #0A0B0F */
-    --surface: 14 16 24; /* #0E1018 */
-    --surface-2: 20 22 31; /* #14161F */
-    --surface-3: 27 30 41; /* #1B1E29 */
-    --card: 14 16 24;
-    --card-foreground: 231 233 238;
-    --popover: 18 20 29;
-    --popover-foreground: 231 233 238;
+    --background: 16 17 18; /* #101112 */
+    --surface: 25 26 28; /* #191A1C */
+    --surface-2: 32 34 37; /* #202225 */
+    --surface-3: 42 44 48; /* #2A2C30 */
+    --card: 25 26 28;
+    --card-foreground: 233 233 234;
+    --popover: 29 31 33; /* #1D1F21 */
+    --popover-foreground: 233 233 234;
+    --code: 12 13 14; /* #0C0D0E */
 
-    --foreground: 231 233 238; /* #E7E9EE */
-    --muted: 23 26 36;
-    --muted-foreground: 139 145 163; /* #8B91A3 */
+    --foreground: 233 233 234; /* #E9E9EA */
+    --muted: 26 27 29;
+    --muted-foreground: 144 146 154; /* #90929A — 6.1:1 on background */
 
-    --border: 34 38 51; /* ~white @ 6% on ink */
-    --border-strong: 52 57 73;
-    --input: 40 44 59;
-    --ring: 34 211 238;
+    --border: 41 43 46; /* #292B2E */
+    --border-strong: 58 61 66; /* #3A3D42 */
+    --input: 46 49 53;
+    --ring: 217 117 47;
 
-    --primary: 34 211 238; /* bright cyan */
-    --primary-foreground: 5 12 18;
-    --accent: 167 139 250; /* lighter violet for dark text */
-    --accent-foreground: 12 14 22;
+    --action: 217 117 47; /* #D9752F — 5.9:1 on background */
+    --action-foreground: 36 16 4; /* #241004 */
+    --primary: 217 117 47;
+    --primary-foreground: 36 16 4;
+    --accent: 70 179 174; /* #46B3AE — 7.5:1 */
+    --accent-foreground: 4 33 31;
+    --amber: 217 183 64; /* #D9B740 */
 
-    --success: 52 199 153;
-    --warning: 234 179 8;
-    --danger: 244 96 96;
+    --success: 93 168 78; /* #5DA84E */
+    --warning: 217 183 64;
+    /* ~30° off the action orange. Destructive controls always pair this with
+       an icon so the distinction never rests on hue alone. */
+    --danger: 224 69 90; /* #E0455A */
+
+    /* `--elev-0` is lighter than a literal deep-water blue would be: at
+       #2C5F8A it only reached 2.8:1 here, and it carries code attributes and
+       variables in the highlight.js rules below. */
+    --elev-0: 74 130 184; /* deep    #4A82B8 — 4.7:1 */
+    --elev-1: 46 143 140; /* shelf   #2E8F8C — 4.9:1 */
+    --elev-2: 93 168 78; /* lowland #5DA84E — 6.5:1 */
+    --elev-3: 217 183 64; /* upland  #D9B740 — 9.7:1 */
+    --elev-4: 217 117 47; /* ridge   #D9752F — 5.9:1 */
+    --elev-5: 232 228 218; /* summit  #E8E4DA — 14.9:1 */
   }
 
   * {
@@ -89,8 +123,33 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Fraunces ships three variable axes and the defaults are wrong for this
+     product: high optical size sharpens the terminals at display sizes, SOFT 0
+     keeps the joints crisp instead of rounded, and WONK 0 disables the
+     cursive-leaning alternates that read as decorative next to a data table.
+     Tailwind has no utility for `font-variation-settings`, so it is pinned to
+     the family here and every `font-display` call site inherits it. */
+  .font-display {
+    font-variation-settings:
+      "opsz" 120,
+      "SOFT" 0,
+      "WONK" 0;
+  }
+
+  /* Every figure in the product is meant to be compared against the one above
+     it — prices, context windows, benchmark scores, token counts. Tabular
+     lining figures by default across the mono face means columns line up
+     without each call site remembering `.tnum`. */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
   ::selection {
-    background: rgb(var(--cyan) / 0.25);
+    background: rgb(var(--action) / 0.25);
     color: rgb(var(--foreground));
   }
 
@@ -122,19 +181,16 @@
 }
 
 @layer components {
-  /* Gradient text — the "intelligence" signal */
-  .text-gradient {
-    @apply bg-gradient-primary bg-clip-text text-transparent;
-  }
-
-  /* Glassmorphism — only where it earns its place */
+  /* Glassmorphism — only where it earns its place. Lower blur than before:
+     the chrome is opaque enough now that 16px was doing nothing but costing
+     a re-rasterize on every scroll. */
   .glass {
-    background: rgb(var(--surface) / 0.6);
-    backdrop-filter: blur(16px) saturate(140%);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    background: rgb(var(--surface) / 0.72);
+    backdrop-filter: blur(10px) saturate(115%);
+    -webkit-backdrop-filter: blur(10px) saturate(115%);
   }
   .dark .glass {
-    background: rgb(var(--surface) / 0.55);
+    background: rgb(var(--surface) / 0.68);
   }
 
   /* Hairline surface card */
@@ -142,49 +198,34 @@
     @apply rounded-2xl border border-border bg-surface shadow-glow;
   }
 
-  /* Animated gradient border (for primary CTAs / featured cards) */
+  /* A hairline in the action hue. Was an animated cyan→violet sweep; the
+     border on a featured card is not the place to spend attention. */
   .gradient-border {
     position: relative;
     background: rgb(var(--surface));
     border-radius: var(--radius);
-  }
-  .gradient-border::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(
-      120deg,
-      rgb(var(--cyan)),
-      rgb(var(--violet)),
-      rgb(var(--cyan))
-    );
-    background-size: 200% 200%;
-    -webkit-mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: border-flow 5s ease infinite;
-    pointer-events: none;
+    border: 1px solid rgb(var(--action) / 0.35);
   }
 
-  /* Faint cartographic grid backdrop */
-  .bg-grid-fade {
-    background-image: theme("backgroundImage.grid");
-    background-size: 56px 56px;
-    -webkit-mask-image: radial-gradient(
-      ellipse 70% 60% at 50% 0%,
-      #000 10%,
-      transparent 75%
-    );
-    mask-image: radial-gradient(
-      ellipse 70% 60% at 50% 0%,
-      #000 10%,
-      transparent 75%
-    );
+  /* Survey graticule — the flat hairline grid a map is plotted on. Every
+     fifth line reads heavier, the way a real graticule marks its intervals. */
+  .bg-graticule {
+    background-image:
+      linear-gradient(rgb(var(--border-strong) / 0.55) 1px, transparent 1px),
+      linear-gradient(
+        90deg,
+        rgb(var(--border-strong) / 0.55) 1px,
+        transparent 1px
+      ),
+      linear-gradient(rgb(var(--border) / 0.7) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--border) / 0.7) 1px, transparent 1px);
+    background-size:
+      240px 240px,
+      240px 240px,
+      48px 48px,
+      48px 48px;
   }
+
 
   /* Shimmer skeleton sweep */
   .shimmer {
@@ -247,6 +288,47 @@
   }
 }
 
+/* The empty state's aurora. A slow drift so the first screen is not static,
+   cheap enough to leave running: one composited transform, no canvas, no RAF.
+   Parked under reduced motion by the blanket block above. */
+.atlas-empty-glow {
+  animation: atlas-empty-drift 12s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes atlas-empty-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -6px, 0) scale(1.06);
+  }
+}
+
+/* The run panel's in-flight connector. A gradient that breathes, so a step that
+   is still working reads as working rather than as stalled at 40% opacity.
+
+   Parked when the panel scrolls out of view: `RunPanel` sets `data-parked` from
+   an IntersectionObserver, which is the CSS-animation counterpart of the RAF
+   parking in `components/landing/constellation.tsx`. Same reasoning, different
+   mechanism — an animation nobody can see is pure cost. The blanket
+   prefers-reduced-motion block above already neutralises the animation itself. */
+.atlas-run-connector {
+  animation: atlas-run-pulse 1.6s ease-in-out infinite;
+}
+[data-parked] .atlas-run-connector {
+  animation-play-state: paused;
+}
+@keyframes atlas-run-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Atlas Flow — animated active edges */
 .flow-edge-active {
   animation: flow-dash 0.6s linear infinite;
@@ -257,56 +339,46 @@
   }
 }
 
-/* AtlasMark loading variant */
-.atlas-loading-conic {
-  background: conic-gradient(
-    from 0deg,
-    rgb(var(--cyan) / 0) 0%,
-    rgb(var(--cyan) / 0.55) 20%,
-    rgb(var(--violet) / 0.55) 45%,
-    rgb(var(--cyan) / 0) 70%,
-    rgb(var(--cyan) / 0) 100%
-  );
-  filter: blur(4px);
-  animation: atlas-conic-spin 2.6s linear infinite;
+/* The Atlas mark — a contour summit.
+
+   Two states, both driven from here so the SVG stays declarative:
+   `draw` runs once on mount and traces each contour outward from the summit;
+   `breathe` loops while something is in flight, each ring swelling a beat
+   after the one inside it so the peak reads as rising rather than pulsing.
+   Both are neutralised by the blanket prefers-reduced-motion block above. */
+/* Each contour carries `pathLength="1"`, so the dash maths is the same for all
+   three regardless of how long the actual path is. */
+.atlas-mark-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: atlas-contour-draw 0.62s var(--ease-atlas) forwards;
 }
-.atlas-loading-orbit {
-  animation: atlas-orbit-spin 1.8s linear infinite;
-  transform-box: fill-box;
-}
-.atlas-loading-pulse {
+.atlas-mark-breathe {
   transform-box: fill-box;
   transform-origin: center;
-  animation: atlas-node-pulse 1.4s ease-in-out infinite;
+  animation: atlas-contour-breathe 1.8s ease-in-out infinite;
 }
-@keyframes atlas-conic-spin {
+@keyframes atlas-contour-draw {
   to {
-    transform: rotate(360deg);
+    stroke-dashoffset: 0;
   }
 }
-@keyframes atlas-orbit-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes atlas-node-pulse {
+@keyframes atlas-contour-breathe {
   0%,
   100% {
     transform: scale(1);
-    opacity: 0.9;
-    filter: drop-shadow(0 0 0 rgb(var(--cyan) / 0));
+    opacity: 0.55;
   }
   50% {
-    transform: scale(1.35);
+    transform: scale(1.06);
     opacity: 1;
-    filter: drop-shadow(0 0 3px rgb(var(--cyan) / 0.9));
   }
 }
 
-/* highlight.js — tuned to the Atlas palette */
+/* highlight.js — syntax drawn from the elevation ramp, so code reads as one
+   more surface of the same map rather than a pasted-in theme. Both `--accent`
+   and the `--elev-*` bands are already theme-aware, so unlike the palette this
+   replaces there is no `.dark` override to keep in sync. */
 .hljs {
   color: rgb(var(--foreground));
   background: transparent;
@@ -314,25 +386,20 @@
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-built_in {
-  color: rgb(var(--violet));
-}
-.dark .hljs-keyword,
-.dark .hljs-selector-tag,
-.dark .hljs-built_in {
-  color: rgb(167 139 250);
+  color: rgb(var(--accent));
 }
 .hljs-string,
 .hljs-attr {
-  color: rgb(var(--success));
+  color: rgb(var(--elev-2));
 }
 .hljs-number,
 .hljs-literal {
-  color: rgb(var(--amber));
+  color: rgb(var(--elev-3));
 }
 .hljs-title,
 .hljs-function .hljs-title,
 .hljs-name {
-  color: rgb(var(--cyan));
+  color: rgb(var(--action));
 }
 .hljs-comment {
   color: rgb(var(--muted-foreground));
@@ -341,5 +408,82 @@
 .hljs-attribute,
 .hljs-variable,
 .hljs-template-variable {
-  color: rgb(var(--cyan));
+  color: rgb(var(--elev-0));
+}
+
+/* ── Resizable panels — Atlas Chat + Atlas Code ──────────────────────────────
+   Panel sizes live in CSS custom properties on each surface root, so a drag
+   writes straight to the DOM instead of re-rendering ChatClient/CodeClient
+   (the two heaviest client roots) once per pointermove. Deliberately
+   unlayered, matching .flow-edge-active above, so these beat the utilities
+   layer without !important on every declaration. */
+:root {
+  /* Mirrors EASE in lib/motion.ts. */
+  --ease-atlas: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* While a handle is dragging. Monaco sets `cursor: text` and every button sets
+   `cursor: pointer`, so both the descendant selector and !important are
+   load-bearing — without them the cursor flickers as it crosses children. */
+.atlas-resizing,
+.atlas-resizing * {
+  cursor: col-resize !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+.atlas-resizing-y,
+.atlas-resizing-y * {
+  cursor: row-resize !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+/* The WebContainer preview and the artifact srcDoc are separate browsing
+   contexts; without this they swallow pointermove and the drag stalls the
+   moment the pointer crosses them. Toggling it does not reload either frame. */
+.atlas-resizing iframe,
+.atlas-resizing-y iframe {
+  pointer-events: none !important;
+}
+
+/* Panels animate only for *programmatic* changes — collapse, expand, reset,
+   keyboard. `data-panels-ready` lands in a layout effect after the rehydrated
+   sizes are written, so there is no slide on first paint; `data-atlas-resizing`
+   switches it off again during a drag so the edge tracks the pointer exactly.
+   The blanket prefers-reduced-motion block above already zeroes both. */
+.atlas-panel {
+  transition: none;
+}
+[data-panels-ready] .atlas-panel {
+  transition:
+    width 200ms var(--ease-atlas),
+    height 200ms var(--ease-atlas);
+}
+
+/* A panel at width 0 is still tabbable and still in the a11y tree, so keyboard
+   and screen reader users would walk into an invisible sidebar. React 18 has no
+   first-class `inert` prop, so `visibility` does the job — delayed by exactly
+   the collapse duration so the content doesn't blink out before the panel has
+   finished closing. Only for panels that collapse to nothing: the terminal
+   keeps its header reachable, which is how you get it back. */
+.atlas-panel[data-collapsed="true"] {
+  visibility: hidden;
+}
+[data-panels-ready] .atlas-panel[data-collapsed="true"] {
+  transition:
+    width 200ms var(--ease-atlas),
+    height 200ms var(--ease-atlas),
+    visibility 0s linear 200ms;
+}
+
+[data-atlas-resizing] .atlas-panel {
+  transition: none !important;
+}
+
+/* The global :focus-visible rule draws a 2px outline at 2px offset, which on a
+   1px separator reads as a floating rectangle. Thicken the line itself. */
+.atlas-handle:focus-visible {
+  outline: none;
+  background-color: rgb(var(--action));
+  box-shadow: 0 0 0 1px rgb(var(--action) / 0.45);
 }

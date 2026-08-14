@@ -32,8 +32,8 @@ export function XpHud() {
           <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/60 py-1 pl-1 pr-2.5">
             <LevelRing fraction={level.fraction} level={level.level} />
             <div className="leading-tight">
-              <p className="text-[11px] font-semibold">{level.title}</p>
-              <p className="font-mono text-[10px] tnum text-muted-foreground">
+              <p className="text-2xs font-semibold">{level.title}</p>
+              <p className="font-mono text-2xs tnum text-muted-foreground">
                 {xp.toLocaleString()} XP
               </p>
             </div>
@@ -58,7 +58,7 @@ export function XpHud() {
               )}
             >
               <Flame className="size-3.5" />
-              <span className="font-mono text-[11px] font-semibold tnum">
+              <span className="font-mono text-2xs font-semibold tnum">
                 {streak}
               </span>
             </div>
@@ -100,8 +100,8 @@ function LevelRing({ fraction, level }: { fraction: number; level: number }) {
       />
       <defs>
         <linearGradient id="xp-ring" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="rgb(var(--cyan))" />
-          <stop offset="100%" stopColor="rgb(var(--violet))" />
+          <stop offset="0%" stopColor="rgb(var(--elev-1))" />
+          <stop offset="100%" stopColor="rgb(var(--elev-0))" />
         </linearGradient>
       </defs>
       <text
@@ -151,16 +151,16 @@ export function RewardToasts() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="pointer-events-none inline-flex items-center gap-2 rounded-full border border-cyan/30 bg-popover px-3.5 py-2 text-sm shadow-float"
+            className="pointer-events-none inline-flex items-center gap-2 rounded-full border border-action/30 bg-popover px-3.5 py-2 text-sm shadow-float"
           >
             {r.kind === "streak" ? (
               <Flame className="size-4 text-amber" />
             ) : (
-              <Zap className="size-4 text-cyan" />
+              <Zap className="size-4 text-action" />
             )}
             <span className="font-medium">{r.label}</span>
             {r.xp > 0 && (
-              <span className="font-mono text-xs font-semibold text-cyan">
+              <span className="font-mono text-xs font-semibold text-action">
                 +{r.xp} XP
               </span>
             )}

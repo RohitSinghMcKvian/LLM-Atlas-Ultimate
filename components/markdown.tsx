@@ -10,9 +10,9 @@ import { Check, Copy, Hash } from "lucide-react";
 import { MermaidBlock } from "@/components/mermaid";
 import { cn } from "@/lib/utils";
 import "katex/dist/katex.min.css";
-// Scoped here rather than in the root layout: only routes that render markdown
-// need the syntax-highlighting theme.
-import "highlight.js/styles/github-dark.css";
+// No highlight.js stylesheet. `github-dark.css` used to be imported here and
+// the `.hljs-*` rules in globals.css then had to out-specify it, which is why
+// code blocks stayed dark on the light theme. The token rules stand alone now.
 
 function extractText(node: React.ReactNode): string {
   if (node == null) return "";
@@ -37,7 +37,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   const lineCount = text.replace(/\n$/, "").split("\n").length;
 
   return (
-    <div className="group relative my-4 overflow-hidden rounded-xl border border-border bg-[#0b0d14]">
+    <div className="group relative my-4 overflow-hidden rounded-xl border border-border bg-code">
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <span className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
           {lang}
@@ -49,7 +49,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
               title="Toggle line numbers"
               className={cn(
                 "inline-flex items-center gap-1 text-2xs transition-colors hover:text-foreground",
-                nums ? "text-cyan" : "text-muted-foreground",
+                nums ? "text-action" : "text-muted-foreground",
               )}
             >
               <Hash className="size-3" /> Lines
@@ -79,12 +79,12 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
         {nums && lineCount > 1 && (
           <pre
             aria-hidden
-            className="select-none border-r border-border/60 py-4 pl-4 pr-3 text-right text-[13px] leading-relaxed text-muted-foreground/50"
+            className="select-none border-r border-border/60 py-4 pl-4 pr-3 text-right text-sm leading-relaxed text-muted-foreground/50"
           >
             {Array.from({ length: lineCount }, (_, i) => i + 1).join("\n")}
           </pre>
         )}
-        <pre className="min-w-0 flex-1 p-4 text-[13px] leading-relaxed">
+        <pre className="min-w-0 flex-1 p-4 text-sm leading-relaxed">
           <code className={className}>{(codeEl?.props as any)?.children}</code>
         </pre>
       </div>
@@ -112,8 +112,8 @@ export const Markdown = React.memo(function Markdown({
         "prose prose-sm max-w-none prose-invert",
         "prose-headings:font-display prose-headings:tracking-tight",
         "prose-p:text-foreground/90 prose-li:text-foreground/90",
-        "prose-a:text-cyan prose-a:no-underline hover:prose-a:underline",
-        "prose-strong:text-foreground prose-code:text-cyan",
+        "prose-a:text-action prose-a:no-underline hover:prose-a:underline",
+        "prose-strong:text-foreground prose-code:text-action",
         "prose-code:before:content-none prose-code:after:content-none",
         "prose-pre:bg-transparent prose-pre:p-0",
         className,
@@ -134,7 +134,7 @@ export const Markdown = React.memo(function Markdown({
               );
             return (
               <code
-                className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[0.85em] text-cyan"
+                className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[0.85em] text-action"
                 {...props}
               >
                 {children}

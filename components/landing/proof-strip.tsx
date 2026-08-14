@@ -19,30 +19,54 @@ export interface ProofStats {
 // claim more than the product actually has.
 const FALLBACK: ProofStats = { models: 97, brands: 20, free: 20, benchmarks: 12 };
 
+/**
+ * The legend for the hero plot, doubling as the proof strip.
+ *
+ * A map's legend explains its symbols and states its scale, so putting the
+ * figures there rather than in a row of floating counters means the structure
+ * is carrying information instead of decorating it — and the reader gets the
+ * key to the thing they just looked at, in the place they'd look for it.
+ */
 export function ProofStrip({ stats = FALLBACK }: { stats?: ProofStats }) {
-  const STATS = [
-    { value: stats.models, suffix: "", label: "Models tracked" },
-    { value: stats.free, suffix: "", label: "Free to run" },
-    { value: stats.brands, suffix: "", label: "Brands covered" },
-    { value: stats.benchmarks, suffix: "", label: "Benchmark suites" },
+  const entries = [
+    { value: stats.models, label: "models charted", note: "routable today" },
+    { value: stats.free, label: "free to run", note: "no key needed" },
+    { value: stats.brands, label: "brands covered", note: "one catalog" },
+    { value: stats.benchmarks, label: "benchmark suites", note: "every score sourced" },
   ];
 
   return (
     <Reveal className="relative border-y border-border bg-surface/30">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 divide-border md:grid-cols-4 md:divide-x">
-        {STATS.map((s, i) => (
-          <div
-            key={s.label}
-            className="flex flex-col items-center gap-1 px-4 py-8 text-center"
-          >
-            <div className="font-mono text-3xl font-semibold tracking-tight sm:text-4xl">
-              <CountUp value={s.value} suffix={s.suffix} duration={1.8} />
-            </div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-              {s.label}
-            </div>
+      <div className="mx-auto max-w-7xl px-4 py-9 sm:px-6">
+        <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-mono text-2xs uppercase tracking-legend text-muted-foreground">
+            Legend
+          </p>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-2xs uppercase tracking-legend text-muted-foreground">
+              cheap
+            </span>
+            <span
+              className="h-2 w-40 rounded-full bg-gradient-elevation sm:w-56"
+              aria-hidden="true"
+            />
+            <span className="font-mono text-2xs uppercase tracking-legend text-muted-foreground">
+              capable
+            </span>
           </div>
-        ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-y-8 md:grid-cols-4">
+          {entries.map((entry) => (
+            <div key={entry.label} className="border-l border-border pl-4">
+              <div className="font-mono text-3xl font-semibold tracking-tight sm:text-4xl">
+                <CountUp value={entry.value} duration={1.8} />
+              </div>
+              <div className="mt-1 text-sm text-foreground">{entry.label}</div>
+              <div className="text-2xs text-muted-foreground">{entry.note}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </Reveal>
   );

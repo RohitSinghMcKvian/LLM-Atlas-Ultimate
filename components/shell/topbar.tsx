@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronRight, Menu, Search, Github } from "lucide-react";
+import { Bell, ChevronRight, Menu, Search } from "lucide-react";
 import { AtlasMark } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ModelSwitcher } from "@/components/shell/model-switcher";
@@ -11,18 +11,27 @@ import {
   ConnectKeyDialog,
   ConnectKeyButton,
 } from "@/components/keys/connect-key-dialog";
-import { Button } from "@/components/ui/button";
+import { SyncButton } from "@/components/auth/sync-dialog";
+import { AccountMenu } from "@/components/auth/account-menu";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { MODULES } from "@/lib/modules";
 import { useUIStore } from "@/lib/store/ui-store";
-import { useKeysStore } from "@/lib/store/keys-store";
+import { cn } from "@/lib/utils";
+
+/**
+ * The bar's two control shapes. Both were spelled out inline at five call
+ * sites, so a change to the chrome meant editing all five and missing one.
+ */
+const CONTROL =
+  "border border-border bg-surface-2/60 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground";
+const ICON_BUTTON = `grid size-9 place-items-center rounded-lg ${CONTROL}`;
+const PILL_BUTTON = `inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 ${CONTROL}`;
 
 function useBreadcrumb() {
   const pathname = usePathname();
@@ -35,14 +44,13 @@ export function Topbar() {
   const title = useBreadcrumb();
   const setCommandOpen = useUIStore((s) => s.setCommandOpen);
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
-  const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/70 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-lg sm:px-6">
       {/* Mobile menu + brand */}
       <button
         onClick={() => setMobileNavOpen(true)}
-        className="grid size-9 place-items-center rounded-lg border border-border bg-surface-2/60 text-muted-foreground lg:hidden"
+        className={cn(ICON_BUTTON, "lg:hidden")}
         aria-label="Open navigation"
       >
         <Menu className="size-[18px]" />
@@ -68,14 +76,14 @@ export function Topbar() {
       >
         <Search className="size-4" />
         <span>Search or jump to…</span>
-        <kbd className="ml-auto inline-flex items-center gap-0.5 rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px]">
+        <kbd className="ml-auto inline-flex items-center gap-0.5 rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-2xs">
           ⌘K
         </kbd>
       </button>
 
       <button
         onClick={() => setCommandOpen(true)}
-        className="ml-auto grid size-9 place-items-center rounded-lg border border-border bg-surface-2/60 text-muted-foreground md:hidden"
+        className={cn(ICON_BUTTON, "ml-auto md:hidden")}
         aria-label="Search"
       >
         <Search className="size-[18px]" />
@@ -85,11 +93,14 @@ export function Topbar() {
 
       {/* Mounted once so a key_required error anywhere can open it */}
       <ConnectKeyDialog />
-      <ConnectKeyButton className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface-2/60 px-2.5 text-muted-foreground transition-colors hover:text-foreground" />
+      <ConnectKeyButton className={cn(PILL_BUTTON)} />
+
+      {/* Renders nothing when Supabase isn't configured. */}
+      <SyncButton className={cn(PILL_BUTTON)} />
 
       {/* Notifications */}
       <DropdownMenu>
-        <DropdownMenuTrigger className="relative grid size-9 place-items-center rounded-lg border border-border bg-surface-2/60 text-muted-foreground transition-colors hover:text-foreground">
+        <DropdownMenuTrigger className={cn(ICON_BUTTON, "relative")}>
           <Bell className="size-[18px]" />
           <span className="absolute right-2 top-2 size-1.5 rounded-full bg-amber" />
         </DropdownMenuTrigger>
@@ -116,37 +127,8 @@ export function Topbar() {
 
       <ThemeToggle />
 
-      {/* Account */}
-      <DropdownMenu>
-        <DropdownMenuTrigger className="grid size-9 place-items-center rounded-full bg-gradient-primary text-sm font-semibold text-primary-foreground">
-          R
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="normal-case">
-            <div className="font-medium text-foreground">Rohit Singh</div>
-            <div className="text-xs text-muted-foreground">
-              itsrohitsingh31@gmail.com
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Github />
-              Star on GitHub
-            </a>
-          </DropdownMenuItem>
-          <DropdownMenuItem>Account settings</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setKeyModalOpen(true)}>
-            Atlas Vault · API keys
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem>Sign out</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Real identity: signed-in menu, or a sign-in link carrying this route. */}
+      <AccountMenu />
     </header>
   );
 }

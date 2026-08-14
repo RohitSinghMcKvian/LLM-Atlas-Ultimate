@@ -13,6 +13,22 @@ import { getCatalogSnapshot } from "@/lib/catalog/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * The one route in the app that can legitimately run for minutes.
+ *
+ * Every other long route here declares 60 s; this one declared nothing and so
+ * inherited the platform default, which is shorter than a single answer from a
+ * large model. Measured against `nvidia/nemotron-3-ultra-550b-a55b`: 57 s to the
+ * first byte and 554 s to `finish_reason`, for one 16k-token answer. A stream cut
+ * at the platform's default is indistinguishable, from the client's side, from a
+ * model that stopped talking — the partial answer is kept and presented as
+ * finished.
+ *
+ * 800 s is the current Vercel maximum. Nothing about the local dev server needs
+ * this; it exists so the deployed app can do what the local one already can.
+ */
+export const maxDuration = 800;
+
 interface Body {
   modelId: string;
   messages: ChatMessage[];
@@ -95,6 +111,10 @@ export async function POST(req: NextRequest) {
           // compare clients; the richer events are additive.
           if (ev.type === "token") send({ type: "delta", text: ev.text });
           else if (ev.type === "reasoning") send({ type: "reasoning", text: ev.text });
+          // Images are already validated and size-capped by lib/router/images.ts;
+          // the route only forwards them.
+          else if (ev.type === "image")
+            send({ type: "image", url: ev.image.url, mime: ev.image.mime });
           else if (ev.type === "tool_call")
             send({ type: "tool_call", ...ev.call });
           else if (ev.type === "usage") send({ type: "usage", ...ev.usage });
@@ -104,6 +124,11 @@ export async function POST(req: NextRequest) {
           // (first choice 429/5xx) — correct the earlier optimistic meta.
           else if (ev.type === "provider")
             send({ type: "meta", provider: ev.provider });
+          // The route rejected `tools` and the request was retried without them.
+          // Forwarded so the client can tell the user AND remember it, rather
+          // than paying for the same rejection on every subsequent turn.
+          else if (ev.type === "capability")
+            send({ type: "capability", capability: ev.capability, supported: ev.supported });
         }
       } catch (e) {
         const err = e as RouterError;

@@ -117,7 +117,7 @@ export function PromptClient() {
                   className={cn(
                     "shrink-0 rounded-xl border p-3 text-left transition-colors lg:w-full",
                     active
-                      ? "border-cyan/40 bg-surface-2"
+                      ? "border-action/40 bg-surface-2"
                       : "border-border bg-surface/50 hover:border-border-strong",
                   )}
                 >
@@ -182,7 +182,7 @@ export function PromptClient() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 rows={6}
-                className="w-full resize-y rounded-xl border border-border bg-[#0b0d14] p-3 font-mono text-[13px] leading-relaxed outline-none focus:border-cyan/40"
+                className="w-full resize-y rounded-xl border border-border bg-code p-3 font-mono text-sm leading-relaxed outline-none focus:border-action/40"
               />
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -209,7 +209,7 @@ export function PromptClient() {
             {/* Variables + preview */}
             <Card className="p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                <Variable className="size-4 text-violet" /> Variables
+                <Variable className="size-4 text-accent" /> Variables
                 {detectedVars.length === 0 && (
                   <span className="text-2xs font-normal text-muted-foreground">
                     add {"{{name}}"} placeholders in the body
@@ -259,7 +259,7 @@ export function PromptClient() {
                     </Button>
                   </div>
                 </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-border bg-surface-2/40 p-3 text-[13px] leading-relaxed">
+                <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-border bg-surface-2/40 p-3 text-sm leading-relaxed">
                   {rendered}
                 </pre>
               </div>
@@ -268,7 +268,7 @@ export function PromptClient() {
             {/* Version history */}
             <Card className="p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                <History className="size-4 text-cyan" /> Version history
+                <History className="size-4 text-action" /> Version history
               </div>
               <div className="space-y-1.5">
                 {[...selected.versions].reverse().map((ver) => (
@@ -338,7 +338,7 @@ function NewPromptDialog({
             onChange={(e) => setBody(e.target.value)}
             rows={5}
             placeholder="Prompt body — use {{variables}} for fill-ins"
-            className="w-full resize-y rounded-xl border border-border bg-[#0b0d14] p-3 font-mono text-[13px] outline-none focus:border-cyan/40"
+            className="w-full resize-y rounded-xl border border-border bg-code p-3 font-mono text-sm outline-none focus:border-action/40"
           />
         </div>
         <DialogFooter>

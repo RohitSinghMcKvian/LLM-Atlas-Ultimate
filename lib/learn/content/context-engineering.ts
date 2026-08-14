@@ -14,7 +14,7 @@ export const CONTEXT_ENGINEERING: Track = {
   blurb:
     "Context rot, compaction, memory tiers, and deciding what earns a place in the window.",
   level: "advanced",
-  accent: "cyan",
+  accent: "ridge",
   prereqs: ["retrieval", "agents"],
   lessons: [
     // -----------------------------------------------------------------------
@@ -210,10 +210,10 @@ for tokens in (4_000, 16_000, 64_000, 128_000):
             kind: "bars",
             unit: "% of window",
             items: [
-              { label: "System + rules", value: 4, accent: "violet", note: "Stable, cacheable, at the front" },
-              { label: "Tool definitions", value: 6, accent: "violet" },
-              { label: "Conversation history", value: 30, accent: "cyan", note: "Compacted, not truncated" },
-              { label: "Retrieved content", value: 25, accent: "amber", note: "Re-ranked and cut hard" },
+              { label: "System + rules", value: 4, accent: "shelf", note: "Stable, cacheable, at the front" },
+              { label: "Tool definitions", value: 6, accent: "shelf" },
+              { label: "Conversation history", value: 30, accent: "ridge", note: "Compacted, not truncated" },
+              { label: "Retrieved content", value: 25, accent: "upland", note: "Re-ranked and cut hard" },
               { label: "Reserved output", value: 15, note: "Held back, not left over" },
               { label: "Deliberately unused", value: 20, note: "The line most budgets are missing" },
             ],
@@ -659,17 +659,17 @@ If a constraint appears, quote it exactly rather than paraphrasing.`,
               {
                 label: "Semantic — durable facts",
                 note: "\"Uses Postgres 16.\" Small, long-lived, always loaded. Must handle contradiction.",
-                accent: "violet",
+                accent: "shelf",
               },
               {
                 label: "Episodic — session records",
                 note: "\"Session 12: migrated billing, hit an FK index issue.\" Retrieved when relevant.",
-                accent: "amber",
+                accent: "upland",
               },
               {
                 label: "Working — this conversation",
                 note: "Verbatim, complete, discarded at the end. The only tier the model sees directly.",
-                accent: "cyan",
+                accent: "ridge",
               },
             ],
           },

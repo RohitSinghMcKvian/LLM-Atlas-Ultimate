@@ -1,4 +1,5 @@
-import type { NewsSnapshot, NewsSnapshotRecord } from "./types";
+import { liveScore } from "./rank";
+import type { NewsArticle, NewsSnapshot, NewsSnapshotRecord } from "./types";
 
 // Pure snapshot helpers: freshness arithmetic and the wire projection.
 //
@@ -58,13 +59,33 @@ export function refreshCooldownMs(
   return Math.max(0, minRefreshMinutes(env) * 60_000 - age);
 }
 
-/** Strip the server-only bookkeeping before a record crosses the RSC boundary. */
-export function toWireNews(record: NewsSnapshotRecord | NewsSnapshot): NewsSnapshot {
+/**
+ * Strip the server-only bookkeeping before a record crosses the RSC boundary.
+ *
+ * `limit` caps how many articles travel in the RSC payload. A full corpus is
+ * ~600 articles at ~700 bytes of serialized props each, and the /news page
+ * embeds them twice (HTML plus the flight payload) — measured at 2.2 MB of
+ * document for 238 articles, which is enough to take a dev server out. The page
+ * ships the highest-ranked slice and `NewsClient` fetches the tail from
+ * `/api/v1/news?offset=` after mount, so nothing is lost and first paint is
+ * bounded. Clusters, sources and stats are never truncated: they describe the
+ * whole corpus and are small.
+ */
+export function toWireNews(
+  record: NewsSnapshotRecord | NewsSnapshot,
+  options: { limit?: number } = {},
+): NewsSnapshot {
+  const { limit } = options;
+  const articles =
+    limit !== undefined && record.articles.length > limit
+      ? rankedForWire(record.articles).slice(0, limit)
+      : record.articles;
+
   return {
     version: record.version,
     syncedAt: record.syncedAt,
     origin: record.origin,
-    articles: record.articles,
+    articles,
     clusters: record.clusters,
     stats: record.stats,
     sources: record.sources,
@@ -72,6 +93,17 @@ export function toWireNews(record: NewsSnapshotRecord | NewsSnapshot): NewsSnaps
     warnings: record.warnings,
     enrichment: record.enrichment,
   };
+}
+
+/**
+ * The same ordering `/api/v1/news` applies, so the page's slice and the tail the
+ * client pages in are two halves of one list rather than two overlapping ones.
+ */
+function rankedForWire(articles: readonly NewsArticle[], now = Date.now()): NewsArticle[] {
+  return articles
+    .map((article) => ({ article, score: liveScore(article, now) }))
+    .sort((a, b) => b.score - a.score || (a.article.id < b.article.id ? -1 : 1))
+    .map((entry) => entry.article);
 }
 
 // --- Per-IP token bucket ----------------------------------------------------

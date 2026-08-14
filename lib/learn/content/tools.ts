@@ -14,7 +14,7 @@ export const TOOLS: Track = {
   blurb:
     "Schemas, the tool loop, error design, MCP, and the safety envelope around it all.",
   level: "intermediate",
-  accent: "amber",
+  accent: "upland",
   prereqs: ["prompting"],
   lessons: [
     // -----------------------------------------------------------------------
@@ -83,12 +83,12 @@ export const TOOLS: Track = {
             kind: "flow",
             lanes: ["Your app", "Model", "Your app"],
             nodes: [
-              { id: "req", label: "Request + tool defs", column: 0, accent: "cyan" },
-              { id: "decide", label: "Call a tool?", column: 1, shape: "decision", accent: "violet" },
-              { id: "call", label: "tool_use block", note: "name + arguments", column: 1, accent: "violet" },
-              { id: "validate", label: "Validate", note: "your code", column: 2, accent: "amber" },
-              { id: "execute", label: "Execute", note: "your code", column: 2, accent: "amber" },
-              { id: "answer", label: "Answer directly", column: 2, accent: "cyan" },
+              { id: "req", label: "Request + tool defs", column: 0, accent: "ridge" },
+              { id: "decide", label: "Call a tool?", column: 1, shape: "decision", accent: "shelf" },
+              { id: "call", label: "tool_use block", note: "name + arguments", column: 1, accent: "shelf" },
+              { id: "validate", label: "Validate", note: "your code", column: 2, accent: "upland" },
+              { id: "execute", label: "Execute", note: "your code", column: 2, accent: "upland" },
+              { id: "answer", label: "Answer directly", column: 2, accent: "ridge" },
             ],
             edges: [
               { from: "req", to: "decide" },
@@ -442,13 +442,13 @@ for (let step = 0; step < MAX_STEPS; step++) {
             kind: "flow",
             lanes: ["Applications", "Protocol", "Servers"],
             nodes: [
-              { id: "ide", label: "IDE assistant", column: 0, accent: "cyan" },
-              { id: "chat", label: "Chat app", column: 0, accent: "cyan" },
-              { id: "agent", label: "Background agent", column: 0, accent: "cyan" },
-              { id: "mcp", label: "MCP", note: "one contract", column: 1, accent: "violet" },
-              { id: "tickets", label: "Tickets server", column: 2, accent: "amber" },
-              { id: "wh", label: "Warehouse server", column: 2, accent: "amber" },
-              { id: "docs", label: "Docs server", column: 2, accent: "amber" },
+              { id: "ide", label: "IDE assistant", column: 0, accent: "ridge" },
+              { id: "chat", label: "Chat app", column: 0, accent: "ridge" },
+              { id: "agent", label: "Background agent", column: 0, accent: "ridge" },
+              { id: "mcp", label: "MCP", note: "one contract", column: 1, accent: "shelf" },
+              { id: "tickets", label: "Tickets server", column: 2, accent: "upland" },
+              { id: "wh", label: "Warehouse server", column: 2, accent: "upland" },
+              { id: "docs", label: "Docs server", column: 2, accent: "upland" },
             ],
             edges: [
               { from: "ide", to: "mcp" },
@@ -510,27 +510,27 @@ for (let step = 0; step < MAX_STEPS; step++) {
               {
                 label: "Blast radius — what the worst case can reach",
                 note: "The only layer that holds when the ones below fail. Scope credentials so the answer is small.",
-                accent: "amber",
+                accent: "upland",
               },
               {
                 label: "Human confirmation on irreversible actions",
                 note: "Deletes, payments, sends, deploys. Cheap, and the last line before consequences.",
-                accent: "amber",
+                accent: "upland",
               },
               {
                 label: "Allow-list of tools per surface",
                 note: "The model only sees the tools this feature genuinely needs.",
-                accent: "violet",
+                accent: "shelf",
               },
               {
                 label: "Validation and authorisation in your code",
                 note: "Every call, every time. Never delegated to the server or the schema.",
-                accent: "violet",
+                accent: "shelf",
               },
               {
                 label: "Prompt-level instruction to distrust tool output",
                 note: "Reduces a rate. Not a boundary. Do not build on this alone.",
-                accent: "cyan",
+                accent: "ridge",
               },
             ],
           },

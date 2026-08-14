@@ -39,10 +39,10 @@ export function CompareBlock({
         <Side side={good} kind="good" />
       </div>
 
-      <p className="flex items-start gap-2 border-t border-border bg-gradient-primary-soft px-4 py-2.5 text-xs leading-relaxed">
-        <MoveRight className="mt-0.5 size-3.5 shrink-0 text-cyan" aria-hidden />
+      <p className="flex items-start gap-2 border-t border-border bg-action/10 px-4 py-2.5 text-xs leading-relaxed">
+        <MoveRight className="mt-0.5 size-3.5 shrink-0 text-action" aria-hidden />
         <span>
-          <span className="font-semibold text-cyan">Why: </span>
+          <span className="font-semibold text-action">Why: </span>
           {verdict}
         </span>
       </p>
@@ -71,8 +71,8 @@ function Side({ side, kind }: { side: CompareSide; kind: "bad" | "good" }) {
         <pre
           className={
             isGood
-              ? "mb-2 overflow-x-auto rounded-lg border border-success/25 bg-success/[0.05] p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground/90"
-              : "mb-2 overflow-x-auto rounded-lg border border-danger/25 bg-danger/[0.05] p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground/90"
+              ? "mb-2 overflow-x-auto rounded-lg border border-success/25 bg-success/[0.05] p-2.5 font-mono text-2xs leading-relaxed text-foreground/90"
+              : "mb-2 overflow-x-auto rounded-lg border border-danger/25 bg-danger/[0.05] p-2.5 font-mono text-2xs leading-relaxed text-foreground/90"
           }
         >
           <code>{side.code}</code>

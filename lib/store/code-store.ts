@@ -309,7 +309,7 @@ export const useCodeStore = create<CodeState>()(
           updatedAt: Date.now(),
         };
         try {
-          await codeSessionsRepo().save(meta, { events, history, trace });
+          await (await codeSessionsRepo()).save(meta, { events, history, trace });
           set((s) => ({ sessions: [meta, ...s.sessions.filter((x) => x.id !== id)] }));
         } catch (e) {
           console.warn("[code] session save failed", e);
@@ -395,7 +395,7 @@ export const useCodeStore = create<CodeState>()(
 
         async openSession(id) {
           if (get().running) return;
-          const loaded = await codeSessionsRepo()
+          const loaded = await (await codeSessionsRepo())
             .load(id)
             .catch(() => null);
           if (!loaded) return;
@@ -420,7 +420,7 @@ export const useCodeStore = create<CodeState>()(
           set((s) => ({
             sessions: s.sessions.map((m) => (m.id === id ? { ...m, name: clean } : m)),
           }));
-          await codeSessionsRepo().rename(id, clean).catch(() => {});
+          await (await codeSessionsRepo()).rename(id, clean).catch(() => {});
         },
 
         async deleteSession(id) {
@@ -430,7 +430,7 @@ export const useCodeStore = create<CodeState>()(
             // conversation stays and re-saves as a new session on next run.
             ...(s.sessionId === id ? { sessionId: null } : {}),
           }));
-          await codeSessionsRepo().remove(id).catch(() => {});
+          await (await codeSessionsRepo()).remove(id).catch(() => {});
         },
 
         previewUrl: null,
@@ -462,7 +462,7 @@ export const useCodeStore = create<CodeState>()(
             // Restore the last session + the saved-sessions index.
             await afterHydration();
             try {
-              const repo = codeSessionsRepo();
+              const repo = await codeSessionsRepo();
               const [list, sid] = [await repo.list(), get().sessionId];
               set({ sessions: list });
               if (sid && get().trace.length === 0) {

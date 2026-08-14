@@ -87,7 +87,7 @@ export function FeatureSections() {
             className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16"
           >
             <Reveal className={cn(reverse && "lg:order-2")}>
-              <p className="mb-3 text-sm font-medium uppercase tracking-wider text-cyan">
+              <p className="mb-3 text-sm font-medium uppercase tracking-wider text-action">
                 {f.eyebrow}
               </p>
               <h3 className="text-balance font-display text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl">
@@ -97,8 +97,8 @@ export function FeatureSections() {
               <ul className="mt-6 space-y-2.5">
                 {f.bullets.map((b) => (
                   <li key={b} className="flex items-center gap-2.5 text-sm">
-                    <span className="grid size-5 shrink-0 place-items-center rounded-md bg-gradient-primary-soft">
-                      <Check className="size-3 text-cyan" />
+                    <span className="grid size-5 shrink-0 place-items-center rounded-md bg-action/10">
+                      <Check className="size-3 text-action" />
                     </span>
                     {b}
                   </li>
@@ -106,7 +106,7 @@ export function FeatureSections() {
               </ul>
               <Link
                 href={f.href}
-                className="group mt-7 inline-flex items-center gap-1.5 text-sm font-medium text-cyan"
+                className="group mt-7 inline-flex items-center gap-1.5 text-sm font-medium text-action"
               >
                 {f.cta}
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
@@ -118,7 +118,7 @@ export function FeatureSections() {
               y={28}
               className={cn("relative", reverse && "lg:order-1")}
             >
-              <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-primary opacity-10 blur-2xl" />
+              <div className="absolute -inset-4 -z-10 rounded-3xl bg-action opacity-10 blur-2xl" />
               {f.preview}
             </Reveal>
           </div>

@@ -39,8 +39,8 @@ export function NewsHero({
     <header className="relative isolate mb-4 overflow-hidden rounded-3xl border border-border">
       {/* Backdrop: aurora over a grid, faded out at the bottom so the filter bar
           below reads as part of the same surface. */}
-      <div className="absolute inset-0 -z-10 bg-gradient-aurora opacity-40" aria-hidden="true" />
-      <div className="absolute inset-0 -z-10 bg-grid-fade opacity-60" aria-hidden="true" />
+      <div className="absolute inset-0 -z-10 opacity-40" aria-hidden="true" />
+      <div className="absolute inset-0 -z-10 bg-graticule opacity-60" aria-hidden="true" />
       <div
         className="absolute inset-0 -z-10 bg-gradient-to-t from-background via-background/40 to-transparent"
         aria-hidden="true"
@@ -49,12 +49,12 @@ export function NewsHero({
       <div className="px-5 py-6 sm:px-7 sm:py-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="mb-1.5 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wider text-cyan">
+            <p className="mb-1.5 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wider text-action">
               <Radio className="size-3" aria-hidden="true" />
               Live feed
             </p>
             <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              Atlas <span className="text-gradient">News</span>
+              Atlas <span className="italic">News</span>
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               {stats.articles > 0 ? (
@@ -64,7 +64,7 @@ export function NewsHero({
                   <button
                     type="button"
                     onClick={onShowSources}
-                    className="font-medium text-foreground underline decoration-dotted underline-offset-2 hover:text-cyan"
+                    className="font-medium text-foreground underline decoration-dotted underline-offset-2 hover:text-action"
                   >
                     {stats.sources} live sources
                   </button>

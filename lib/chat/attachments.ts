@@ -141,6 +141,74 @@ export async function parseAttachment(file: File): Promise<Attachment> {
   }
 }
 
+/**
+ * Attachment limits, matched to what the major assistants accept.
+ *
+ * There were none. `handleFiles` parsed whatever it was handed, so dropping a
+ * folder of a hundred images read every one into a data URL on the main thread
+ * and then tried to put them all in one request — a tab that stops responding
+ * and then a provider error, when the honest answer was available before any of
+ * it started.
+ */
+export const MAX_ATTACHMENTS = 20;
+export const MAX_ATTACHMENT_BYTES = 30 * 1024 * 1024;
+
+export interface AdmissionResult<T> {
+  accepted: T[];
+  /** What was turned away, with a sentence for the user. */
+  rejected: { name: string; reason: string }[];
+}
+
+/**
+ * Decide which of a dropped batch may be attached.
+ *
+ * Pure over `{ name, size }` rather than over `File`, so the rules are testable
+ * without a DOM. Rejections are returned rather than dropped: a file that
+ * silently failed to attach is one the user believes the model can see.
+ */
+export function admitFiles<T extends { name: string; size: number }>(
+  existingCount: number,
+  incoming: T[],
+): AdmissionResult<T> {
+  const accepted: T[] = [];
+  const rejected: AdmissionResult<T>["rejected"] = [];
+  let count = existingCount;
+
+  for (const file of incoming) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      rejected.push({
+        name: file.name,
+        reason: `is ${(file.size / 1024 / 1024).toFixed(0)}MB — the limit is ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB per file`,
+      });
+      continue;
+    }
+    if (count >= MAX_ATTACHMENTS) {
+      rejected.push({
+        name: file.name,
+        reason: `would be attachment ${count + 1} — the limit is ${MAX_ATTACHMENTS} per message`,
+      });
+      continue;
+    }
+    accepted.push(file);
+    count++;
+  }
+
+  return { accepted, rejected };
+}
+
+/** A rejected file, as an attachment chip that says why. */
+export function rejectionAttachment(name: string, reason: string): Attachment {
+  return {
+    id: uuid(),
+    name,
+    kind: "text",
+    mime: "text/plain",
+    size: 0,
+    failed: true,
+    text: `${name} was not attached — it ${reason}.`,
+  };
+}
+
 /** Render attachments as a prompt-injectable text block (non-image content). */
 export function attachmentsToPromptText(atts: Attachment[]): string {
   const textual = atts.filter((a) => a.kind !== "image" && a.text);

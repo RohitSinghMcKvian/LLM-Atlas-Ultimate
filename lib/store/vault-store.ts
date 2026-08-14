@@ -3,13 +3,18 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
+import { encryptedLocalStorage } from "@/lib/crypto/encrypted-storage";
 
 /**
  * Atlas Vault — a browser-local store for tool/agent credentials plus an audit
- * trail of every access. Values live ONLY in this browser (localStorage); in a
- * hosted deployment these would be envelope-encrypted server-side and injected
- * at call time by Atlas Router. This store is the faithful front-end of that
- * surface — see the security note in the Vault UI.
+ * trail of every access. Values live ONLY in this browser; in a hosted
+ * deployment these would be envelope-encrypted server-side and injected at call
+ * time by Atlas Router. This store is the faithful front-end of that surface.
+ *
+ * At rest the whole blob is AES-GCM encrypted under a non-extractable IndexedDB
+ * key (§1.3, lib/crypto/secret-box.ts). The per-value base64 below predates that
+ * and is now only in-memory obfuscation — it keeps secrets from showing up in a
+ * casual state dump, and is not what protects them on disk.
  */
 
 export type SecretScope = "All modules" | "Flow" | "Code" | "Router" | "Chat";
@@ -17,7 +22,7 @@ export type SecretScope = "All modules" | "Flow" | "Code" | "Router" | "Chat";
 export interface VaultSecret {
   id: string;
   name: string;
-  /** Stored obfuscated at rest (base64) — not a security boundary, just avoids plaintext-at-a-glance. */
+  /** Base64-obfuscated in memory; the persisted blob is AES-GCM encrypted. Read via `decodeSecret`. */
   value: string;
   scope: SecretScope;
   note?: string;
@@ -149,7 +154,7 @@ export const useVaultStore = create<VaultState>()(
       log: (action, target) =>
         set((s) => ({ audit: pushAudit(s.audit, action, target) })),
     }),
-    { name: "atlas-vault" },
+    { name: "atlas-vault", storage: encryptedLocalStorage<VaultState>() },
   ),
 );
 

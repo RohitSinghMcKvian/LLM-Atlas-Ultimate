@@ -133,9 +133,9 @@ export function LiveCell({
   const dirty = text !== prompt;
 
   return (
-    <div className="not-prose overflow-hidden rounded-2xl border border-violet/30 bg-surface/60 shadow-glow">
-      <div className="flex items-center gap-2 border-b border-border bg-violet/[0.07] px-3.5 py-2.5">
-        <span className="grid size-5 place-items-center rounded bg-gradient-primary text-primary-foreground">
+    <div className="not-prose overflow-hidden rounded-2xl border border-accent/30 bg-surface/60 shadow-glow">
+      <div className="flex items-center gap-2 border-b border-border bg-accent/[0.07] px-3.5 py-2.5">
+        <span className="grid size-5 place-items-center rounded bg-action text-action-foreground">
           <Terminal className="size-3" />
         </span>
         <span className="text-xs font-semibold">Run this live</span>
@@ -159,7 +159,7 @@ export function LiveCell({
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
-          className="w-full resize-y rounded-lg border border-border bg-surface-2/50 p-2.5 text-sm leading-relaxed outline-none transition-colors focus:border-cyan/50"
+          className="w-full resize-y rounded-lg border border-border bg-surface-2/50 p-2.5 text-sm leading-relaxed outline-none transition-colors focus:border-action/50"
         />
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -186,7 +186,7 @@ export function LiveCell({
           )}
           <Link
             href={`/playground?prompt=${encodeURIComponent(text)}`}
-            className="ml-auto inline-flex items-center gap-0.5 text-2xs text-muted-foreground hover:text-cyan"
+            className="ml-auto inline-flex items-center gap-0.5 text-2xs text-muted-foreground hover:text-action"
           >
             Open in Playground <ArrowUpRight className="size-3" />
           </Link>
@@ -204,7 +204,7 @@ export function LiveCell({
               </div>
             ) : (
               <p className="flex items-center gap-2 text-muted-foreground">
-                <span className="size-1.5 animate-pulse-dot rounded-full bg-cyan" />
+                <span className="size-1.5 animate-pulse-dot rounded-full bg-action" />
                 thinking…
               </p>
             )}

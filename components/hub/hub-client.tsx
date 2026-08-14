@@ -27,11 +27,12 @@ import {
 } from "@/lib/catalog";
 import type { CatalogModel } from "@/lib/catalog/types";
 import { useKeysStore } from "@/lib/store/keys-store";
+import { ACCENT_TEXT } from "@/lib/accent";
 import { cn, formatContext } from "@/lib/utils";
 
 export function HubClient() {
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const hasKey = useKeysStore((s) => s.openrouterKey.length > 0);
+  const hasKey = useKeysStore((s) => s.keyPresent);
 
   // One subscription drives every rail: a synced snapshot is a new object
   // identity, so all five memos below recompute exactly once when it lands.
@@ -64,7 +65,7 @@ export function HubClient() {
   return (
     <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:py-10">
       {/* Hero */}
-      <div className="mb-8 overflow-hidden rounded-3xl border border-border bg-gradient-primary-soft p-6 sm:p-8">
+      <div className="mb-8 overflow-hidden rounded-3xl border border-border bg-action/10 p-6 sm:p-8">
         <Badge variant="primary" className="mb-3">
           <Sparkles className="size-3" /> Orchestrator home
         </Badge>
@@ -92,7 +93,7 @@ export function HubClient() {
       <div className="space-y-9">
         <Rail
           icon={Flame}
-          tone="cyan"
+          tone="ridge"
           title="Trending"
           subtitle="What the community is reaching for right now"
           models={trending}
@@ -100,7 +101,7 @@ export function HubClient() {
         {fresh.length > 0 && (
           <Rail
             icon={Clock}
-            tone="violet"
+            tone="shelf"
             title="New & Notable"
             subtitle="Recently added to the Atlas catalog"
             models={fresh.slice(0, 12)}
@@ -116,7 +117,7 @@ export function HubClient() {
         />
         <Rail
           icon={Crown}
-          tone="amber"
+          tone="upland"
           title="Frontier · bring your own key"
           subtitle="The strongest closed models, on your OpenRouter account"
           models={frontier}
@@ -137,7 +138,7 @@ function Rail({
   onConnect,
 }: {
   icon: React.ElementType;
-  tone: "cyan" | "violet" | "amber" | "success";
+  tone: "ridge" | "shelf" | "upland" | "success";
   title: string;
   subtitle: string;
   models: CatalogModel[];
@@ -145,12 +146,7 @@ function Rail({
   onConnect?: () => void;
 }) {
   if (models.length === 0) return null;
-  const toneCls = {
-    cyan: "text-cyan",
-    violet: "text-[rgb(167_139_250)]",
-    amber: "text-amber",
-    success: "text-success",
-  }[tone];
+  const toneCls = { ...ACCENT_TEXT, success: "text-success" }[tone];
 
   return (
     <section>
@@ -167,12 +163,12 @@ function Rail({
         {onConnect ? (
           <button
             onClick={onConnect}
-            className="shrink-0 text-xs font-medium text-cyan hover:underline"
+            className="shrink-0 text-xs font-medium text-action hover:underline"
           >
             Connect key →
           </button>
         ) : cta ? (
-          <Link href={cta.href} className="shrink-0 text-xs font-medium text-cyan hover:underline">
+          <Link href={cta.href} className="shrink-0 text-xs font-medium text-action hover:underline">
             {cta.label} →
           </Link>
         ) : null}
@@ -202,7 +198,7 @@ function ModelCard({ model, index }: { model: CatalogModel; index: number }) {
           <p className="truncate font-medium">{model.name}</p>
           <p className="truncate text-xs text-muted-foreground">{model.provider}</p>
         </div>
-        <Badge variant={free ? "success" : "violet"} className="shrink-0">
+        <Badge variant={free ? "success" : "accent"} className="shrink-0">
           {free ? "Free" : "Your key"}
         </Badge>
       </div>

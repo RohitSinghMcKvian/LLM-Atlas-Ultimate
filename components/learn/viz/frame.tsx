@@ -35,9 +35,9 @@ export function VizFrame({
         className,
       )}
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-gradient-primary-soft px-3.5 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-action/10 px-3.5 py-2.5">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-          <Sparkles className="size-3.5 text-cyan" aria-hidden />
+          <Sparkles className="size-3.5 text-action" aria-hidden />
           {label}
         </span>
         {hint && (
@@ -70,7 +70,7 @@ export function VizSlider({
   max,
   step = 1,
   format,
-  accent = "cyan",
+  accent = "ridge",
 }: {
   label: string;
   value: number;
@@ -79,7 +79,7 @@ export function VizSlider({
   max: number;
   step?: number;
   format?: (v: number) => string;
-  accent?: "cyan" | "violet" | "amber";
+  accent?: "ridge" | "shelf" | "upland";
 }) {
   const id = React.useId();
   return (
@@ -91,9 +91,9 @@ export function VizSlider({
         <span
           className={cn(
             "font-mono text-2xs tnum",
-            accent === "cyan" && "text-cyan",
-            accent === "violet" && "text-[rgb(167_139_250)]",
-            accent === "amber" && "text-amber",
+            accent === "ridge" && "text-action",
+            accent === "shelf" && "text-accent",
+            accent === "upland" && "text-amber",
           )}
         >
           {format ? format(value) : value}
@@ -107,7 +107,7 @@ export function VizSlider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-3 accent-[rgb(var(--cyan))]"
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-3 accent-[rgb(var(--elev-1))]"
       />
     </div>
   );
@@ -159,19 +159,19 @@ export function VizStat({
 }: {
   label: string;
   value: React.ReactNode;
-  accent?: "cyan" | "violet" | "amber" | "success" | "danger";
+  accent?: "ridge" | "shelf" | "upland" | "success" | "danger";
 }) {
   return (
     <div className="rounded-lg border border-border bg-surface-2/50 px-2.5 py-1.5">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+      <p className="text-2xs uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
       <p
         className={cn(
           "font-mono text-sm font-semibold tnum",
-          accent === "cyan" && "text-cyan",
-          accent === "violet" && "text-[rgb(167_139_250)]",
-          accent === "amber" && "text-amber",
+          accent === "ridge" && "text-action",
+          accent === "shelf" && "text-accent",
+          accent === "upland" && "text-amber",
           accent === "success" && "text-success",
           accent === "danger" && "text-danger",
         )}

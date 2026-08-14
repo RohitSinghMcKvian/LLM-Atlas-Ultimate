@@ -148,14 +148,14 @@ export function AgentLoopViz() {
                     isActive
                       ? current.tone === "fail"
                         ? "rgb(var(--danger) / 0.22)"
-                        : "rgb(var(--cyan) / 0.22)"
+                        : "rgb(var(--elev-1) / 0.22)"
                       : "rgb(var(--surface-3))"
                   }
                   stroke={
                     isActive
                       ? current.tone === "fail"
                         ? "rgb(var(--danger))"
-                        : "rgb(var(--cyan))"
+                        : "rgb(var(--elev-1))"
                       : "rgb(var(--border))"
                   }
                   strokeWidth={isActive ? 2 : 1}
@@ -228,7 +228,7 @@ export function AgentLoopViz() {
               <motion.div
                 className={cn(
                   "h-full rounded-full",
-                  contextPct > 75 ? "bg-amber" : "bg-gradient-primary",
+                  contextPct > 75 ? "bg-amber" : "bg-action",
                 )}
                 animate={{ width: `${contextPct}%` }}
                 transition={{ type: "spring", stiffness: 220, damping: 30 }}
@@ -240,12 +240,12 @@ export function AgentLoopViz() {
             <VizStat
               label="Cost so far"
               value={`$${current.costUsd.toFixed(3)}`}
-              accent="amber"
+              accent = "upland"
             />
             <VizStat
               label="Tool calls"
               value={RUN.slice(0, step + 1).filter((s) => s.node === "act").length}
-              accent="cyan"
+              accent = "ridge"
             />
           </div>
         </div>

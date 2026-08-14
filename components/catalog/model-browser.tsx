@@ -6,6 +6,7 @@ import {
   Check,
   Cpu,
   Eye,
+  Image as ImageIcon,
   KeyRound,
   Search,
   Sparkles,
@@ -17,7 +18,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { unavailableReason, type Availability } from "@/lib/catalog/availability";
-import { PROVIDERS, type CatalogModel, type ProviderId } from "@/lib/catalog";
+import { PROVIDERS, producesImages, type CatalogModel, type ProviderId } from "@/lib/catalog";
 import { browseModels, type AccessTab, type BrowseRow } from "@/lib/catalog/search";
 import { useCatalogSnapshotLive } from "@/lib/hooks/use-catalog-snapshot";
 import { useInfiniteReveal } from "@/lib/hooks/use-infinite-reveal";
@@ -217,7 +218,7 @@ export function ModelBrowser({
                   setReasoning(false);
                   setMinContext(0);
                 }}
-                className="h-7 rounded-full px-2.5 text-xs text-cyan transition-colors hover:bg-cyan/10"
+                className="h-7 rounded-full px-2.5 text-xs text-action transition-colors hover:bg-action/10"
               >
                 Clear {activeFilters}
               </button>
@@ -295,7 +296,7 @@ function FilterChip({
       className={cn(
         "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors",
         active
-          ? "border-cyan/40 bg-cyan/10 text-cyan"
+          ? "border-action/40 bg-action/10 text-action"
           : "border-border bg-surface-2 text-muted-foreground hover:border-border-strong hover:text-foreground",
       )}
     >
@@ -344,15 +345,15 @@ const ModelRow = React.memo(function ModelRow({
         className={cn(
           "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
           runnable ? "hover:bg-surface-2/60" : "cursor-not-allowed opacity-50",
-          active && "bg-cyan/5",
+          active && "bg-action/5",
         )}
       >
-        <Cpu className={cn("size-4 shrink-0", active ? "text-cyan" : "text-muted-foreground")} />
+        <Cpu className={cn("size-4 shrink-0", active ? "text-action" : "text-muted-foreground")} />
 
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-foreground">{model.name}</span>
-            {active && <Check className="size-3.5 shrink-0 text-cyan" />}
+            {active && <Check className="size-3.5 shrink-0 text-action" />}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
             <span>{model.provider}</span>
@@ -368,6 +369,15 @@ const ModelRow = React.memo(function ModelRow({
               <>
                 <span aria-hidden>·</span>
                 <Eye className="size-3" aria-label="Vision" />
+              </>
+            )}
+            {/* Beside the eye on purpose: the two are opposite ends of the same
+                axis — one reads pictures, the other draws them — and a user
+                scanning for "can this make an image" looks where vision is. */}
+            {producesImages(model) && (
+              <>
+                <span aria-hidden>·</span>
+                <ImageIcon className="size-3" aria-label="Image output" />
               </>
             )}
             {model.capabilities.reasoning && (
@@ -397,14 +407,14 @@ function AccessBadge({ availability }: { availability: Availability }) {
   }
   if (availability.kind === "your_key") {
     return (
-      <Badge variant="violet" className="shrink-0">
+      <Badge variant="accent" className="shrink-0">
         Your key
       </Badge>
     );
   }
   if (availability.kind === "needs_key") {
     return (
-      <Badge variant="violet" className="shrink-0">
+      <Badge variant="accent" className="shrink-0">
         Needs key
       </Badge>
     );

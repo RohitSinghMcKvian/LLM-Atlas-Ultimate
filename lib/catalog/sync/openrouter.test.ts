@@ -23,6 +23,80 @@ describe("filtering", () => {
     expect(drafts.has("imagen-4")).toBe(false);
   });
 
+  it("keeps a chat model that also returns images, and records it (§P12)", () => {
+    // `imagen-4` above stays dropped — a dedicated generator does not speak
+    // chat-completions and the denylist catches it by id. What changed in P12 is
+    // that a *chat* model which can also emit a picture is no longer filtered
+    // out for having "image" among its outputs.
+    const drafted = normalizeOpenRouter(
+      [
+        {
+          id: "google/gemini-4-flash-image",
+          canonical_slug: "google/gemini-4-flash-image",
+          name: "Google: Gemini 4 Flash Image",
+          created: 1_780_000_000,
+          description: "Chat model that can also return images.",
+          context_length: 32_768,
+          architecture: { input_modalities: ["text", "image"], output_modalities: ["text", "image"] },
+          pricing: { prompt: "0.0000003", completion: "0.0000025" },
+          top_provider: { context_length: 32_768, max_completion_tokens: 8_192 },
+          supported_parameters: ["max_tokens"],
+        },
+      ] as unknown as typeof OPENROUTER_SAMPLE,
+      { today: TODAY, freeOpenCeilingPerM: 0 },
+    );
+    expect(drafted).toHaveLength(1);
+    expect(drafted[0].model.outputModalities).toEqual(["text", "image"]);
+    // Input vision and output image are separate axes and both survive.
+    expect(drafted[0].model.modalities).toContain("vision");
+  });
+
+  it("leaves outputModalities off a plain text model", () => {
+    // Absent means text. Stamping ["text"] on every row would bloat the
+    // snapshot and change nothing.
+    expect(deepseek.model.outputModalities).toBeUndefined();
+  });
+
+  it("records the image-output rate from `image_output` (§P13)", () => {
+    // `image_output` is quoted per *token*, in the same unit as prompt and
+    // completion — verified against OpenRouter's live listing, where
+    // google/gemini-2.5-flash-image carries "0.00003" and Google documents that
+    // model at $30 per million image-output tokens. `perMillion` therefore
+    // applies unchanged. `image` (no suffix) is a different number entirely:
+    // the per-input-image vision price, and it must not land here.
+    const drafted = normalizeOpenRouter(
+      [
+        {
+          id: "google/gemini-4-pro-image",
+          canonical_slug: "google/gemini-4-pro-image",
+          name: "Google: Gemini 4 Pro Image",
+          created: 1_780_000_000,
+          description: "Draws.",
+          context_length: 32_768,
+          architecture: {
+            input_modalities: ["text", "image"],
+            output_modalities: ["text", "image"],
+          },
+          pricing: {
+            prompt: "0.000002",
+            completion: "0.000012",
+            image: "0.000002",
+            image_output: "0.00012",
+          },
+          top_provider: { context_length: 32_768, max_completion_tokens: 8_192 },
+          supported_parameters: ["max_tokens"],
+        },
+      ] as unknown as typeof OPENROUTER_SAMPLE,
+      { today: TODAY, freeOpenCeilingPerM: 0 },
+    );
+    expect(drafted[0].model.pricing.imageOutputPerM).toBe(120);
+    expect(drafted[0].model.pricing.outputPerM).toBe(12);
+  });
+
+  it("leaves imageOutputPerM off a model that does not draw", () => {
+    expect(deepseek.model.pricing.imageOutputPerM).toBeUndefined();
+  });
+
   it("keeps every chat model exactly once", () => {
     expect([...drafts.keys()].sort()).toEqual(
       [

@@ -24,8 +24,8 @@ interface Word {
 }
 
 const CLUSTERS: Record<string, { label: string; color: string }> = {
-  code: { label: "Programming", color: "var(--cyan)" },
-  money: { label: "Billing", color: "var(--violet)" },
+  code: { label: "Programming", color: "var(--elev-1)" },
+  money: { label: "Billing", color: "var(--elev-0)" },
   animal: { label: "Animals", color: "var(--amber)" },
   royal: { label: "Monarchy", color: "var(--success)" },
 };
@@ -121,7 +121,7 @@ export function EmbeddingsViz() {
                 y1={sel.y}
                 x2={p.x}
                 y2={p.y}
-                stroke="rgb(var(--cyan))"
+                stroke="rgb(var(--elev-1))"
                 strokeWidth={1 + sim * 1.6}
                 strokeOpacity={0.15 + sim * 0.45}
               />
@@ -181,7 +181,7 @@ export function EmbeddingsViz() {
             <p className="text-2xs uppercase tracking-wider text-muted-foreground">
               Nearest to
             </p>
-            <p className="font-mono text-sm font-semibold text-cyan">
+            <p className="font-mono text-sm font-semibold text-action">
               {selected.word}
             </p>
           </div>
@@ -192,7 +192,7 @@ export function EmbeddingsViz() {
                 className="flex items-center justify-between rounded-lg border border-border bg-surface-2/50 px-2 py-1"
               >
                 <span className="font-mono text-xs">{word.word}</span>
-                <span className="font-mono text-2xs tnum text-cyan">
+                <span className="font-mono text-2xs tnum text-action">
                   {sim.toFixed(2)}
                 </span>
               </li>
@@ -201,14 +201,14 @@ export function EmbeddingsViz() {
           <VizStat
             label={`Farthest · ${farthest.word.word}`}
             value={farthest.sim.toFixed(2)}
-            accent={farthest.sim < 0 ? "danger" : "amber"}
+            accent={farthest.sim < 0 ? "danger" : "upland"}
           />
           <div className="flex flex-wrap gap-1.5 pt-1">
             {Object.entries(CLUSTERS).map(([id, c]) => (
               <span
                 key={id}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[10px]",
+                  "inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-2xs",
                   selected.cluster === id && "border-border-strong",
                 )}
               >

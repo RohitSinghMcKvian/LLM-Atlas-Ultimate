@@ -10,8 +10,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // Solid, with a 1px top highlight for a little dimension. The two
+        // 40px coloured drop shadows this replaces made the primary action
+        // glow — the one control on screen that never needed help being found.
         primary:
-          "bg-gradient-primary text-primary-foreground font-semibold shadow-[0_8px_30px_-12px_rgb(var(--cyan)/0.6)] hover:shadow-[0_10px_40px_-10px_rgb(var(--violet)/0.7)] hover:brightness-110",
+          "bg-action text-action-foreground font-semibold shadow-[inset_0_1px_0_0_rgb(255_255_255/0.18)] hover:bg-action/90",
         secondary:
           "bg-surface-2 text-foreground border border-border hover:bg-surface-3 hover:border-border-strong",
         outline:
@@ -19,7 +22,7 @@ const buttonVariants = cva(
         ghost:
           "bg-transparent text-muted-foreground hover:bg-surface-2 hover:text-foreground",
         glass:
-          "glass border border-white/10 text-foreground hover:border-white/20",
+          "glass border border-border text-foreground hover:border-border-strong",
         danger:
           "bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25",
         link: "text-primary underline-offset-4 hover:underline px-0",

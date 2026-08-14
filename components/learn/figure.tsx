@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
  */
 
 const ACCENT_VAR: Record<Accent, string> = {
-  cyan: "var(--cyan)",
-  violet: "var(--violet)",
-  amber: "var(--amber)",
+  ridge: "var(--elev-4)",
+  shelf: "var(--elev-1)",
+  upland: "var(--elev-3)",
 };
 
 export function Figure({
@@ -190,7 +190,7 @@ const FlowBox = React.forwardRef<
     >
       <p className="text-xs font-semibold leading-snug">{node.label}</p>
       {node.note && (
-        <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+        <p className="mt-0.5 text-2xs leading-snug text-muted-foreground">
           {node.note}
         </p>
       )}
@@ -213,7 +213,7 @@ function FlowPath({
 }) {
   if (!from || !to) return null;
 
-  const stroke = edge.back ? "rgb(var(--amber) / 0.7)" : "rgb(var(--cyan) / 0.6)";
+  const stroke = edge.back ? "rgb(var(--amber) / 0.7)" : "rgb(var(--elev-1) / 0.6)";
   let d: string;
   let labelAt: { x: number; y: number };
 
@@ -250,7 +250,7 @@ function FlowPath({
           x={labelAt.x}
           y={labelAt.y}
           textAnchor="middle"
-          className="fill-[rgb(var(--muted-foreground))] text-[9px]"
+          className="fill-[rgb(var(--muted-foreground))] text-2xs"
         >
           {edge.label}
         </text>
@@ -265,7 +265,7 @@ function FlowPath({
           markerHeight="5"
           orient="auto-start-reverse"
         >
-          <path d="M 0 1 L 7 4 L 0 7 z" fill="rgb(var(--cyan) / 0.7)" />
+          <path d="M 0 1 L 7 4 L 0 7 z" fill="rgb(var(--elev-1) / 0.7)" />
         </marker>
         <marker
           id="fig-arrow-back"
@@ -296,7 +296,7 @@ function StackFigure({
   return (
     <ol className="space-y-1.5">
       {spec.layers.map((layer, i) => {
-        const tint = layer.accent ? ACCENT_VAR[layer.accent] : "var(--cyan)";
+        const tint = layer.accent ? ACCENT_VAR[layer.accent] : "var(--elev-1)";
         return (
           <motion.li
             key={layer.label}
@@ -311,7 +311,7 @@ function StackFigure({
             }}
           >
             <span
-              className="grid size-6 shrink-0 place-items-center rounded-md font-mono text-[10px] font-bold"
+              className="grid size-6 shrink-0 place-items-center rounded-md font-mono text-2xs font-bold"
               style={{
                 background: `rgb(${tint} / 0.2)`,
                 color: `rgb(${tint})`,
@@ -322,7 +322,7 @@ function StackFigure({
             <span className="min-w-0">
               <span className="block text-xs font-semibold">{layer.label}</span>
               {layer.note && (
-                <span className="block text-[11px] leading-snug text-muted-foreground">
+                <span className="block text-2xs leading-snug text-muted-foreground">
                   {layer.note}
                 </span>
               )}
@@ -369,7 +369,7 @@ function QuadrantFigure({
           />
 
           {spec.points.map((p, i) => {
-            const tint = p.accent ? ACCENT_VAR[p.accent] : "var(--cyan)";
+            const tint = p.accent ? ACCENT_VAR[p.accent] : "var(--elev-1)";
             return (
               <motion.span
                 key={p.label}
@@ -391,7 +391,7 @@ function QuadrantFigure({
                     boxShadow: `0 0 0 4px rgb(${tint} / 0.18)`,
                   }}
                 />
-                <span className="whitespace-nowrap rounded border border-border bg-surface px-1.5 py-px text-[10px] font-medium">
+                <span className="whitespace-nowrap rounded border border-border bg-surface px-1.5 py-px text-2xs font-medium">
                   {p.label}
                 </span>
               </motion.span>
@@ -427,7 +427,7 @@ function TimelineFigure({
     <ol className="relative flex min-w-[30rem] items-start">
       <span
         aria-hidden
-        className="absolute left-0 right-0 top-[0.4rem] h-px bg-gradient-to-r from-cyan/50 via-violet/50 to-transparent"
+        className="absolute left-0 right-0 top-[0.4rem] h-px bg-gradient-to-r from-action/50 via-accent/50 to-transparent"
       />
       {spec.items.map((item, i) => (
         <motion.li
@@ -438,11 +438,11 @@ function TimelineFigure({
           transition={{ duration: 0.3, delay: i * 0.08 }}
           className="relative flex-1 pr-3"
         >
-          <span className="relative z-10 block size-3 rounded-full border-2 border-cyan bg-background" />
-          <p className="mt-2 font-mono text-2xs tnum text-cyan">{item.at}</p>
+          <span className="relative z-10 block size-3 rounded-full border-2 border-action bg-background" />
+          <p className="mt-2 font-mono text-2xs tnum text-action">{item.at}</p>
           <p className="text-xs font-semibold leading-snug">{item.label}</p>
           {item.note && (
-            <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+            <p className="mt-0.5 text-2xs leading-snug text-muted-foreground">
               {item.note}
             </p>
           )}
@@ -463,7 +463,7 @@ function BarsFigure({ spec }: { spec: Extract<FigureSpec, { kind: "bars" }> }) {
   return (
     <ul className="space-y-2.5">
       {spec.items.map((item, i) => {
-        const tint = item.accent ? ACCENT_VAR[item.accent] : "var(--cyan)";
+        const tint = item.accent ? ACCENT_VAR[item.accent] : "var(--elev-1)";
         return (
           <li key={item.label}>
             <div className="mb-1 flex items-baseline justify-between gap-3">
@@ -474,7 +474,7 @@ function BarsFigure({ spec }: { spec: Extract<FigureSpec, { kind: "bars" }> }) {
               >
                 {item.value.toLocaleString()}
                 {spec.unit && (
-                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">
+                  <span className="ml-0.5 text-2xs font-normal text-muted-foreground">
                     {spec.unit}
                   </span>
                 )}
@@ -493,7 +493,7 @@ function BarsFigure({ spec }: { spec: Extract<FigureSpec, { kind: "bars" }> }) {
               />
             </div>
             {item.note && (
-              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              <p className="mt-1 text-2xs leading-snug text-muted-foreground">
                 {item.note}
               </p>
             )}

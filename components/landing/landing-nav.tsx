@@ -61,10 +61,10 @@ export function LandingNav() {
                           href={m.href}
                           className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-surface-2"
                         >
-                          <m.icon className="size-4 text-muted-foreground group-hover:text-cyan" />
+                          <m.icon className="size-4 text-muted-foreground group-hover:text-action" />
                           {m.label}
                           {m.status === "soon" && (
-                            <span className="ml-auto text-[10px] uppercase text-muted-foreground/60">
+                            <span className="ml-auto text-2xs uppercase text-muted-foreground/60">
                               soon
                             </span>
                           )}
@@ -97,11 +97,15 @@ export function LandingNav() {
             rel="noreferrer"
             className="hidden items-center gap-2 rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-sm font-medium transition-colors hover:border-border-strong sm:inline-flex"
           >
+            {/* No star count. The number here was hardcoded to 2,438 against a
+                repository this build has no way to query. */}
             <Github className="size-4" />
-            <Star className="size-3.5 text-amber" />
-            <CountUp value={2438} className="tabular-nums" />
+            Source
           </a>
           <ThemeToggle />
+          <Button asChild variant="ghost" className="hidden sm:inline-flex">
+            <Link href="/login">Sign in</Link>
+          </Button>
           <Button asChild variant="primary" className="hidden sm:inline-flex">
             <Link href="/chat">Open the Workspace</Link>
           </Button>
@@ -152,11 +156,18 @@ export function LandingNav() {
                 </div>
               ))}
             </div>
-            <Button asChild variant="primary" size="lg" className="mt-4">
-              <Link href="/chat" onClick={() => setMobileOpen(false)}>
-                Open the Workspace <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+            <div className="mt-4 space-y-2">
+              <Button asChild variant="primary" size="lg" className="w-full">
+                <Link href="/chat" onClick={() => setMobileOpen(false)}>
+                  Open the Workspace <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="w-full">
+                <Link href="/login" onClick={() => setMobileOpen(false)}>
+                  Sign in
+                </Link>
+              </Button>
+            </div>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>

@@ -12,7 +12,7 @@ import type { NewsTopic } from "./types";
 // consumes this; the optional LLM pass may only *refine* summaries, never
 // rewrite topics.
 
-export type TopicAccent = "cyan" | "violet" | "amber";
+export type TopicAccent = "ridge" | "shelf" | "upland";
 
 export interface TopicDef {
   id: NewsTopic;
@@ -31,67 +31,67 @@ export const NEWS_TOPICS: readonly TopicDef[] = [
     id: "models",
     label: "Models",
     blurb: "Launches, upgrades, deprecations and benchmark claims.",
-    accent: "cyan",
+    accent: "ridge",
   },
   {
     id: "agents",
     label: "Agents",
     blurb: "Tool use, autonomy, computer use and agent frameworks.",
-    accent: "violet",
+    accent: "shelf",
   },
   {
     id: "open-source",
     label: "Open source",
     blurb: "Open-weight releases, permissive licences and community forks.",
-    accent: "cyan",
+    accent: "ridge",
   },
   {
     id: "multimodal",
     label: "Multimodal",
     blurb: "Vision, audio, video and speech across modalities.",
-    accent: "violet",
+    accent: "shelf",
   },
   {
     id: "research",
     label: "Research",
     blurb: "Preprints, papers and results from the labs.",
-    accent: "violet",
+    accent: "shelf",
   },
   {
     id: "tools",
     label: "Tools",
     blurb: "SDKs, IDEs, evaluation harnesses and developer tooling.",
-    accent: "cyan",
+    accent: "ridge",
   },
   {
     id: "infrastructure",
     label: "Infrastructure",
     blurb: "Silicon, serving stacks, data centres and inference throughput.",
-    accent: "amber",
+    accent: "upland",
   },
   {
     id: "pricing",
     label: "Pricing",
     blurb: "Token prices, tiers, rate limits and cost changes.",
-    accent: "amber",
+    accent: "upland",
   },
   {
     id: "safety",
     label: "Safety",
     blurb: "Alignment, red-teaming, evaluations and model risk.",
-    accent: "amber",
+    accent: "upland",
   },
   {
     id: "policy",
     label: "Policy",
     blurb: "Regulation, litigation, standards and government action.",
-    accent: "amber",
+    accent: "upland",
   },
   {
     id: "funding",
     label: "Funding",
     blurb: "Rounds, valuations, acquisitions and market moves.",
-    accent: "amber",
+    accent: "upland",
   },
 ] as const;
 
@@ -104,7 +104,7 @@ export function topicLabel(id: NewsTopic): string {
 }
 
 export function topicAccent(id: NewsTopic): TopicAccent {
-  return TOPIC_MAP.get(id)?.accent ?? "cyan";
+  return TOPIC_MAP.get(id)?.accent ?? "ridge";
 }
 
 /** Every topic id, in display order. Handy for building total records. */

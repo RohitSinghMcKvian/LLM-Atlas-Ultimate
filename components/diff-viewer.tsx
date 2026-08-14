@@ -32,7 +32,7 @@ export function DiffViewer({
   return (
     <div
       className={cn(
-        "overflow-auto rounded-xl border border-border bg-[#0b0d14] font-mono text-[12.5px] leading-relaxed",
+        "overflow-auto rounded-xl border border-border bg-code font-mono text-xs leading-relaxed",
         className,
       )}
     >

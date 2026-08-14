@@ -17,7 +17,7 @@ const T: Track = {
   title: "Track",
   blurb: "",
   level: "beginner",
-  accent: "cyan",
+  accent: "ridge",
   lessons: [
     {
       id: "l1",

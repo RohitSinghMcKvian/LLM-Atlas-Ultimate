@@ -10,9 +10,10 @@ import { Reveal } from "@/components/motion/reveal";
 export function ClosingCTA() {
   return (
     <section className="relative isolate overflow-hidden border-t border-border">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-aurora opacity-80" />
-      <div className="absolute inset-0 -z-10 opacity-70">
-        <Constellation density={0.7} className="size-full" />
+      {/* Mirrors the hero at lower intensity. The aurora wash that sat behind
+          the field is gone with the rest of the brand gradients. */}
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-70">
+        <Constellation variant="ambient" density={0.8} className="size-full" />
       </div>
 
       <div className="mx-auto max-w-3xl px-4 py-28 text-center sm:px-6 sm:py-36">
@@ -20,7 +21,7 @@ export function ClosingCTA() {
           <h2 className="text-balance font-display text-4xl font-semibold tracking-tightest sm:text-6xl">
             The whole LLM universe,
             <br />
-            <span className="text-gradient">one workspace away.</span>
+            <span className="italic">one workspace away.</span>
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-pretty text-muted-foreground">
             Open-source, self-hostable, provider-neutral. Start mapping yours.

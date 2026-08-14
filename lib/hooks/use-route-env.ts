@@ -27,7 +27,7 @@ import { useKeysStore } from "@/lib/store/keys-store";
  */
 export function useRouteEnv(): RouteEnv | null {
   const providers = useProviders();
-  const hasUserKey = useKeysStore((s) => s.openrouterKey.length > 0);
+  const hasUserKey = useKeysStore((s) => s.keyPresent);
 
   // `configured` is a fresh array on every provider fetch, so memoize on its
   // contents rather than its identity.

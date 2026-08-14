@@ -35,7 +35,7 @@ export default function Page() {
         <p className="mt-3 max-w-2xl text-muted-foreground">
           LLM Atlas is fully open-source and self-hostable end-to-end. These
           docs are a placeholder in this build — the full documentation site
-          lives in <code className="text-cyan">apps/docs</code>.
+          lives in <code className="text-action">apps/docs</code>.
         </p>
       </Reveal>
       <div className="mt-10 grid gap-4 sm:grid-cols-3">
@@ -43,7 +43,7 @@ export default function Page() {
           <Reveal key={s.title} delay={i * 0.08}>
             <Card interactive className="h-full">
               <CardContent className="pt-6">
-                <s.icon className="mb-3 size-5 text-cyan" />
+                <s.icon className="mb-3 size-5 text-action" />
                 <h2 className="font-display text-base font-semibold">
                   {s.title}
                 </h2>

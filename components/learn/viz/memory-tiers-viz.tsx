@@ -159,7 +159,7 @@ export function MemoryTiersViz() {
           <motion.div
             className={cn(
               "h-full rounded-full",
-              over ? "bg-danger" : "bg-gradient-primary",
+              over ? "bg-danger" : "bg-action",
             )}
             animate={{ width: `${Math.min(100, (state.workingTokens / budget) * 100)}%` }}
             transition={{ type: "spring", stiffness: 200, damping: 26 }}
@@ -180,7 +180,7 @@ export function MemoryTiersViz() {
           icon={MessageSquare}
           title="Working"
           sub="verbatim, in the window"
-          tint="var(--cyan)"
+          tint="var(--elev-1)"
           tokens={state.workingTokens}
         >
           <AnimatePresence initial={false} mode="popLayout">
@@ -197,17 +197,17 @@ export function MemoryTiersViz() {
                 <p className="flex items-baseline gap-1.5">
                   <span
                     className={cn(
-                      "font-mono text-[9px] uppercase",
-                      t.role === "user" ? "text-cyan" : "text-violet",
+                      "font-mono text-2xs uppercase",
+                      t.role === "user" ? "text-action" : "text-accent",
                     )}
                   >
                     {t.role}
                   </span>
-                  <span className="ml-auto shrink-0 font-mono text-[9px] tnum text-muted-foreground">
+                  <span className="ml-auto shrink-0 font-mono text-2xs tnum text-muted-foreground">
                     {fmt(t.tokens)}
                   </span>
                 </p>
-                <p className="text-[11px] leading-snug text-foreground/85">
+                <p className="text-2xs leading-snug text-foreground/85">
                   {t.text}
                 </p>
               </motion.li>
@@ -223,7 +223,7 @@ export function MemoryTiersViz() {
           tokens={state.episodicTokens}
         >
           {state.episodes.length === 0 ? (
-            <li className="rounded-lg border border-dashed border-border px-2 py-2 text-[10px] text-muted-foreground">
+            <li className="rounded-lg border border-dashed border-border px-2 py-2 text-2xs text-muted-foreground">
               Nothing compacted yet. Lower the budget or advance the session.
             </li>
           ) : (
@@ -234,8 +234,8 @@ export function MemoryTiersViz() {
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-lg border border-amber/30 bg-amber/[0.06] px-2 py-1.5"
               >
-                <p className="text-[11px] font-medium">{e.label}</p>
-                <p className="font-mono text-[9px] tnum text-muted-foreground">
+                <p className="text-2xs font-medium">{e.label}</p>
+                <p className="font-mono text-2xs tnum text-muted-foreground">
                   {fmt(e.fromTokens)} → {fmt(e.tokens)} tokens
                 </p>
               </motion.li>
@@ -247,11 +247,11 @@ export function MemoryTiersViz() {
           icon={Brain}
           title="Semantic"
           sub="durable facts"
-          tint="var(--violet)"
+          tint="var(--elev-0)"
           tokens={state.semanticTokens}
         >
           {state.semantic.length === 0 ? (
-            <li className="rounded-lg border border-dashed border-border px-2 py-2 text-[10px] text-muted-foreground">
+            <li className="rounded-lg border border-dashed border-border px-2 py-2 text-2xs text-muted-foreground">
               Facts are lifted here when their turn is compacted.
             </li>
           ) : (
@@ -260,7 +260,7 @@ export function MemoryTiersViz() {
                 key={f}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="rounded-lg border border-violet/30 bg-violet/[0.07] px-2 py-1.5 text-[11px] leading-snug"
+                className="rounded-lg border border-accent/30 bg-accent/[0.07] px-2 py-1.5 text-2xs leading-snug"
               >
                 {f}
               </motion.li>
@@ -270,8 +270,8 @@ export function MemoryTiersViz() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <VizStat label="Compactions" value={state.compactions} accent="amber" />
-        <VizStat label="Resident" value={fmt(state.resident)} accent="cyan" />
+        <VizStat label="Compactions" value={state.compactions} accent = "upland" />
+        <VizStat label="Resident" value={fmt(state.resident)} accent = "ridge" />
         <VizStat label="Naive (no tiers)" value={fmt(state.naiveTokens)} />
         <VizStat
           label="Saved"
@@ -313,11 +313,11 @@ function Tier({
       >
         <Icon className="size-3.5" />
         <span className="text-2xs font-semibold">{title}</span>
-        <span className="ml-auto font-mono text-[10px] tnum text-muted-foreground">
+        <span className="ml-auto font-mono text-2xs tnum text-muted-foreground">
           {tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}K` : tokens}
         </span>
       </div>
-      <p className="px-2.5 pt-1.5 text-[10px] text-muted-foreground">{sub}</p>
+      <p className="px-2.5 pt-1.5 text-2xs text-muted-foreground">{sub}</p>
       <ul className="max-h-56 space-y-1 overflow-y-auto p-2">{children}</ul>
     </div>
   );

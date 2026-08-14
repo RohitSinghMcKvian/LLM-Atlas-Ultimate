@@ -14,7 +14,7 @@ export const RETRIEVAL: Track = {
   blurb:
     "Chunking, vector search, hybrid retrieval, re-ranking, and measuring the pipeline.",
   level: "intermediate",
-  accent: "cyan",
+  accent: "ridge",
   prereqs: ["foundations"],
   lessons: [
     // -----------------------------------------------------------------------
@@ -87,12 +87,12 @@ export const RETRIEVAL: Track = {
             kind: "flow",
             lanes: ["Index", "Retrieve", "Re-rank", "Generate"],
             nodes: [
-              { id: "corpus", label: "Chunked corpus", note: "offline", column: 0, accent: "cyan" },
-              { id: "hybrid", label: "Dense + lexical", note: "top 20", column: 1, accent: "cyan" },
-              { id: "cross", label: "Cross-encoder", note: "top 3", column: 2, accent: "violet" },
-              { id: "gen", label: "Grounded answer", note: "with citations", column: 3, accent: "amber" },
-              { id: "miss", label: "Not indexed", note: "recall failure", column: 1, accent: "amber" },
-              { id: "noise", label: "Wrong chunk on top", note: "precision failure", column: 2, accent: "amber" },
+              { id: "corpus", label: "Chunked corpus", note: "offline", column: 0, accent: "ridge" },
+              { id: "hybrid", label: "Dense + lexical", note: "top 20", column: 1, accent: "ridge" },
+              { id: "cross", label: "Cross-encoder", note: "top 3", column: 2, accent: "shelf" },
+              { id: "gen", label: "Grounded answer", note: "with citations", column: 3, accent: "upland" },
+              { id: "miss", label: "Not indexed", note: "recall failure", column: 1, accent: "upland" },
+              { id: "noise", label: "Wrong chunk on top", note: "precision failure", column: 2, accent: "upland" },
             ],
             edges: [
               { from: "corpus", to: "hybrid" },
@@ -863,12 +863,12 @@ MRR 0.71
             kind: "flow",
             lanes: ["Bad answer", "Check", "Verdict"],
             nodes: [
-              { id: "bad", label: "Wrong answer", column: 0, accent: "amber" },
+              { id: "bad", label: "Wrong answer", column: 0, accent: "upland" },
               { id: "inctx", label: "Was the gold chunk retrieved?", column: 1, shape: "decision" },
               { id: "cited", label: "Did the answer cite it?", column: 1, shape: "decision" },
-              { id: "retrieval", label: "Retrieval failure", note: "fix the pipeline", column: 2, accent: "cyan" },
-              { id: "gen", label: "Generation failure", note: "fix the prompt", column: 2, accent: "violet" },
-              { id: "support", label: "Cited but unsupported", note: "the dangerous one", column: 2, accent: "amber" },
+              { id: "retrieval", label: "Retrieval failure", note: "fix the pipeline", column: 2, accent: "ridge" },
+              { id: "gen", label: "Generation failure", note: "fix the prompt", column: 2, accent: "shelf" },
+              { id: "support", label: "Cited but unsupported", note: "the dangerous one", column: 2, accent: "upland" },
             ],
             edges: [
               { from: "bad", to: "inctx" },

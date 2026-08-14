@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { useInfiniteReveal } from "@/lib/hooks/use-infinite-reveal";
 import { dayKey, dayLabel } from "@/lib/news/format";
 import type { NewsArticle, NewsCluster, NewsView } from "@/lib/news/types";
 import { cn } from "@/lib/utils";
@@ -27,8 +28,16 @@ export interface NewsFeedProps {
   onToggleSave: (id: string) => void;
 }
 
+/**
+ * Cards mounted before the reader scrolls, and per chunk after.
+ *
+ * Grid layouts show a handful of rows at a time, so 24 covers a tall screen with
+ * room to spare; compact rows are ~48px, hence the larger first chunk there.
+ */
+const REVEAL = { magazine: 24, grid: 24, compact: 60, timeline: 60 } as const;
+
 export function NewsFeed({
-  articles,
+  articles: allSelected,
   clusters,
   allArticles,
   view,
@@ -41,6 +50,28 @@ export function NewsFeed({
   onToggleSave,
 }: NewsFeedProps) {
   const reducedMotion = useReducedMotion();
+
+  // Chunked reveal, the same treatment `/leaderboard` gives ~400 models. The
+  // corpus runs to several hundred articles and every card carries an image, a
+  // verification badge and a cluster lookup — mounting the lot costs the first
+  // commit and every re-render after it, for rows nobody has scrolled to.
+  const chunk = REVEAL[view];
+  const { limit, sentinelRef, hasMore } = useInfiniteReveal(allSelected.length, {
+    initial: chunk,
+    step: chunk,
+    // A different filter, sort or layout is a different list; keeping a large
+    // limit would mount hundreds of rows the reader never asked for.
+    resetKey: `${view}|${query ?? ""}|${allSelected.length}|${allSelected[0]?.id ?? ""}`,
+  });
+
+  const articles = React.useMemo(
+    () => (limit >= allSelected.length ? allSelected : allSelected.slice(0, limit)),
+    [allSelected, limit],
+  );
+
+  const sentinel = hasMore ? (
+    <div ref={sentinelRef} aria-hidden="true" className="h-px w-full" />
+  ) : null;
 
   // Cluster siblings, resolved once per render rather than per card.
   const siblingsByArticle = React.useMemo(() => {
@@ -82,7 +113,9 @@ export function NewsFeed({
       onOpen={onOpen}
       onToggleSave={onToggleSave}
       index={index}
-      setSize={articles.length}
+      // The full selection, not the revealed slice: a screen reader should hear
+      // "3 of 240", not a total that grows as the reader scrolls.
+      setSize={allSelected.length}
     />
   );
 
@@ -115,6 +148,7 @@ export function NewsFeed({
 
     let cursor = 0;
     return (
+      <>
       <ul {...listProps} className="space-y-6">
         {groups.map((group) => {
           const start = cursor;
@@ -126,7 +160,7 @@ export function NewsFeed({
               </h2>
               <div className="relative pl-4">
                 <span
-                  className="absolute inset-y-0 left-1 w-px bg-gradient-to-b from-cyan/40 via-border to-transparent"
+                  className="absolute inset-y-0 left-1 w-px bg-gradient-to-b from-action/40 via-border to-transparent"
                   aria-hidden="true"
                 />
                 <ul className="rounded-xl border border-border bg-surface">
@@ -137,14 +171,19 @@ export function NewsFeed({
           );
         })}
       </ul>
+      {sentinel}
+      </>
     );
   }
 
   if (view === "compact") {
     return (
-      <ul {...listProps} className="overflow-hidden rounded-2xl border border-border bg-surface">
-        {articles.map((article, index) => cardFor(article, index, "compact"))}
-      </ul>
+      <>
+        <ul {...listProps} className="overflow-hidden rounded-2xl border border-border bg-surface">
+          {articles.map((article, index) => cardFor(article, index, "compact"))}
+        </ul>
+        {sentinel}
+      </>
     );
   }
 
@@ -153,31 +192,37 @@ export function NewsFeed({
     // collapses to one column, which is why the lead does not get a bespoke
     // two-column treatment — it would only exist above one breakpoint.
     return (
-      <motion.ul
-        {...listProps}
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-        initial={reducedMotion ? false : "hidden"}
-        animate="visible"
-        variants={{ visible: { transition: { staggerChildren: 0.03 } } }}
-      >
-        {articles.map((article, index) =>
-          cardFor(
-            article,
-            index,
-            index === 0 ? "magazine" : "grid",
-            // The class lands on the `<li>`, which is the grid item. Wrapping it
-            // in a `display: contents` div would put the span on a box the grid
-            // does not lay out.
-            index === 0 ? "sm:col-span-2" : undefined,
-          ),
-        )}
-      </motion.ul>
+      <>
+        <motion.ul
+          {...listProps}
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          initial={reducedMotion ? false : "hidden"}
+          animate="visible"
+          variants={{ visible: { transition: { staggerChildren: 0.03 } } }}
+        >
+          {articles.map((article, index) =>
+            cardFor(
+              article,
+              index,
+              index === 0 ? "magazine" : "grid",
+              // The class lands on the `<li>`, which is the grid item. Wrapping it
+              // in a `display: contents` div would put the span on a box the grid
+              // does not lay out.
+              index === 0 ? "sm:col-span-2" : undefined,
+            ),
+          )}
+        </motion.ul>
+        {sentinel}
+      </>
     );
   }
 
   return (
-    <ul {...listProps} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {articles.map((article, index) => cardFor(article, index, "grid"))}
-    </ul>
+    <>
+      <ul {...listProps} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {articles.map((article, index) => cardFor(article, index, "grid"))}
+      </ul>
+      {sentinel}
+    </>
   );
 }

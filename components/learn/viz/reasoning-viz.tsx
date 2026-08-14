@@ -140,10 +140,10 @@ export function ReasoningViz() {
             <CircleX className="size-3.5" /> Answer straight away
           </p>
           <p className="text-sm leading-relaxed">{p.direct.answer}</p>
-          <p className="mt-2 border-t border-danger/20 pt-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-2 border-t border-danger/20 pt-2 text-2xs leading-relaxed text-muted-foreground">
             {p.direct.why}
           </p>
-          <p className="mt-2 font-mono text-[10px] tnum text-muted-foreground">
+          <p className="mt-2 font-mono text-2xs tnum text-muted-foreground">
             {directTokens} output tokens · {cost(directTokens)}
           </p>
         </div>
@@ -174,9 +174,9 @@ export function ReasoningViz() {
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="flex gap-2 text-[12.5px] leading-relaxed"
+                  className="flex gap-2 text-xs leading-relaxed"
                 >
-                  <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border border-cyan/40 font-mono text-[9px] font-bold text-cyan">
+                  <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border border-action/40 font-mono text-2xs font-bold text-action">
                     {i + 1}
                   </span>
                   <span className="text-foreground/85">{s}</span>
@@ -184,7 +184,7 @@ export function ReasoningViz() {
               ))}
             </AnimatePresence>
             {!finished && (
-              <li className="pl-6 text-[11px] text-muted-foreground">
+              <li className="pl-6 text-2xs text-muted-foreground">
                 {shown === 0
                   ? `${p.steps.length} steps hidden — reveal them one at a time.`
                   : `${p.steps.length - shown} step${p.steps.length - shown === 1 ? "" : "s"} to go.`}
@@ -202,7 +202,7 @@ export function ReasoningViz() {
             </motion.p>
           )}
 
-          <p className="mt-2 font-mono text-[10px] tnum text-muted-foreground">
+          <p className="mt-2 font-mono text-2xs tnum text-muted-foreground">
             {shownTokens} output tokens · {cost(shownTokens)}
           </p>
         </div>
@@ -214,7 +214,7 @@ export function ReasoningViz() {
         <VizStat
           label="Token multiple"
           value={`${(reasonedTokens / Math.max(1, directTokens)).toFixed(1)}×`}
-          accent="amber"
+          accent = "upland"
         />
         <VizStat
           label="Extra cost / 1K calls"

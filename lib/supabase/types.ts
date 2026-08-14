@@ -2,6 +2,20 @@
 // supabase/migrations/0001_init.sql. Once a Supabase project exists you can
 // replace/augment these with `supabase gen types typescript`.
 
+/** Roles, least to most privileged. `owner` is `admin` plus intent to be final. */
+export type UserRole = "user" | "admin" | "owner";
+
+/** One row per auth user, created by the signup trigger in migration 0011. */
+export interface Profile {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Project {
   id: string;
   user_id: string | null;
@@ -56,6 +70,8 @@ export interface Message {
   artifacts: unknown | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
+  /** Part of `completion_tokens` that a generated image is made of (§P13). */
+  image_tokens: number | null;
   cost_usd: number | null;
   created_at: string;
 }

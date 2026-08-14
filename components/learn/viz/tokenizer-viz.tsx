@@ -177,7 +177,7 @@ export function TokenizerViz() {
         onChange={(e) => setText(e.target.value)}
         rows={2}
         spellCheck={false}
-        className="w-full resize-none rounded-lg border border-border bg-surface-2/50 p-2.5 font-mono text-[13px] outline-none transition-colors focus:border-cyan/50"
+        className="w-full resize-none rounded-lg border border-border bg-surface-2/50 p-2.5 font-mono text-sm outline-none transition-colors focus:border-action/50"
       />
 
       <div
@@ -194,12 +194,12 @@ export function TokenizerViz() {
             key={i}
             title={`token ${i + 1}`}
             className={cn(
-              "rounded border px-1.5 py-0.5 font-mono text-[12px] leading-tight",
+              "rounded border px-1.5 py-0.5 font-mono text-xs leading-tight",
               // Alternating tint makes boundaries readable at a glance —
               // adjacent tokens are never the same colour.
               i % 2 === 0
-                ? "border-cyan/30 bg-cyan/10 text-cyan"
-                : "border-violet/30 bg-violet/10 text-[rgb(167_139_250)]",
+                ? "border-action/30 bg-action/10 text-action"
+                : "border-accent/30 bg-accent/10 text-accent",
               !p.head && "opacity-70",
             )}
           >
@@ -209,13 +209,13 @@ export function TokenizerViz() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <VizStat label="Tokens" value={tokens} accent="cyan" />
+        <VizStat label="Tokens" value={tokens} accent = "ridge" />
         <VizStat label="Characters" value={chars} />
         <VizStat label="Chars / token" value={ratio ? ratio.toFixed(2) : "—"} />
         <VizStat
           label="Words"
           value={words}
-          accent={tokens > words * 1.6 ? "amber" : undefined}
+          accent={tokens > words * 1.6 ? "upland" : undefined}
         />
       </div>
       <p className="mt-2 text-2xs text-muted-foreground">

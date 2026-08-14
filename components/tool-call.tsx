@@ -35,12 +35,12 @@ export function ToolCall({ call, defaultOpen = false }: { call: ToolCallView; de
   const status = call.status ?? (call.result !== undefined ? "done" : "calling");
 
   return (
-    <div className="my-2 overflow-hidden rounded-xl border border-cyan/20 bg-cyan/5">
+    <div className="my-2 overflow-hidden rounded-xl border border-action/20 bg-action/5">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-cyan/10"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-action/10"
       >
-        <Wrench className="size-3.5 text-cyan" />
+        <Wrench className="size-3.5 text-action" />
         <span className="font-medium text-foreground">{call.name || "tool"}</span>
         <StatusPill status={status} />
         <ChevronRight
@@ -57,7 +57,7 @@ export function ToolCall({ call, defaultOpen = false }: { call: ToolCallView; de
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="border-t border-cyan/15"
+            className="border-t border-action/15"
           >
             <div className="space-y-2 px-3 py-2.5">
               <Field label="Input">{pretty(call.arguments) || "—"}</Field>
@@ -78,7 +78,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="mb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
-      <pre className="max-h-56 overflow-auto rounded-lg bg-[#0b0d14] p-2.5 font-mono text-[12px] leading-relaxed text-foreground/90">
+      <pre className="max-h-56 overflow-auto rounded-lg bg-code p-2.5 font-mono text-xs leading-relaxed text-foreground/90">
         {children}
       </pre>
     </div>
@@ -99,7 +99,7 @@ function StatusPill({ status }: { status: ToolStatus }) {
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1 text-2xs text-cyan">
+    <span className="inline-flex items-center gap-1 text-2xs text-action">
       <Loader2 className="size-3 animate-spin" />
       {status === "running" ? "running" : "calling"}
     </span>

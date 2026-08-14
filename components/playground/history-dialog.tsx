@@ -45,7 +45,7 @@ export function HistoryDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="size-4 text-cyan" /> Run history
+            <History className="size-4 text-action" /> Run history
           </DialogTitle>
           <DialogDescription>
             Every run is recorded with its full config and metrics. Restore one
@@ -173,7 +173,7 @@ export function HistoryDialog({
                         } else if (e.key === "Escape") setNoteId(null);
                       }}
                       placeholder="Add a note…"
-                      className="mt-1.5 h-7 w-full rounded-lg border border-cyan/40 bg-surface px-2 text-xs outline-none"
+                      className="mt-1.5 h-7 w-full rounded-lg border border-action/40 bg-surface px-2 text-xs outline-none"
                     />
                   )}
                 </div>

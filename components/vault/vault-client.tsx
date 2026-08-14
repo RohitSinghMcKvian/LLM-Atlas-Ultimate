@@ -55,6 +55,7 @@ import {
   type AuditEntry,
 } from "@/lib/store/vault-store";
 import { PROVIDER_LIST } from "@/lib/catalog";
+import { ACCENT_TEXT } from "@/lib/accent";
 import { cn, formatUSD, timeAgo } from "@/lib/utils";
 
 const SCOPES: SecretScope[] = ["All modules", "Flow", "Code", "Router", "Chat"];
@@ -67,7 +68,7 @@ export function VaultClient() {
       <Reveal>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-border bg-surface text-[rgb(167_139_250)] shadow-glow">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-border bg-surface text-accent shadow-glow">
               <KeyRound className="size-5" />
             </span>
             <div>
@@ -178,7 +179,7 @@ function ByokKeyCard() {
           <span
             className={cn(
               "grid size-9 shrink-0 place-items-center rounded-xl",
-              connected ? "bg-success/15 text-success" : "bg-violet/15 text-[rgb(167_139_250)]",
+              connected ? "bg-success/15 text-success" : "bg-accent/15 text-accent",
             )}
           >
             <KeyRound className="size-4" />
@@ -199,7 +200,7 @@ function ByokKeyCard() {
           href="https://openrouter.ai/keys"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-cyan hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-action hover:underline"
         >
           Get a key <ExternalLink className="size-3" />
         </a>
@@ -320,7 +321,7 @@ function ProvidersPanel() {
   return (
     <Reveal delay={0.05} className="rounded-2xl border border-border bg-surface/60 p-5 shadow-glow sm:p-6">
       <div className="flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-xl bg-cyan/15 text-cyan">
+        <span className="grid size-9 place-items-center rounded-xl bg-action/15 text-action">
           <Server className="size-4" />
         </span>
         <div>
@@ -587,7 +588,7 @@ function AddSecretDialog() {
 
 function SecurityCard() {
   return (
-    <Reveal delay={0.05} className="rounded-2xl border border-border bg-gradient-primary-soft p-5 sm:p-6">
+    <Reveal delay={0.05} className="rounded-2xl border border-border bg-action/10 p-5 sm:p-6">
       <div className="flex items-center gap-2.5">
         <span className="grid size-9 place-items-center rounded-xl bg-surface text-success">
           <ShieldCheck className="size-4" />
@@ -595,15 +596,15 @@ function SecurityCard() {
         <h2 className="font-medium">How secrets are handled</h2>
       </div>
       <ul className="mt-4 space-y-3 text-sm">
-        <SecurityRow icon={Server} tone="cyan" title="Operator keys">
+        <SecurityRow icon={Server} tone="ridge" title="Operator keys">
           Provider keys live in <code className="font-mono text-xs">.env.local</code> and are
           read server-side only. The client sees a boolean, never a value.
         </SecurityRow>
-        <SecurityRow icon={KeyRound} tone="violet" title="Your model key (BYOK)">
+        <SecurityRow icon={KeyRound} tone="shelf" title="Your model key (BYOK)">
           Kept in this browser and forwarded per-request to call paid models — never
           stored or logged by Atlas.
         </SecurityRow>
-        <SecurityRow icon={Lock} tone="amber" title="Tool secrets">
+        <SecurityRow icon={Lock} tone="upland" title="Tool secrets">
           Held in browser storage for this demo. In a hosted deployment they&apos;re
           envelope-encrypted and injected by Atlas Router at call time.
         </SecurityRow>
@@ -645,10 +646,10 @@ function AuditTrail() {
 const ACTION_META: Record<AuditAction, { verb: string; tone: string }> = {
   created: { verb: "Added", tone: "text-success" },
   revealed: { verb: "Revealed", tone: "text-amber" },
-  copied: { verb: "Copied", tone: "text-cyan" },
+  copied: { verb: "Copied", tone: "text-action" },
   removed: { verb: "Removed", tone: "text-danger" },
-  used: { verb: "Used", tone: "text-[rgb(167_139_250)]" },
-  tested: { verb: "Tested", tone: "text-cyan" },
+  used: { verb: "Used", tone: "text-accent" },
+  tested: { verb: "Tested", tone: "text-action" },
   updated: { verb: "Updated", tone: "text-foreground" },
 };
 
@@ -717,15 +718,11 @@ function SecurityRow({
   children,
 }: {
   icon: React.ElementType;
-  tone: "cyan" | "violet" | "amber";
+  tone: "ridge" | "shelf" | "upland";
   title: string;
   children: React.ReactNode;
 }) {
-  const toneCls = {
-    cyan: "text-cyan",
-    violet: "text-[rgb(167_139_250)]",
-    amber: "text-amber",
-  }[tone];
+  const toneCls = ACCENT_TEXT[tone];
   return (
     <li className="flex gap-3">
       <Icon className={cn("mt-0.5 size-4 shrink-0", toneCls)} />

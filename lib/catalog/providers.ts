@@ -10,7 +10,7 @@ export interface ProviderMeta {
   /** Env var holding the API key (empty for keyless local). */
   apiKeyEnv: string;
   docsUrl: string;
-  accent: "cyan" | "violet" | "amber" | "blue" | "orange";
+  accent: "ridge" | "shelf" | "upland" | "blue" | "orange";
   /**
    * Who pays, at point of use.
    *
@@ -36,7 +36,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     defaultBaseUrl: "https://integrate.api.nvidia.com/v1",
     apiKeyEnv: "NVIDIA_API_KEY",
     docsUrl: "https://build.nvidia.com/",
-    accent: "cyan",
+    accent: "ridge",
     billing: "operator-funded",
   },
   openrouter: {
@@ -48,7 +48,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     defaultBaseUrl: "https://openrouter.ai/api/v1",
     apiKeyEnv: "OPENROUTER_API_KEY",
     docsUrl: "https://openrouter.ai/docs",
-    accent: "violet",
+    accent: "shelf",
     billing: "metered",
   },
   google: {
@@ -84,7 +84,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     defaultBaseUrl: "http://localhost:11434/v1",
     apiKeyEnv: "LOCAL_API_KEY",
     docsUrl: "https://ollama.com",
-    accent: "amber",
+    accent: "upland",
     billing: "operator-funded",
   },
 };

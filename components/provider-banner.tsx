@@ -11,7 +11,7 @@ import { useKeysStore } from "@/lib/store/keys-store";
  */
 export function ProviderBanner() {
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const hasKey = useKeysStore((s) => s.openrouterKey.length > 0);
+  const hasKey = useKeysStore((s) => s.keyPresent);
 
   return (
     <div className="rounded-2xl border border-amber/30 bg-amber/5 p-4 sm:p-5">
@@ -32,7 +32,7 @@ export function ProviderBanner() {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               onClick={() => setKeyModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-violet/40 bg-violet/10 px-2.5 py-1.5 text-xs font-medium text-[rgb(167_139_250)] transition-colors hover:bg-violet/20"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
             >
               <KeyRound className="size-3.5" />
               {hasKey ? "OpenRouter key connected" : "Connect your OpenRouter key"}

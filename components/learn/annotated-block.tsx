@@ -91,12 +91,12 @@ export function AnnotatedBlock({
   );
 
   return (
-    <div className="not-prose overflow-hidden rounded-2xl border border-cyan/25 bg-surface/50 shadow-glow">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-gradient-primary-soft px-3.5 py-2.5">
-        <MousePointerClick className="size-3.5 text-cyan" aria-hidden />
+    <div className="not-prose overflow-hidden rounded-2xl border border-action/25 bg-surface/50 shadow-glow">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-action/10 px-3.5 py-2.5">
+        <MousePointerClick className="size-3.5 text-action" aria-hidden />
         <span className="text-xs font-semibold">Pick it apart</span>
         {lang && (
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="font-mono text-2xs uppercase tracking-wider text-muted-foreground">
             {lang}
           </span>
         )}
@@ -105,7 +105,7 @@ export function AnnotatedBlock({
         </span>
       </div>
 
-      <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3.5 font-mono text-[12.5px] leading-[1.7] text-foreground/85">
+      <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3.5 font-mono text-xs leading-[1.7] text-foreground/85">
         <code>
           {segments.map((seg, i) =>
             seg.kind === "text" ? (
@@ -121,8 +121,8 @@ export function AnnotatedBlock({
                 className={cn(
                   "-mx-0.5 rounded px-0.5 text-left underline decoration-dotted decoration-1 underline-offset-4 transition-colors",
                   active === seg.index
-                    ? "bg-cyan/25 text-foreground decoration-cyan"
-                    : "bg-cyan/10 decoration-cyan/50 hover:bg-cyan/20",
+                    ? "bg-action/25 text-foreground decoration-action"
+                    : "bg-action/10 decoration-action/50 hover:bg-action/20",
                 )}
               >
                 {seg.text}
@@ -140,10 +140,10 @@ export function AnnotatedBlock({
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden border-t border-cyan/25 bg-cyan/[0.06]"
+            className="overflow-hidden border-t border-action/25 bg-action/[0.06]"
           >
             <div className="px-3.5 py-3">
-              <p className="mb-1 text-2xs font-semibold uppercase tracking-wider text-cyan">
+              <p className="mb-1 text-2xs font-semibold uppercase tracking-wider text-action">
                 {notes[active].label}
               </p>
               <RichText className="text-xs leading-relaxed text-foreground/85">
@@ -161,9 +161,9 @@ export function AnnotatedBlock({
               onClick={() => setActive((cur) => (cur === i ? null : i))}
               disabled={!found.has(i)}
               className={cn(
-                "rounded-full border px-2 py-0.5 text-[10px] transition-colors",
+                "rounded-full border px-2 py-0.5 text-2xs transition-colors",
                 active === i
-                  ? "border-cyan/50 bg-cyan/15 font-semibold text-cyan"
+                  ? "border-action/50 bg-action/15 font-semibold text-action"
                   : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
                 !found.has(i) && "opacity-40",
               )}

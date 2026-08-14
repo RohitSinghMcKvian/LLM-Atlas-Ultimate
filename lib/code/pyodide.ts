@@ -43,9 +43,22 @@ async function loadInner(): Promise<any> {
   return loadPyodide({ indexURL: INDEX_URL });
 }
 
-/** Load (or reuse) the page-wide Pyodide interpreter. */
+/**
+ * Load (or reuse) the page-wide Pyodide interpreter.
+ *
+ * A *rejection* is deliberately not memoised. Caching the promise is what makes
+ * this a singleton, but caching a failed one made a single transient CDN blip
+ * disable Python for the entire life of the tab, with no way back short of a
+ * reload — the same reasoning that keeps `lib/chat/repo-idb.ts` from caching a
+ * failed connection.
+ */
 export function getPyodide(): Promise<any> {
-  if (!globalThis.__atlasPyodide) globalThis.__atlasPyodide = loadInner();
+  if (!globalThis.__atlasPyodide) {
+    globalThis.__atlasPyodide = loadInner().catch((e) => {
+      globalThis.__atlasPyodide = undefined;
+      throw e;
+    });
+  }
   return globalThis.__atlasPyodide;
 }
 

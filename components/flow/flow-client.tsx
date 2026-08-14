@@ -37,13 +37,12 @@ import {
   type NodeKind,
 } from "@/lib/flow/graph";
 import { routableModels, getModelById } from "@/lib/catalog";
+import { ACCENT_RGB } from "@/lib/accent";
 import { cn } from "@/lib/utils";
 
 const ACCENT_HEX = {
-  cyan: "#22D3EE",
-  violet: "#A78BFA",
-  amber: "#F5A623",
-  success: "#34C799",
+  ...ACCENT_RGB,
+  success: "rgb(var(--success))",
 };
 
 type RunStatus = "idle" | "running" | "done";
@@ -247,9 +246,9 @@ export function FlowClient() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <Workflow className="size-4 text-cyan" />
+          <Workflow className="size-4 text-action" />
           <span className="text-sm font-semibold">Atlas Flow</span>
-          <Badge variant="violet" className="hidden sm:inline-flex">
+          <Badge variant="accent" className="hidden sm:inline-flex">
             compiles to Atlas Brain
           </Badge>
         </div>
@@ -292,8 +291,8 @@ export function FlowClient() {
 
       <div className="flex min-h-0 flex-1">
         {/* Canvas */}
-        <div className="relative min-w-0 flex-1 overflow-auto bg-[#0a0b0f]">
-          <div className="pointer-events-none absolute inset-0 bg-grid-fade opacity-40" />
+        <div className="relative min-w-0 flex-1 overflow-auto bg-code">
+          <div className="pointer-events-none absolute inset-0 bg-graticule opacity-40" />
           <div
             ref={canvasRef}
             onPointerMove={onCanvasPointerMove}
@@ -306,9 +305,11 @@ export function FlowClient() {
             {/* edges */}
             <svg className="pointer-events-none absolute inset-0 size-full overflow-visible">
               <defs>
+                {/* An active edge runs shelf → ridge: the direction of travel
+                    is legible from the colour, not just the dash animation. */}
                 <linearGradient id="flow-edge" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#22D3EE" />
-                  <stop offset="100%" stopColor="#7C3AED" />
+                  <stop offset="0%" stopColor="rgb(var(--elev-1))" />
+                  <stop offset="100%" stopColor="rgb(var(--elev-4))" />
                 </linearGradient>
               </defs>
               {edges.map((e) => {
@@ -320,7 +321,7 @@ export function FlowClient() {
                     key={e.id}
                     d={edgePath(a, b)}
                     fill="none"
-                    stroke={active ? "url(#flow-edge)" : "rgba(255,255,255,0.16)"}
+                    stroke={active ? "url(#flow-edge)" : "rgb(var(--border-strong))"}
                     strokeWidth={active ? 2.5 : 1.5}
                     strokeDasharray={active ? "6 6" : undefined}
                     className={active ? "flow-edge-active" : undefined}
@@ -334,7 +335,7 @@ export function FlowClient() {
                     <path
                       d={edgePath(a, { x: connect.x, y: connect.y })}
                       fill="none"
-                      stroke="#22D3EE"
+                      stroke="rgb(var(--action))"
                       strokeWidth={2}
                       strokeDasharray="4 4"
                     />
@@ -421,8 +422,8 @@ function FlowNodeView({
       onPointerUp={onPointerUp}
       className={cn(
         "group absolute cursor-grab touch-none select-none rounded-xl border bg-surface shadow-lift transition-shadow active:cursor-grabbing",
-        selected ? "border-cyan/60" : "border-border",
-        status === "running" && "shadow-glow-primary",
+        selected ? "border-action/60" : "border-border",
+        status === "running" && "shadow-glow",
       )}
       style={{
         left: node.x,
@@ -519,7 +520,7 @@ function Inspector({
       <input
         value={node.label}
         onChange={(e) => onChange({ label: e.target.value })}
-        className="mb-4 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 py-2 text-sm outline-none focus:border-cyan/40"
+        className="mb-4 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 py-2 text-sm outline-none focus:border-action/40"
       />
 
       {node.kind === "agent" && (
@@ -531,7 +532,7 @@ function Inspector({
               const m = getModelById(e.target.value);
               onChange({ model: e.target.value, sub: m?.name });
             }}
-            className="mb-4 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 py-2 text-sm outline-none focus:border-cyan/40"
+            className="mb-4 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 py-2 text-sm outline-none focus:border-action/40"
           >
             {models.map((m) => (
               <option key={m.id} value={m.id}>
@@ -551,7 +552,7 @@ function Inspector({
             value={node.instruction ?? ""}
             onChange={(e) => onChange({ instruction: e.target.value })}
             rows={4}
-            className="w-full resize-none rounded-lg border border-border bg-surface-2/50 px-2.5 py-2 text-sm outline-none focus:border-cyan/40"
+            className="w-full resize-none rounded-lg border border-border bg-surface-2/50 px-2.5 py-2 text-sm outline-none focus:border-action/40"
           />
         </>
       )}

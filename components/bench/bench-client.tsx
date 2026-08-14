@@ -273,7 +273,7 @@ export function BenchClient() {
                 <PopoverTrigger asChild>
                   <button
                     disabled={running}
-                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground hover:border-cyan hover:text-foreground disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground hover:border-action hover:text-foreground disabled:opacity-50"
                   >
                     <Plus className="size-3" /> Add
                   </button>
@@ -323,7 +323,7 @@ export function BenchClient() {
             <div className="space-y-1.5">
               <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
                 <motion.div
-                  className="h-full rounded-full bg-gradient-primary"
+                  className="h-full rounded-full bg-action"
                   animate={{ width: `${(progress.done / progress.total) * 100}%` }}
                 />
               </div>
@@ -345,7 +345,7 @@ export function BenchClient() {
           {hasResults ? (
             <Card className="overflow-hidden">
               <div className="flex items-center gap-2 border-b border-border p-4">
-                <Gauge className="size-4 text-cyan" />
+                <Gauge className="size-4 text-action" />
                 <span className="text-sm font-medium">Results</span>
                 <Button
                   variant="ghost"
@@ -420,7 +420,7 @@ export function BenchClient() {
                         <span className="flex items-center justify-end gap-2">
                           <span className="hidden h-1.5 w-10 overflow-hidden rounded-full bg-surface-3 sm:block">
                             <span
-                              className="block h-full rounded-full bg-gradient-primary"
+                              className="block h-full rounded-full bg-action"
                               style={{ width: `${pct}%` }}
                             />
                           </span>
@@ -467,7 +467,7 @@ export function BenchClient() {
                                           {r && ` · ${r.ms}ms`}
                                         </p>
                                         {r && (
-                                          <p className="mt-1 truncate rounded bg-[#0b0d14] px-2 py-1 font-mono text-2xs text-foreground/70">
+                                          <p className="mt-1 truncate rounded bg-code px-2 py-1 font-mono text-2xs text-foreground/70">
                                             {r.output.slice(0, 120) || "(empty)"}
                                           </p>
                                         )}

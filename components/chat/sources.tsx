@@ -22,7 +22,7 @@ export function Sources({ sources }: { sources: WebSource[] }) {
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 text-2xs font-medium text-muted-foreground hover:text-foreground"
       >
-        <Globe className="size-3.5 text-cyan" />
+        <Globe className="size-3.5 text-action" />
         {sources.length} web source{sources.length === 1 ? "" : "s"}
         <span className="ml-auto">{open ? "Hide" : "Show"}</span>
       </button>
@@ -30,7 +30,7 @@ export function Sources({ sources }: { sources: WebSource[] }) {
         <ol className="mt-2 space-y-1.5">
           {sources.map((s, i) => (
             <li key={i} className="flex gap-2 text-xs">
-              <span className="grid size-4 shrink-0 place-items-center rounded bg-cyan/15 text-2xs font-medium text-cyan">
+              <span className="grid size-4 shrink-0 place-items-center rounded bg-action/15 text-2xs font-medium text-action">
                 {i + 1}
               </span>
               <a
@@ -39,7 +39,7 @@ export function Sources({ sources }: { sources: WebSource[] }) {
                 rel="noreferrer"
                 className="group min-w-0 flex-1"
               >
-                <span className="flex items-center gap-1 font-medium text-foreground group-hover:text-cyan">
+                <span className="flex items-center gap-1 font-medium text-foreground group-hover:text-action">
                   <span className="truncate">{s.title}</span>
                   <ExternalLink className="size-3 shrink-0 opacity-0 group-hover:opacity-100" />
                 </span>

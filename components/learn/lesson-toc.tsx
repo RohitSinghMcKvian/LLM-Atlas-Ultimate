@@ -86,7 +86,7 @@ export function LessonToc({
                 <motion.span
                   layoutId="toc-marker"
                   aria-hidden
-                  className="absolute inset-y-0.5 left-0 w-[2px] rounded-full bg-gradient-to-b from-cyan to-violet"
+                  className="absolute inset-y-0.5 left-0 w-[2px] rounded-full bg-gradient-to-b from-action to-accent"
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />
               )}

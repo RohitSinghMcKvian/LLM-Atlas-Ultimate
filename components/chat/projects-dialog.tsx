@@ -40,7 +40,7 @@ export function ProjectsDialog({
                 <ChevronLeft className="size-4" />
               </button>
             )}
-            <FolderGit2 className="size-4 text-cyan" />
+            <FolderGit2 className="size-4 text-action" />
             {editing ? editing.name : "Projects"}
           </DialogTitle>
           <DialogDescription>
@@ -115,14 +115,14 @@ function ProjectList({
               className={cn(
                 "group flex items-center gap-2 rounded-lg border px-3 py-2",
                 activeProjectId === p.id
-                  ? "border-cyan/50 bg-cyan/5"
+                  ? "border-action/50 bg-action/5"
                   : "border-border bg-surface-2/40",
               )}
             >
               <button onClick={() => onOpen(p.id)} className="min-w-0 flex-1 text-left">
                 <div className="flex items-center gap-1.5 text-sm font-medium">
                   {p.name}
-                  {activeProjectId === p.id && <Check className="size-3.5 text-cyan" />}
+                  {activeProjectId === p.id && <Check className="size-3.5 text-action" />}
                 </div>
                 <div className="text-2xs text-muted-foreground">
                   {p.files.length} file{p.files.length === 1 ? "" : "s"}
@@ -132,7 +132,7 @@ function ProjectList({
               {activeProjectId !== p.id && (
                 <button
                   onClick={() => onAssign(p.id)}
-                  className="rounded-md border border-border px-2 py-1 text-2xs hover:border-cyan/40"
+                  className="rounded-md border border-border px-2 py-1 text-2xs hover:border-action/40"
                 >
                   Use here
                 </button>
@@ -171,7 +171,7 @@ function ProjectEditor({ project }: { project: Project }) {
         <input
           value={project.name}
           onChange={(e) => update(project.id, { name: e.target.value })}
-          className="h-9 w-full rounded-lg border border-border bg-surface-2/50 px-3 text-sm outline-none focus:border-cyan/40"
+          className="h-9 w-full rounded-lg border border-border bg-surface-2/50 px-3 text-sm outline-none focus:border-action/40"
         />
       </div>
 
@@ -182,7 +182,7 @@ function ProjectEditor({ project }: { project: Project }) {
           onChange={(e) => update(project.id, { instructions: e.target.value })}
           rows={4}
           placeholder="Shared context for every chat in this project…"
-          className="w-full resize-none rounded-lg border border-border bg-surface-2/50 px-3 py-2 text-sm outline-none focus:border-cyan/40"
+          className="w-full resize-none rounded-lg border border-border bg-surface-2/50 px-3 py-2 text-sm outline-none focus:border-action/40"
         />
       </div>
 
@@ -193,7 +193,7 @@ function ProjectEditor({ project }: { project: Project }) {
           </label>
           <button
             onClick={() => fileRef.current?.click()}
-            className="inline-flex items-center gap-1 text-2xs text-cyan hover:underline"
+            className="inline-flex items-center gap-1 text-2xs text-action hover:underline"
           >
             <Upload className="size-3" /> {busy ? "Parsing…" : "Add files"}
           </button>
@@ -219,7 +219,7 @@ function ProjectEditor({ project }: { project: Project }) {
                 key={f.id}
                 className="group flex items-center gap-2 rounded-lg border border-border bg-surface-2/40 px-3 py-1.5 text-sm"
               >
-                <FileText className="size-3.5 shrink-0 text-cyan" />
+                <FileText className="size-3.5 shrink-0 text-action" />
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
                 <span className="text-2xs text-muted-foreground">
                   {(f.text.length / 1000).toFixed(1)}k chars

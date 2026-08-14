@@ -33,7 +33,7 @@ function Flow() {
       <div className="absolute inset-0 w-px bg-border" />
       {!reduce && (
         <motion.div
-          className="absolute left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-cyan shadow-glow-primary"
+          className="absolute left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-action shadow-glow"
           animate={{ top: ["0%", "100%"], opacity: [0, 1, 0] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -46,7 +46,7 @@ export function Architecture() {
   return (
     <section className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-28">
       <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-        <p className="mb-3 text-sm font-medium uppercase tracking-wider text-cyan">
+        <p className="mb-3 text-sm font-medium uppercase tracking-wider text-action">
           The shared platform layer
         </p>
         <h2 className="text-balance font-display text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -74,8 +74,8 @@ export function Architecture() {
           <Flow />
 
           {/* Platform */}
-          <div className="rounded-2xl border border-cyan/25 bg-gradient-primary-soft p-4">
-            <p className="mb-3 text-center text-2xs font-semibold uppercase tracking-wider text-cyan">
+          <div className="rounded-2xl border border-action/25 bg-action/10 p-4">
+            <p className="mb-3 text-center text-2xs font-semibold uppercase tracking-wider text-action">
               Platform layer
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -84,11 +84,11 @@ export function Architecture() {
                   key={p.label}
                   className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-surface/80 p-3 text-center"
                 >
-                  <p.icon className="size-4 text-cyan" />
+                  <p.icon className="size-4 text-action" />
                   <span className="text-xs font-medium leading-tight">
                     {p.label}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     {p.sub}
                   </span>
                 </div>

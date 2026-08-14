@@ -172,7 +172,7 @@ export function ModelSwitcherList({ onPicked }: { onPicked: () => void }) {
       {/* The escape hatch from the shortlist. */}
       <button
         onClick={() => setBrowsing(true)}
-        className="flex w-full items-center justify-center gap-2 border-t border-border px-3 py-2.5 text-xs font-medium text-cyan transition-colors hover:bg-cyan/5"
+        className="flex w-full items-center justify-center gap-2 border-t border-border px-3 py-2.5 text-xs font-medium text-action transition-colors hover:bg-action/5"
       >
         <LayoutGrid className="size-3.5" />
         Browse all {shortlist.total} models
@@ -214,7 +214,7 @@ const ModelOption = React.memo(function ModelOption({
         <Badge variant="default" className="hidden md:inline-flex">
           {formatContext(model.contextWindow)}
         </Badge>
-        {active && <Check className="size-4 text-cyan" />}
+        {active && <Check className="size-4 text-action" />}
       </span>
     </CommandItem>
   );
@@ -252,7 +252,7 @@ function AccessPill({ availability }: { availability: Availability | null }) {
     );
   }
   return (
-    <Badge variant="violet" className="hidden sm:inline-flex">
+    <Badge variant="accent" className="hidden sm:inline-flex">
       Your key
     </Badge>
   );

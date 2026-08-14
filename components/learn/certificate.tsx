@@ -58,7 +58,7 @@ export function TranscriptView({ progress }: { progress: ProgressState }) {
         <SummaryTile
           label="Grade-point average"
           value={transcript.gpa ? transcript.gpa.toFixed(2) : "—"}
-          accent={transcript.gpa >= 3 ? "success" : transcript.gpa > 0 ? "amber" : undefined}
+          accent={transcript.gpa >= 3 ? "success" : transcript.gpa > 0 ? "upland" : undefined}
         />
         <SummaryTile label="Overall grade" value={transcript.overallLetter} />
         <SummaryTile
@@ -102,11 +102,11 @@ export function TranscriptView({ progress }: { progress: ProgressState }) {
                       <div className="flex items-center gap-2">
                         <div className="h-1 w-16 overflow-hidden rounded-full bg-surface-3">
                           <div
-                            className="h-full rounded-full bg-gradient-primary"
+                            className="h-full rounded-full bg-action"
                             style={{ width: `${row.mastery}%` }}
                           />
                         </div>
-                        <span className="font-mono text-[10px] tnum text-muted-foreground">
+                        <span className="font-mono text-2xs tnum text-muted-foreground">
                           {row.mastery}%
                         </span>
                       </div>
@@ -159,7 +159,7 @@ export function TranscriptView({ progress }: { progress: ProgressState }) {
                     <span className={cn(r.met && "text-muted-foreground")}>
                       {r.label}
                     </span>
-                    <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+                    <span className="ml-1.5 font-mono text-2xs text-muted-foreground">
                       {r.detail}
                     </span>
                   </span>
@@ -237,7 +237,7 @@ function SummaryTile({
 }: {
   label: string;
   value: string;
-  accent?: "success" | "amber";
+  accent?: "success" | "upland";
 }) {
   return (
     <div className="rounded-2xl border border-border bg-surface/50 px-4 py-3">
@@ -248,7 +248,7 @@ function SummaryTile({
         className={cn(
           "mt-0.5 font-display text-xl font-semibold",
           accent === "success" && "text-success",
-          accent === "amber" && "text-amber",
+          accent === "upland" && "text-amber",
         )}
       >
         {value}
@@ -327,7 +327,7 @@ export function CertificateDialog({
           <div className="relative overflow-hidden rounded-[calc(var(--radius)-1px)] bg-surface p-7 text-center">
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 bg-gradient-aurora opacity-60"
+              className="pointer-events-none absolute inset-0 opacity-60"
             />
             <div className="relative">
               <AtlasMark size={40} className="mx-auto" />
@@ -347,10 +347,10 @@ export function CertificateDialog({
 
               <div className="my-5 flex items-center justify-center gap-6 text-center">
                 <div>
-                  <p className="font-display text-xl font-semibold text-cyan">
+                  <p className="font-display text-xl font-semibold text-action">
                     {transcript.gpa ? transcript.gpa.toFixed(2) : "—"}
                   </p>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <p className="text-2xs uppercase tracking-wider text-muted-foreground">
                     GPA
                   </p>
                 </div>
@@ -359,7 +359,7 @@ export function CertificateDialog({
                   <p className="font-display text-xl font-semibold">
                     {transcript.overallLetter}
                   </p>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <p className="text-2xs uppercase tracking-wider text-muted-foreground">
                     Grade
                   </p>
                 </div>
@@ -368,7 +368,7 @@ export function CertificateDialog({
                   <p className="font-display text-xl font-semibold">
                     {Math.round(transcript.totalMinutes / 60)}h
                   </p>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <p className="text-2xs uppercase tracking-wider text-muted-foreground">
                     Studied
                   </p>
                 </div>
@@ -385,7 +385,7 @@ export function CertificateDialog({
                       .map((r) => (
                         <li key={r.id} className="text-xs text-foreground/85">
                           · {r.label}{" "}
-                          <span className="font-mono text-[10px] text-muted-foreground">
+                          <span className="font-mono text-2xs text-muted-foreground">
                             ({r.detail})
                           </span>
                         </li>
@@ -420,7 +420,7 @@ export function CertificateDialog({
                 )}
               </div>
 
-              <p className="mt-4 text-[10px] leading-relaxed text-muted-foreground/70">
+              <p className="mt-4 text-2xs leading-relaxed text-muted-foreground/70">
                 Atlas issues this credential itself. It is not accredited and is
                 not affiliated with any university. The id is derived from your
                 completed work, so anyone holding the verification data can
@@ -447,24 +447,24 @@ function certificateSvg(v: {
       ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!,
     );
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="840" viewBox="0 0 1200 840" role="img" aria-label="Atlas certificate for ${esc(v.name)}">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#22D3EE"/><stop offset="100%" stop-color="#7C3AED"/>
-    </linearGradient>
-  </defs>
-  <rect width="1200" height="840" fill="#0A0B0F"/>
-  <rect x="28" y="28" width="1144" height="784" rx="20" fill="none" stroke="url(#g)" stroke-width="2"/>
-  <circle cx="600" cy="150" r="30" fill="none" stroke="url(#g)" stroke-width="3"/>
-  <circle cx="600" cy="150" r="7" fill="#22D3EE"/>
-  <text x="600" y="238" text-anchor="middle" fill="#8B91A3" font-family="Helvetica,Arial,sans-serif" font-size="15" letter-spacing="7">CERTIFICATE OF COMPLETION</text>
-  <text x="600" y="308" text-anchor="middle" fill="#E7E9EE" font-family="Georgia,serif" font-size="50" font-weight="bold">Applied LLM Engineering</text>
-  <line x1="380" y1="352" x2="820" y2="352" stroke="#222633" stroke-width="1"/>
-  <text x="600" y="410" text-anchor="middle" fill="#8B91A3" font-family="Helvetica,Arial,sans-serif" font-size="17">awarded to</text>
-  <text x="600" y="482" text-anchor="middle" fill="#E7E9EE" font-family="Georgia,serif" font-size="46">${esc(v.name)}</text>
-  <text x="600" y="548" text-anchor="middle" fill="#8B91A3" font-family="Helvetica,Arial,sans-serif" font-size="17">for completing ${v.lessons} lessons across nine tracks with a grade-point average of ${v.gpa.toFixed(2)}</text>
-  <text x="600" y="646" text-anchor="middle" fill="#22D3EE" font-family="Courier New,monospace" font-size="19" letter-spacing="2">${esc(v.credentialId)}</text>
-  <text x="600" y="678" text-anchor="middle" fill="#8B91A3" font-family="Helvetica,Arial,sans-serif" font-size="13">issued ${esc(v.issuedOn)} · LLM Atlas</text>
-  <text x="600" y="762" text-anchor="middle" fill="#5A6172" font-family="Helvetica,Arial,sans-serif" font-size="12">A self-issued course credential. Not accredited and not affiliated with any university.</text>
+  <rect width="1200" height="840" fill="#101112"/>
+  <rect x="28" y="28" width="1144" height="784" rx="20" fill="none" stroke="#292B2E" stroke-width="1"/>
+  <rect x="38" y="38" width="1124" height="764" rx="14" fill="none" stroke="#D9752F" stroke-opacity="0.5" stroke-width="1"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M 520 196 C 543 187, 571 138, 600 111 C 629 138, 657 187, 680 196" stroke="#E9E9EA" stroke-opacity="0.28" stroke-width="2.5"/>
+    <path d="M 548 172 C 564 165, 583 129, 600 108 C 617 129, 636 165, 652 172" stroke="#E9E9EA" stroke-opacity="0.5" stroke-width="2.5"/>
+    <path d="M 570 148 C 579 143, 590 116, 600 100 C 610 116, 621 143, 630 148" stroke="#D9752F" stroke-width="3"/>
+  </g>
+  <circle cx="600" cy="100" r="7" fill="#D9752F"/>
+  <text x="600" y="262" text-anchor="middle" fill="#90929A" font-family="Helvetica,Arial,sans-serif" font-size="15" letter-spacing="7">CERTIFICATE OF COMPLETION</text>
+  <text x="600" y="330" text-anchor="middle" fill="#E9E9EA" font-family="Georgia,serif" font-size="50" font-weight="bold">Applied LLM Engineering</text>
+  <line x1="380" y1="372" x2="820" y2="372" stroke="#292B2E" stroke-width="1"/>
+  <text x="600" y="426" text-anchor="middle" fill="#90929A" font-family="Helvetica,Arial,sans-serif" font-size="17">awarded to</text>
+  <text x="600" y="496" text-anchor="middle" fill="#E9E9EA" font-family="Georgia,serif" font-size="46">${esc(v.name)}</text>
+  <text x="600" y="560" text-anchor="middle" fill="#90929A" font-family="Helvetica,Arial,sans-serif" font-size="17">for completing ${v.lessons} lessons across nine tracks with a grade-point average of ${v.gpa.toFixed(2)}</text>
+  <text x="600" y="652" text-anchor="middle" fill="#D9752F" font-family="Courier New,monospace" font-size="19" letter-spacing="2">${esc(v.credentialId)}</text>
+  <text x="600" y="684" text-anchor="middle" fill="#90929A" font-family="Helvetica,Arial,sans-serif" font-size="13">issued ${esc(v.issuedOn)} · LLM Atlas</text>
+  <text x="600" y="762" text-anchor="middle" fill="#6B6D75" font-family="Helvetica,Arial,sans-serif" font-size="12">A self-issued course credential. Not accredited and not affiliated with any university.</text>
 </svg>`;
 }
 
@@ -474,9 +474,9 @@ export function CertificateUnlocked() {
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="rounded-2xl border border-cyan/40 bg-gradient-primary-soft p-4 text-center"
+      className="rounded-2xl border border-action/40 bg-action/10 p-4 text-center"
     >
-      <Award className="mx-auto size-6 text-cyan" />
+      <Award className="mx-auto size-6 text-action" />
       <p className="mt-2 font-display text-base font-semibold">
         Certification unlocked
       </p>

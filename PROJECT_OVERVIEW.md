@@ -899,7 +899,7 @@ Text is truncated at `MAX_CHARS = 24_000`. **Parsing never throws** — a failur
 |---|---|
 | `repo.ts` | Dual-driver persistence — localStorage `atlas-chat-v1` or Supabase `conversations`/`messages` (upsert by id). `pinned` is deliberately not persisted |
 | `memory.ts` | Keyless local recall. `recallMemories` scores token overlap normalized by fact length, with a ~30-day-halflife recency prior. `extractMemory` conservatively captures "remember …" / "note …" / "fyi …" phrasings, 3–500 chars |
-| `health.ts` | `measureHealth(messages, modelId)` → estimated tokens ÷ context window. `ok` < 0.6, `warning` ≥ 0.6, `critical` ≥ 0.8. `buildContinuationSummary` keeps pinned messages verbatim + a topic list + the last 6 turns |
+| `health.ts` | `measureHealth(messages, modelId, systemChars)` → estimated tokens ÷ context window. `ok` < 0.6, `warning` ≥ 0.6, `critical` ≥ 0.8. Summarising lives in `compact.ts`, which folds messages in place rather than replacing the transcript |
 | `escalate.ts` | Chat → Code promotion. Extracts fenced code blocks into `artifact_N.<ext>`, builds a brief from the last 3 user messages, compacts a summary, filters to ≤10 text/code/csv attachments. Stashes via sessionStorage `atlas-escalation-payload`. **Gated behind the `chatEscalation` flag** |
 | `cost.ts` | `messageCostUsd` / `sessionCostUsd` from catalog pricing; `formatUsd` with adaptive precision |
 | `export.ts` | `toMarkdown`, `toJSON`, `downloadText`, `slugify` |

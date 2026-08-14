@@ -11,7 +11,7 @@ import {
   toWireNews,
   type TokenBucket,
 } from "./snapshot";
-import type { NewsSnapshotRecord } from "./types";
+import type { NewsArticle, NewsSnapshot, NewsSnapshotRecord } from "./types";
 
 const NOW = Date.parse("2025-07-16T12:00:00.000Z");
 const minutesAgo = (m: number) => ({ syncedAt: new Date(NOW - m * 60_000).toISOString() });
@@ -145,6 +145,44 @@ describe("toWireNews", () => {
     }
     expect(wire.version).toBe(record.version);
     expect(wire.articles).toBe(record.articles);
+  });
+
+  describe("limit", () => {
+    // The /news page embeds its articles in the document twice (HTML plus the
+    // flight payload). An untruncated corpus measured 2.2 MB for 238 articles.
+    const article = (id: string, base: number, publishedAt: string) =>
+      ({ id, baseScore: base, publishedAt }) as unknown as NewsArticle;
+
+    const corpus = (n: number): NewsSnapshot => ({
+      ...BASELINE_NEWS_SNAPSHOT,
+      articles: Array.from({ length: n }, (_, i) =>
+        article(`a${i}`, i, new Date(Date.UTC(2026, 0, 1)).toISOString()),
+      ),
+    });
+
+    it("passes the corpus through untouched when it fits", () => {
+      const snapshot = corpus(5);
+      expect(toWireNews(snapshot, { limit: 10 }).articles).toBe(snapshot.articles);
+      expect(toWireNews(snapshot).articles).toBe(snapshot.articles);
+    });
+
+    it("keeps the highest-ranked articles, not the first ones", () => {
+      const wire = toWireNews(corpus(20), { limit: 3 });
+      expect(wire.articles).toHaveLength(3);
+      // Equal recency, so `liveScore` orders by `baseScore` — the tail of the
+      // input array is what survives.
+      expect(wire.articles.map((a) => a.id)).toEqual(["a19", "a18", "a17"]);
+    });
+
+    it("never truncates clusters, sources or stats", () => {
+      // They describe the whole corpus and are small; a card's "also reported
+      // by" would break if its cluster went missing with the tail.
+      const snapshot = corpus(50);
+      const wire = toWireNews(snapshot, { limit: 2 });
+      expect(wire.clusters).toBe(snapshot.clusters);
+      expect(wire.sources).toBe(snapshot.sources);
+      expect(wire.stats).toBe(snapshot.stats);
+    });
   });
 });
 

@@ -283,3 +283,46 @@ describe("readingMinutes", () => {
     expect(readingMinutes("word ".repeat(660))).toBe(3);
   });
 });
+
+describe("parseFeed recognition", () => {
+  // Zero items has two causes with opposite meanings, and only the parser can
+  // tell them apart. `adapters/rss.ts` reports the first as `skipped` and the
+  // second as `failed`; conflating them put a permanent "3 of 32 sources
+  // failed" banner over the feed every weekend, because arXiv declares
+  // `<skipDays>Saturday, Sunday</skipDays>` and serves an empty channel.
+  it("recognises a valid RSS channel that published nothing", () => {
+    const weekend = `<?xml version='1.0' encoding='UTF-8'?>
+<rss version="2.0"><channel>
+  <title>cs.AI updates on arXiv.org</title>
+  <skipDays><day>Saturday</day><day>Sunday</day></skipDays>
+</channel></rss>`;
+
+    const parsed = parseFeed(weekend);
+    expect(parsed.items).toEqual([]);
+    expect(parsed.recognized).toBe(true);
+  });
+
+  it("recognises an empty Atom feed", () => {
+    const parsed = parseFeed(`<feed xmlns="http://www.w3.org/2005/Atom"><title>Quiet</title></feed>`);
+    expect(parsed.items).toEqual([]);
+    expect(parsed.recognized).toBe(true);
+  });
+
+  it("does NOT recognise an HTML error page served with HTTP 200", () => {
+    const parsed = parseFeed(`<html><body><h1>404 Not Found</h1></body></html>`);
+    expect(parsed.items).toEqual([]);
+    expect(parsed.recognized).toBe(false);
+  });
+
+  it("does not recognise empty or non-XML input", () => {
+    expect(parseFeed("").recognized).toBe(false);
+    expect(parseFeed("not xml at all").recognized).toBe(false);
+  });
+
+  it("recognises a wrapped feed on the strength of its items", () => {
+    const wrapped = `<wrapper><channel><item><title>A</title><link>https://ex.com/a</link></item></channel></wrapper>`;
+    const parsed = parseFeed(wrapped);
+    expect(parsed.items.length).toBe(1);
+    expect(parsed.recognized).toBe(true);
+  });
+});

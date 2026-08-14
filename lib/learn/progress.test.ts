@@ -47,7 +47,7 @@ const T1: Track = {
   title: "One",
   blurb: "",
   level: "beginner",
-  accent: "cyan",
+  accent: "ridge",
   lessons: [lesson("a", "t1"), lesson("b", "t1"), lesson("c", "t1")],
 };
 
@@ -56,7 +56,7 @@ const T2: Track = {
   title: "Two",
   blurb: "",
   level: "intermediate",
-  accent: "violet",
+  accent: "shelf",
   prereqs: ["t1"],
   lessons: [
     lesson("d", "t2", {

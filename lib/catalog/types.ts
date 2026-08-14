@@ -1,7 +1,14 @@
 export type ProviderId = "nvidia" | "openrouter" | "local" | "google" | "groq";
 export type License = "open" | "proprietary";
 export type ModelStatus = "ga" | "preview" | "upcoming" | "deprecated";
+/**
+ * What a model can be *given*. `vision` means it accepts images, not that it
+ * makes them — see {@link OutputModality} for the other direction.
+ */
 export type Modality = "text" | "vision" | "audio";
+
+/** What a model can *produce*. */
+export type OutputModality = "text" | "image";
 
 /**
  * How an end user pays for a model.
@@ -28,6 +35,16 @@ export interface ModelPricing {
   outputPerM: number;
   /** USD per 1M cached input tokens, if the provider supports caching. */
   cachedInputPerM?: number;
+  /**
+   * USD per 1M *image-output* tokens, for models that draw (§P13).
+   *
+   * A separate rate rather than a per-image price: OpenRouter's
+   * `pricing.image_output` is quoted per token in the same unit as
+   * `prompt`/`completion`, and a generated image costs a fixed number of them
+   * (Gemini 2.5 Flash Image: 1290 tokens at $30/M = $0.039 an image). Pricing
+   * those tokens at `outputPerM` under-reports by 10–20×.
+   */
+  imageOutputPerM?: number;
   effectiveFrom: string;
 }
 
@@ -67,6 +84,12 @@ export interface CatalogModel {
   contextWindow: number;
   maxOutput: number;
   modalities: Modality[];
+  /**
+   * What the model emits. Absent means text only, which is what every entry
+   * meant before image output existed — so an old snapshot keeps its meaning
+   * rather than being read as "unknown".
+   */
+  outputModalities?: OutputModality[];
   capabilities: {
     toolUse: boolean;
     structuredOutput: boolean;

@@ -4,6 +4,7 @@ import {
   contextWindowFor,
   reasoningHint,
   titleizeModelId,
+  toolUseHint,
   visionHint,
 } from "./brands";
 import { atlasId, isoDate, matchKey } from "./normalize";
@@ -55,9 +56,17 @@ export function draftFromNvidiaId(m: NvidiaModel, options: NormalizeNvidiaOption
 
   const modalities: Modality[] = vision ? ["text", "vision"] : ["text"];
   const capabilities: CatalogModel["capabilities"] = {
-    // NIM exposes OpenAI-compatible tool calling broadly, but we cannot confirm
-    // it per model, so claim only what is safe to claim.
-    toolUse: false,
+    // NIM exposes OpenAI-compatible tool calling broadly but does not say so per
+    // model, so this is a family hint rather than a confirmed fact — which is
+    // why `metaConfidence` stays "derived" and a curated entry still wins.
+    //
+    // It used to be a flat `false` on the grounds of claiming only what was safe
+    // to claim. That was safe for the capability badge and ruinous everywhere
+    // else: the chat client read the same field as a gate, so every NIM-synced
+    // model without a hand-curated twin ran as a single-shot completion with the
+    // agent loop switched off. An optimistic wrong answer now costs one
+    // downgraded round trip, which `lib/router/index.ts` recovers from.
+    toolUse: toolUseHint(m.id),
     structuredOutput: false,
     reasoning: reasoningHint(m.id),
     caching: false,

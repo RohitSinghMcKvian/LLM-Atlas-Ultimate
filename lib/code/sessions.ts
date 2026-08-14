@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseBrowser, remotePersistenceReady } from "@/lib/supabase/client";
 import type { ChatMessage as RouterMsg } from "@/lib/router";
 import type { UiEvent } from "@/lib/store/code-store";
 import type { TraceEvent } from "@/lib/engine/types";
@@ -185,9 +185,23 @@ function makeSupabaseRepo(): CodeSessionsRepo {
   };
 }
 
-let cached: CodeSessionsRepo | null = null;
+let cached: Promise<CodeSessionsRepo> | null = null;
 
-export function codeSessionsRepo(): CodeSessionsRepo {
-  if (!cached) cached = isSupabaseConfigured() ? makeSupabaseRepo() : localRepo;
+/**
+ * Async because driver choice depends on being signed in: with auth-scoped RLS
+ * (migration 0005) the Supabase driver drops every write for a signed-out
+ * visitor. See lib/chat/repo.ts for the same pattern.
+ */
+export function codeSessionsRepo(): Promise<CodeSessionsRepo> {
+  if (!cached) {
+    cached = remotePersistenceReady().then((ready) =>
+      ready ? makeSupabaseRepo() : localRepo,
+    );
+  }
   return cached;
+}
+
+/** Re-pick the driver after a sign-in or sign-out. */
+export function resetCodeSessionsRepo(): void {
+  cached = null;
 }

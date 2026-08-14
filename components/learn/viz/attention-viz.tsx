@@ -113,13 +113,13 @@ export function AttentionViz() {
           <span
             key={j}
             className={cn(
-              "rounded px-1.5 py-0.5 text-[13px] transition-colors",
-              j === query && "ring-1 ring-cyan",
+              "rounded px-1.5 py-0.5 text-sm transition-colors",
+              j === query && "ring-1 ring-action",
             )}
             style={{
               background:
                 j <= query
-                  ? `rgb(var(--cyan) / ${(active[j] * 0.85).toFixed(3)})`
+                  ? `rgb(var(--elev-1) / ${(active[j] * 0.85).toFixed(3)})`
                   : "transparent",
               color: j > query ? "rgb(var(--muted-foreground) / 0.4)" : undefined,
             }}
@@ -141,7 +141,7 @@ export function AttentionViz() {
                 <th
                   key={j}
                   scope="col"
-                  className="h-14 w-7 align-bottom text-[10px] font-normal text-muted-foreground"
+                  className="h-14 w-7 align-bottom text-2xs font-normal text-muted-foreground"
                 >
                   <span className="inline-block origin-bottom-left translate-x-2 -rotate-45 whitespace-nowrap">
                     {t}
@@ -162,8 +162,8 @@ export function AttentionViz() {
                   scope="row"
                   tabIndex={0}
                   className={cn(
-                    "w-16 pr-1.5 text-right text-[11px] font-normal outline-none",
-                    i === query ? "font-semibold text-cyan" : "text-muted-foreground",
+                    "w-16 pr-1.5 text-right text-2xs font-normal outline-none",
+                    i === query ? "font-semibold text-action" : "text-muted-foreground",
                   )}
                 >
                   {t}
@@ -178,12 +178,12 @@ export function AttentionViz() {
                       className={cn(
                         "size-7 rounded-sm",
                         masked && "bg-surface-3/25",
-                        i === query && !masked && "ring-1 ring-cyan/40",
+                        i === query && !masked && "ring-1 ring-action/40",
                       )}
                       style={
                         masked
                           ? undefined
-                          : { background: `rgb(var(--cyan) / ${(0.06 + w * 0.9).toFixed(3)})` }
+                          : { background: `rgb(var(--elev-1) / ${(0.06 + w * 0.9).toFixed(3)})` }
                       }
                     />
                   );
@@ -195,9 +195,9 @@ export function AttentionViz() {
       </div>
 
       <p className="mt-3 text-xs">
-        <span className="font-mono text-cyan">{TOKENS[query]}</span> attends most
+        <span className="font-mono text-action">{TOKENS[query]}</span> attends most
         strongly to{" "}
-        <span className="font-mono text-cyan">{TOKENS[strongest]}</span>{" "}
+        <span className="font-mono text-action">{TOKENS[strongest]}</span>{" "}
         <span className="font-mono text-2xs text-muted-foreground">
           ({(active[strongest] * 100).toFixed(0)}%)
         </span>

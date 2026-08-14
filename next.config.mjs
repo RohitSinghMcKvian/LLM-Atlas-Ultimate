@@ -28,7 +28,10 @@ const nextConfig = {
         // cross-origin subresources that lack CORP/CORS headers, which would
         // break external images elsewhere. Monaco + Pyodide load from
         // jsDelivr, which serves Cross-Origin-Resource-Policy: cross-origin.
-        source: "/code",
+        // `:path*` matters: scoped to the bare `/code`, no sub-route was
+        // cross-origin isolated, so WebContainer silently failed to boot there
+        // and `run_command` degraded to a MemoryWorkspace returning exit 127.
+        source: "/code/:path*",
         headers: [
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },

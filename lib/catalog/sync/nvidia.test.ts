@@ -151,12 +151,50 @@ describe("draftFromNvidiaId", () => {
     expect(unknown.model.capabilities.reasoning).toBe(false);
   });
 
-  it("claims no capability it cannot confirm", () => {
-    // NIM does not report per-model tool support, so promising it would put
-    // models in the agent picker that cannot run the agent.
-    expect(nemotron.model.capabilities.toolUse).toBe(false);
+  it("claims no capability it cannot confirm or infer", () => {
     expect(nemotron.model.capabilities.structuredOutput).toBe(false);
     expect(nemotron.model.capabilities.caching).toBe(false);
+  });
+
+  // `toolUse` used to be a flat `false` here, on the grounds that NIM does not
+  // report per-model tool support. That was honest about the badge and wrong
+  // about everything downstream: the chat client read the same field as a gate,
+  // so every NIM-synced model without a hand-curated twin ran as a single-shot
+  // completion with the agent loop off — the default path for the free catalog.
+  //
+  // It is now a family hint. `metaConfidence` stays "derived", so a curated
+  // entry still wins in merge.ts, and a wrong optimistic guess costs one
+  // downgraded round trip that lib/router/index.ts recovers from.
+  it("infers tool use for instruction-tuned families that support it", () => {
+    for (const id of [
+      "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+      "meta/llama-3.1-8b-instruct",
+      "qwen/qwen2.5-7b-instruct",
+      "mistralai/mixtral-8x22b-instruct-v0.1",
+      "deepseek-ai/deepseek-v3",
+      "openai/gpt-oss-120b",
+      "google/gemma-3-27b-it",
+    ]) {
+      const d = draftFromNvidiaId({ id, owned_by: id.split("/")[0] }, { today: TODAY })!;
+      expect(d.model.capabilities.toolUse, id).toBe(true);
+    }
+  });
+
+  // The optimistic guess must not reach models that have no chat template at
+  // all, or heads that are not chat models. The deny list is checked first, so
+  // `llama-guard` does not inherit the `llama-3.1` verdict.
+  it("withholds tool use from models that cannot have it", () => {
+    for (const id of [
+      "meta/llama-guard-3-8b",
+      "nvidia/nv-embedqa-e5-v5",
+      "nvidia/nemoretriever-parse",
+      "baai/bge-reranker",
+      "qwen/qwen2.5-vl-7b-instruct",
+      "databricks/dbrx-instruct",
+    ]) {
+      const d = draftFromNvidiaId({ id, owned_by: id.split("/")[0] }, { today: TODAY })!;
+      expect(d.model.capabilities.toolUse, id).toBe(false);
+    }
   });
 
   it("ignores NIM's nonsense created timestamp", () => {

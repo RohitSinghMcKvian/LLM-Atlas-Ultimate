@@ -36,7 +36,7 @@ export const DIFFICULTY_XP_MULTIPLIER: Record<Difficulty, number> = {
 };
 
 /** Accent token shared with `lib/modules.ts`, so tracks look native to the app. */
-export type Accent = "cyan" | "violet" | "amber";
+export type Accent = "ridge" | "shelf" | "upland";
 
 /**
  * Keys of the interactive visualizations in `components/learn/viz`.

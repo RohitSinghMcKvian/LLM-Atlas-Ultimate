@@ -170,7 +170,7 @@ export function EvalMatrixViz() {
                   {counts[cell]}
                 </p>
                 <p className="text-2xs font-semibold">{meta.label}</p>
-                <p className="text-[10px] text-muted-foreground">{meta.sub}</p>
+                <p className="text-2xs text-muted-foreground">{meta.sub}</p>
               </div>
             );
           })}
@@ -206,9 +206,9 @@ export function EvalMatrixViz() {
       )}
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <VizStat label="Precision" value={pct(precision)} accent="cyan" />
-        <VizStat label="Recall" value={pct(recall)} accent="violet" />
-        <VizStat label="F1" value={pct(f1)} accent="amber" />
+        <VizStat label="Precision" value={pct(precision)} accent = "ridge" />
+        <VizStat label="Recall" value={pct(recall)} accent = "shelf" />
+        <VizStat label="F1" value={pct(f1)} accent = "upland" />
         <VizStat label="Accuracy" value={pct(accuracy)} />
       </div>
 

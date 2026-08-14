@@ -60,21 +60,21 @@ import { cn } from "@/lib/utils";
  */
 
 const ACCENT_RING: Record<Accent, string> = {
-  cyan: "border-cyan/45 bg-cyan/[0.07]",
-  violet: "border-violet/45 bg-violet/[0.07]",
-  amber: "border-amber/45 bg-amber/[0.07]",
+  ridge: "border-elev-4/45 bg-elev-4/[0.07]",
+  shelf: "border-elev-1/45 bg-elev-1/[0.07]",
+  upland: "border-elev-3/45 bg-elev-3/[0.07]",
 };
 
 const ACCENT_STRIP: Record<Accent, string> = {
-  cyan: "from-cyan/25 via-cyan/[0.06]",
-  violet: "from-violet/25 via-violet/[0.06]",
-  amber: "from-amber/25 via-amber/[0.06]",
+  ridge: "from-elev-4/25 via-elev-4/[0.06]",
+  shelf: "from-elev-1/25 via-elev-1/[0.06]",
+  upland: "from-elev-3/25 via-elev-3/[0.06]",
 };
 
 const ACCENT_VAR: Record<Accent, string> = {
-  cyan: "var(--cyan)",
-  violet: "var(--violet)",
-  amber: "var(--amber)",
+  ridge: "var(--elev-4)",
+  shelf: "var(--elev-1)",
+  upland: "var(--elev-3)",
 };
 
 const ACHIEVEMENT_ICONS: Record<string, LucideIcon> = {
@@ -176,7 +176,7 @@ export function Roadmap({
             />
             <motion.span
               aria-hidden
-              className="absolute left-[1.375rem] top-3 w-px origin-top bg-gradient-to-b from-cyan to-violet"
+              className="absolute left-[1.375rem] top-3 w-px origin-top bg-gradient-to-b from-action to-accent"
               initial={false}
               animate={{ height: `${coverage.percent}%` }}
               style={{ maxHeight: "calc(100% - 1.5rem)" }}
@@ -236,16 +236,16 @@ function CourseHero({
       <div className="relative overflow-hidden rounded-[calc(var(--radius)-1px)] bg-surface/85">
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-aurora"
+          className="pointer-events-none absolute inset-0"
         />
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-grid-fade opacity-50"
+          className="pointer-events-none absolute inset-0 bg-graticule opacity-50"
         />
 
         <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="min-w-0">
-            <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-cyan">
+            <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-action">
               {finished
                 ? "Course complete"
                 : coverage.done === 0
@@ -293,7 +293,7 @@ function CourseHero({
             <div className="mt-5 flex items-center gap-3">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
                 <motion.div
-                  className="h-full rounded-full bg-gradient-primary"
+                  className="h-full rounded-full bg-action"
                   initial={false}
                   animate={{ width: `${coverage.percent}%` }}
                   transition={{ type: "spring", stiffness: 180, damping: 28 }}
@@ -339,7 +339,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
       <dd className="font-display text-base font-semibold leading-none tnum">
         {value}
       </dd>
-      <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">
+      <dt className="text-2xs uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
     </div>
@@ -393,8 +393,8 @@ function MasteryRing({
       />
       <defs>
         <linearGradient id="mastery-gradient" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="rgb(var(--cyan))" />
-          <stop offset="100%" stopColor="rgb(var(--violet))" />
+          <stop offset="0%" stopColor="rgb(var(--elev-1))" />
+          <stop offset="100%" stopColor="rgb(var(--elev-0))" />
         </linearGradient>
       </defs>
       <text
@@ -469,7 +469,7 @@ function LessonFilter({
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Search all lessons…"
           aria-label="Search lessons"
-          className="w-full rounded-lg border border-border bg-surface-2/50 py-1.5 pl-8 pr-2.5 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-cyan/45"
+          className="w-full rounded-lg border border-border bg-surface-2/50 py-1.5 pl-8 pr-2.5 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-action/45"
         />
       </div>
 
@@ -510,7 +510,7 @@ function LessonFilter({
               className={cn(
                 "inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-2xs font-medium transition-colors",
                 on
-                  ? "border-cyan/50 bg-cyan/10 text-cyan"
+                  ? "border-action/50 bg-action/10 text-action"
                   : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
               )}
             >
@@ -620,9 +620,9 @@ function TrackNode({
         className={cn(
           "absolute left-0 top-3 grid size-11 place-items-center rounded-full border-2 bg-background transition-colors",
           coverage.complete
-            ? "border-cyan bg-gradient-primary text-primary-foreground"
+            ? "border-action bg-action text-action-foreground"
             : coverage.done > 0
-              ? "border-cyan/50 text-cyan"
+              ? "border-action/50 text-action"
               : unlocked
                 ? "border-border-strong text-muted-foreground"
                 : "border-border text-muted-foreground/50",
@@ -631,7 +631,7 @@ function TrackNode({
           currentLessonId &&
           track.lessons.some((l) => l.id === currentLessonId) &&
           !coverage.complete
-            ? { boxShadow: "0 0 0 5px rgb(var(--cyan) / 0.12)" }
+            ? { boxShadow: "0 0 0 5px rgb(var(--elev-1) / 0.12)" }
             : undefined
         }
       >
@@ -670,13 +670,13 @@ function TrackNode({
               <h3 className="font-display text-base font-semibold tracking-tight">
                 {track.title}
               </h3>
-              <span className="rounded-full border border-border bg-surface/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span className="rounded-full border border-border bg-surface/70 px-1.5 py-0.5 text-2xs text-muted-foreground">
                 {DIFFICULTY_LABEL[track.level]}
               </span>
               {!unlocked && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="rounded-full border border-amber/30 bg-amber/10 px-1.5 py-0.5 text-[10px] text-amber">
+                    <span className="rounded-full border border-amber/30 bg-amber/10 px-1.5 py-0.5 text-2xs text-amber">
                       suggested later
                     </span>
                   </TooltipTrigger>
@@ -691,7 +691,7 @@ function TrackNode({
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {track.blurb}
             </p>
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] tnum text-muted-foreground">
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-2xs tnum text-muted-foreground">
               <span>
                 {coverage.done}/{coverage.total} lessons
               </span>
@@ -785,17 +785,17 @@ function LessonRow({
           done
             ? "border-success bg-success/20 text-success"
             : current
-              ? "border-cyan text-cyan"
+              ? "border-action text-action"
               : "border-border-strong",
         )}
       >
         {done && <Check className="size-2.5" />}
-        {!done && current && <span className="size-1.5 rounded-full bg-cyan" />}
+        {!done && current && <span className="size-1.5 rounded-full bg-action" />}
       </span>
 
       <span className="min-w-0 flex-1">
         {track && (
-          <span className="block text-[10px] uppercase tracking-wider text-cyan">
+          <span className="block text-2xs uppercase tracking-wider text-action">
             {track.title}
           </span>
         )}
@@ -816,7 +816,7 @@ function LessonRow({
         {interactive && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="grid size-4 place-items-center rounded bg-cyan/15 text-cyan">
+              <span className="grid size-4 place-items-center rounded bg-action/15 text-action">
                 <Wand2 className="size-2.5" />
               </span>
             </TooltipTrigger>
@@ -826,7 +826,7 @@ function LessonRow({
         {drill && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="grid size-4 place-items-center rounded bg-violet/15 text-violet">
+              <span className="grid size-4 place-items-center rounded bg-accent/15 text-accent">
                 <Brain className="size-2.5" />
               </span>
             </TooltipTrigger>
@@ -834,13 +834,13 @@ function LessonRow({
           </Tooltip>
         )}
         {graded && (
-          <span className="rounded bg-amber/15 px-1 text-[9px] font-semibold uppercase text-amber">
+          <span className="rounded bg-amber/15 px-1 text-2xs font-semibold uppercase text-amber">
             graded
           </span>
         )}
       </span>
 
-      <span className="shrink-0 font-mono text-[10px] tnum text-muted-foreground">
+      <span className="shrink-0 font-mono text-2xs tnum text-muted-foreground">
         {lesson.minutes}m
       </span>
       <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
@@ -888,21 +888,21 @@ function Achievements({ progress }: { progress: ProgressState }) {
               className={cn(
                 "relative flex items-start gap-2.5 overflow-hidden rounded-xl border px-3 py-2.5 transition-colors",
                 earned
-                  ? "border-cyan/35 bg-cyan/[0.06]"
+                  ? "border-action/35 bg-action/[0.06]"
                   : "border-border bg-surface/40",
               )}
             >
               {earned && (
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 bg-gradient-primary-soft opacity-60"
+                  className="pointer-events-none absolute inset-0 bg-action/10 opacity-60"
                 />
               )}
               <span
                 className={cn(
                   "relative grid size-8 shrink-0 place-items-center rounded-lg",
                   earned
-                    ? "bg-gradient-primary text-primary-foreground"
+                    ? "bg-action text-action-foreground"
                     : "bg-surface-3 text-muted-foreground/60",
                 )}
               >

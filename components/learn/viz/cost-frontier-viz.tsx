@@ -59,7 +59,7 @@ export function CostFrontierViz() {
       <div className="mb-4 space-y-2">
         {[
           { label: "Everything to the frontier model", value: baseline, tone: "muted" as const },
-          { label: "With routing + caching", value: routed, tone: "cyan" as const },
+          { label: "With routing + caching", value: routed, tone: "ridge" as const },
         ].map((row) => (
           <div key={row.label}>
             <div className="mb-1 flex items-baseline justify-between text-2xs">
@@ -67,7 +67,7 @@ export function CostFrontierViz() {
               <span
                 className={cn(
                   "font-mono tnum",
-                  row.tone === "cyan" ? "text-cyan" : "text-muted-foreground",
+                  row.tone === "ridge" ? "text-action" : "text-muted-foreground",
                 )}
               >
                 {formatUSD(row.value)}/mo
@@ -77,7 +77,7 @@ export function CostFrontierViz() {
               <motion.div
                 className={cn(
                   "h-full rounded",
-                  row.tone === "cyan" ? "bg-gradient-primary" : "bg-surface-3",
+                  row.tone === "ridge" ? "bg-action" : "bg-surface-3",
                 )}
                 animate={{ width: `${(row.value / barMax) * 100}%` }}
                 transition={{ type: "spring", stiffness: 240, damping: 30 }}
@@ -103,7 +103,7 @@ export function CostFrontierViz() {
           min={0}
           max={100}
           format={(v) => `${v}%`}
-          accent="amber"
+          accent = "upland"
         />
         <VizSlider
           label="Cache hit rate"
@@ -112,7 +112,7 @@ export function CostFrontierViz() {
           min={0}
           max={80}
           format={(v) => `${v}%`}
-          accent="violet"
+          accent = "shelf"
         />
       </div>
 
@@ -130,7 +130,7 @@ export function CostFrontierViz() {
         <VizStat
           label="Double-billed"
           value={`${(escalated / 1000).toFixed(0)}K`}
-          accent="amber"
+          accent = "upland"
         />
         <VizStat
           label="Cost / request"

@@ -54,8 +54,8 @@ const REASON_META: Record<
   },
   new: {
     label: "New",
-    tint: "text-cyan",
-    ring: "border-cyan/40 bg-cyan/[0.07]",
+    tint: "text-action",
+    ring: "border-action/40 bg-action/[0.07]",
   },
   shaky: {
     label: "Shaky",
@@ -148,7 +148,7 @@ export function PracticeView({
 
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
           <motion.div
-            className="h-full rounded-full bg-gradient-primary"
+            className="h-full rounded-full bg-action"
             animate={{ width: `${(at / session.length) * 100}%` }}
             transition={{ type: "spring", stiffness: 200, damping: 28 }}
           />
@@ -182,7 +182,7 @@ export function PracticeView({
         </span>
         <button
           onClick={() => onOpenLesson(item.lessonId)}
-          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-cyan"
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-action"
         >
           <BookOpen className="size-3" />
           {item.lessonTitle}
@@ -364,7 +364,7 @@ function ReviewQuiz({
                   "flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors",
                   !checked &&
                     (isPicked
-                      ? "border-cyan/50 bg-cyan/[0.08]"
+                      ? "border-action/50 bg-action/[0.08]"
                       : "border-border bg-surface-2/40 hover:border-border-strong"),
                   checked &&
                     isAnswer &&
@@ -376,7 +376,7 @@ function ReviewQuiz({
                   checked && !isAnswer && !isPicked && "border-border opacity-60",
                 )}
               >
-                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded border border-border-strong font-mono text-[9px] font-bold text-muted-foreground">
+                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded border border-border-strong font-mono text-2xs font-bold text-muted-foreground">
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1 leading-snug">{opt}</span>
@@ -435,7 +435,7 @@ function ReviewQuiz({
         </>
       )}
 
-      <p className="mt-2 text-center text-[10px] text-muted-foreground">
+      <p className="mt-2 text-center text-2xs text-muted-foreground">
         <kbd className="rounded border border-border bg-surface-2 px-1">1</kbd>–
         <kbd className="rounded border border-border bg-surface-2 px-1">
           {block.options.length}
@@ -475,7 +475,7 @@ function ReviewTerm({
       <button
         onClick={() => setFlipped((f) => !f)}
         aria-expanded={flipped}
-        className="grid min-h-[9rem] w-full place-items-center rounded-2xl border border-violet/30 bg-gradient-primary-soft px-4 py-6 text-center transition-colors hover:border-violet/50"
+        className="grid min-h-[9rem] w-full place-items-center rounded-2xl border border-accent/30 bg-action/10 px-4 py-6 text-center transition-colors hover:border-accent/50"
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
@@ -492,7 +492,7 @@ function ReviewTerm({
               </span>
             ) : (
               <>
-                <span className="block font-mono text-xl font-semibold text-cyan">
+                <span className="block font-mono text-xl font-semibold text-action">
                   {term.term}
                 </span>
                 <span className="mt-1.5 block text-2xs text-muted-foreground">
@@ -535,10 +535,10 @@ function PracticeStart({
         <div className="relative overflow-hidden rounded-[calc(var(--radius)-1px)] bg-surface/80 p-6 sm:p-8">
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-aurora opacity-70"
+            className="pointer-events-none absolute inset-0 opacity-70"
           />
           <div className="relative text-center">
-            <span className="mx-auto mb-3 grid size-11 place-items-center rounded-2xl bg-gradient-primary text-primary-foreground">
+            <span className="mx-auto mb-3 grid size-11 place-items-center rounded-2xl bg-action text-action-foreground">
               <Dumbbell className="size-5" />
             </span>
             <h2 className="font-display text-2xl font-semibold tracking-tight text-balance">
@@ -594,7 +594,7 @@ function PracticeStart({
       </div>
 
       <p className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-surface-2/40 px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
-        <Sparkles className="mt-0.5 size-3.5 shrink-0 text-cyan" />
+        <Sparkles className="mt-0.5 size-3.5 shrink-0 text-action" />
         <span>
           Cards you get right rest longer before returning — one day, then three,
           then a week, then a fortnight. Cards you miss come straight back.
@@ -627,7 +627,7 @@ function SessionSummary({
         <div className="relative overflow-hidden border-b border-border px-6 py-7 text-center">
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-aurora opacity-60"
+            className="pointer-events-none absolute inset-0 opacity-60"
           />
           <div className="relative">
             <p className="font-display text-5xl font-bold tnum">

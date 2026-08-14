@@ -85,7 +85,7 @@ function Node({
       {status && (
         <span
           className={cn(
-            "ml-auto mr-0.5 text-[10px] font-semibold",
+            "ml-auto mr-0.5 text-2xs font-semibold",
             status === "new" ? "text-success" : "text-amber",
           )}
         >

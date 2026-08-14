@@ -79,6 +79,146 @@ const DropdownMenuSeparator = React.forwardRef<
 DropdownMenuSeparator.displayName =
   DropdownMenuPrimitive.Separator.displayName;
 
+const DropdownMenuSubTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
+    inset?: boolean;
+  }
+>(({ className, inset, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none transition-colors focus:bg-surface-2 data-[state=open]:bg-surface-2 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4",
+      inset && "pl-8",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+    <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" />
+  </DropdownMenuPrimitive.SubTrigger>
+));
+DropdownMenuSubTrigger.displayName =
+  DropdownMenuPrimitive.SubTrigger.displayName;
+
+const DropdownMenuSubContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubContent
+    ref={ref}
+    className={cn(
+      "z-50 min-w-[9rem] overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-float data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+      className,
+    )}
+    {...props}
+  />
+));
+DropdownMenuSubContent.displayName =
+  DropdownMenuPrimitive.SubContent.displayName;
+
+const DropdownMenuRadioItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(({ className, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(
+      "relative flex cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-2.5 text-sm outline-none transition-colors focus:bg-surface-2 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      className,
+    )}
+    {...props}
+  >
+    <span className="absolute left-2 flex size-4 items-center justify-center">
+      <DropdownMenuPrimitive.ItemIndicator>
+        <Circle className="size-2 fill-current" />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </DropdownMenuPrimitive.RadioItem>
+));
+DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;
+
+/**
+ * A menu row that reads as a settings switch rather than a checklist tick:
+ * leading icon, label, optional hint, and a track on the right.
+ *
+ * The track is a plain `<span>`, not the Radix `Switch` — a real switch inside
+ * a `menuitemcheckbox` would nest two interactive roles and swallow the row's
+ * own keyboard handling. Selecting never closes the menu, because flipping two
+ * options in a row is the common case.
+ */
+const DropdownMenuSwitchItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
+  Omit<
+    React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>,
+    "children"
+  > & {
+    icon?: React.ReactNode;
+    label: React.ReactNode;
+    hint?: React.ReactNode;
+    /** Rendered between the hint and the track — a count, a status word. */
+    trailing?: React.ReactNode;
+    /** Accent when on. Violet marks a mode change, not a per-turn option. */
+    tone?: "ridge" | "shelf";
+  }
+>(
+  (
+    { className, icon, label, hint, trailing, tone = "ridge", checked, ...props },
+    ref,
+  ) => (
+    <DropdownMenuPrimitive.CheckboxItem
+      ref={ref}
+      checked={checked}
+      onSelect={(e) => e.preventDefault()}
+      className={cn(
+        "group/switch relative flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none transition-colors focus:bg-surface-2 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        className,
+      )}
+      {...props}
+    >
+      {icon && (
+        <span
+          className={cn(
+            "grid size-4 shrink-0 place-items-center transition-colors [&_svg]:size-4",
+            checked
+              ? tone === "shelf"
+                ? "text-accent"
+                : "text-action"
+              : "text-muted-foreground",
+          )}
+        >
+          {icon}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {hint && (
+        <span className="shrink-0 text-2xs text-muted-foreground">{hint}</span>
+      )}
+      {trailing}
+      <span
+        aria-hidden
+        className={cn(
+          "relative h-4 w-7 shrink-0 rounded-full transition-colors",
+          checked
+            ? tone === "shelf"
+              ? "bg-accent"
+              : "bg-action"
+            : "bg-surface-3",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform",
+            checked ? "translate-x-3.5" : "translate-x-0.5",
+          )}
+        />
+      </span>
+    </DropdownMenuPrimitive.CheckboxItem>
+  ),
+);
+DropdownMenuSwitchItem.displayName = "DropdownMenuSwitchItem";
+
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
@@ -109,10 +249,14 @@ export {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuCheckboxItem,
+  DropdownMenuSwitchItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuGroup,
   DropdownMenuPortal,
   DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 };

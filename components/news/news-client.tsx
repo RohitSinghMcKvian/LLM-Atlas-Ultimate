@@ -33,13 +33,27 @@ import type { SyncState } from "./news-sync-pill";
 
 const VIEW_CYCLE: NewsView[] = ["magazine", "grid", "compact", "timeline"];
 
+/** Articles pulled in one client request. Matches the API route's `limit` ceiling. */
+const CORPUS_PAGE = 300;
+
+/** Cold-start poll: how often to re-check, and for how long, before giving up. */
+const COLD_POLL_MS = 4_000;
+const COLD_POLL_ATTEMPTS = 15;
+
 export function NewsClient({
   snapshot,
+  totalArticles,
   catalogDiff,
   initial,
   publicRefresh,
 }: {
   snapshot: NewsSnapshot;
+  /**
+   * Articles in the *server's* corpus. The `snapshot` prop carries only the
+   * highest-ranked slice of it (see `PAGE_ARTICLE_LIMIT`), so this is how the
+   * client knows a tail exists and is worth fetching.
+   */
+  totalArticles: number;
   catalogDiff: readonly CatalogDiffEntry[];
   initial: NewsFilterState;
   /** Whether the operator left the public Refresh endpoint enabled. */
@@ -60,6 +74,80 @@ export function NewsClient({
   // A fresh server render (navigation back to /news) must win over stale client
   // state from the last visit.
   React.useEffect(() => setLive(snapshot), [snapshot]);
+
+  /**
+   * Pull the current corpus from the API and adopt it.
+   *
+   * The single reconciliation path: the page prop is only ever the top slice,
+   * and on a cold start it is empty entirely. Returns the article count so a
+   * caller can report what changed.
+   */
+  const pullCorpus = React.useCallback(async (): Promise<number | null> => {
+    try {
+      const response = await fetch(`/api/v1/news?limit=${CORPUS_PAGE}`, { cache: "no-store" });
+      if (!response.ok) return null;
+      const fresh = await response.json();
+      if (!Array.isArray(fresh.articles)) return null;
+
+      setLive((prev) => ({
+        ...prev,
+        version: fresh.version ?? prev.version,
+        syncedAt: fresh.syncedAt ?? prev.syncedAt,
+        origin: fresh.origin ?? prev.origin,
+        articles: fresh.articles,
+        clusters: fresh.clusters ?? prev.clusters,
+        sources: fresh.sources ?? prev.sources,
+        stats: fresh.stats ?? prev.stats,
+        warnings: fresh.warnings ?? [],
+      }));
+      return fresh.articles.length as number;
+    } catch {
+      // Offline, or the route is down. The page keeps rendering what it has.
+      return null;
+    }
+  }, []);
+
+  // The tail. The server sends the top slice so the document stays small; the
+  // rest arrives immediately after mount, before the reader has scrolled past
+  // what they were given.
+  React.useEffect(() => {
+    if (totalArticles <= snapshot.articles.length) return;
+    void pullCorpus();
+  }, [totalArticles, snapshot.articles.length, pullCorpus]);
+
+  /**
+   * Cold start.
+   *
+   * The first request to a fresh server sees an empty corpus, schedules the
+   * sweep behind the response, and renders "the first sync is still running".
+   * Without this the page would say that forever: the sweep finishes seconds
+   * later on the server, but nothing tells the already-rendered client. Polling
+   * stops the moment articles arrive, and gives up rather than hammering.
+   */
+  React.useEffect(() => {
+    if (live.articles.length > 0) return;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const tick = async () => {
+      if (cancelled) return;
+      attempts += 1;
+      const count = await pullCorpus();
+      if (cancelled) return;
+      if (count && count > 0) {
+        announce(`${count} stories loaded`);
+        return;
+      }
+      if (attempts < COLD_POLL_ATTEMPTS) timer = window.setTimeout(tick, COLD_POLL_MS);
+    };
+
+    let timer = window.setTimeout(tick, COLD_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [live.articles.length, pullCorpus]);
 
   const saved = useNewsStore((s) => s.saved);
   const read = useNewsStore((s) => s.read);
@@ -191,32 +279,40 @@ export function NewsClient({
 
       const body = await response.json();
 
+      const before = live.articles.length;
+
       if (body.status === "fresh") {
-        // The server's global cooldown. Reporting it honestly beats a fake
-        // spinner: the reader learns the feed is current and exactly when a new
-        // sweep becomes possible.
+        // The server's global cooldown: no upstream sweep ran. That does NOT
+        // mean this page is showing what the server has.
+        //
+        // The bug this guards against was the whole feature failing in front of
+        // a reader: a cold-start page renders empty, the background sweep fills
+        // the server's corpus seconds later, and the reader presses Sync now.
+        // The cooldown answers "fresh", and returning here left them staring at
+        // "the first sync is still running" while 245 stories sat one fetch
+        // away. Whenever the server's corpus differs from ours, adopt it —
+        // "up to date" has to mean the screen is, not just the server.
+        const stale =
+          body.syncedAt !== live.syncedAt || (body.articles ?? 0) !== before;
+        if (stale) {
+          const count = await pullCorpus();
+          if (count !== null) {
+            setDismissedWarning(false);
+            setSyncState({ kind: "synced", added: Math.max(0, count - before) });
+            announce(count > before ? `${count - before} new stories.` : "Up to date.");
+            return;
+          }
+        }
+
         setSyncState({ kind: "fresh", nextEligibleAt: body.nextEligibleAt });
         announce("Already up to date");
         return;
       }
 
-      const fresh = await fetch("/api/v1/news?limit=300").then((r) => r.json());
-      const before = live.articles.length;
-
-      setLive((prev) => ({
-        ...prev,
-        version: fresh.version ?? prev.version,
-        syncedAt: fresh.syncedAt ?? prev.syncedAt,
-        origin: fresh.origin ?? prev.origin,
-        articles: fresh.articles ?? prev.articles,
-        clusters: fresh.clusters ?? prev.clusters,
-        sources: fresh.sources ?? prev.sources,
-        stats: fresh.stats ?? prev.stats,
-        warnings: fresh.warnings ?? [],
-      }));
+      const count = await pullCorpus();
       setDismissedWarning(false);
 
-      const added = Math.max(0, (fresh.articles?.length ?? before) - before);
+      const added = Math.max(0, (count ?? before) - before);
       setSyncState({ kind: "synced", added });
       announce(added > 0 ? `Synced. ${added} new stories.` : "Synced. Nothing new.");
     } catch (error) {
@@ -224,7 +320,7 @@ export function NewsClient({
       setSyncState({ kind: "error", message });
       announce(message);
     }
-  }, [syncState.kind, live.articles.length]);
+  }, [syncState.kind, live.articles.length, live.syncedAt, pullCorpus]);
 
   // --- Keyboard -------------------------------------------------------------
 

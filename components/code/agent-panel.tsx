@@ -178,7 +178,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
     <div className="flex h-full w-full flex-col bg-surface/40">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-action text-action-foreground">
           <AtlasMark size={16} />
         </span>
         <div className="min-w-0 leading-tight">
@@ -243,7 +243,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
                           restoreCheckpoint(cp.id);
                           setCpOpen(false);
                         }}
-                        className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-1 text-2xs text-muted-foreground opacity-0 transition-opacity hover:border-cyan/40 hover:text-foreground group-hover:opacity-100 disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-1 text-2xs text-muted-foreground opacity-0 transition-opacity hover:border-action/40 hover:text-foreground group-hover:opacity-100 disabled:opacity-40"
                       >
                         <RotateCcw className="size-3" /> Restore
                       </button>
@@ -274,7 +274,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
                     clearConversation();
                     setSessOpen(false);
                   }}
-                  className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:border-cyan/40 hover:text-foreground disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:border-action/40 hover:text-foreground disabled:opacity-40"
                 >
                   <Plus className="size-3" /> New
                 </button>
@@ -357,7 +357,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
         {trace.length === 0 && (
           <div className="flex flex-col items-center gap-3 pt-12 text-center">
             <div className="relative">
-              <div className="absolute -inset-3 rounded-full bg-gradient-primary opacity-20 blur-xl" />
+              <div className="absolute -inset-3 rounded-full bg-action opacity-20 blur-xl" />
               <AtlasMark size={32} className="relative" />
             </div>
             <p className="max-w-[240px] text-sm text-muted-foreground">
@@ -373,7 +373,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
                 <button
                   key={s}
                   onClick={() => setGoal(s)}
-                  className="block w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-cyan/40 hover:text-foreground"
+                  className="block w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-action/40 hover:text-foreground"
                 >
                   {s}
                 </button>
@@ -437,9 +437,9 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
 
       {/* Plan-approval bar */}
       {pendingPlan && !running && (
-        <div className="border-t border-cyan/30 bg-cyan/5 px-3 py-2.5">
+        <div className="border-t border-action/30 bg-action/5 px-3 py-2.5">
           <div className="flex items-center gap-2">
-            <ClipboardList className="size-4 shrink-0 text-cyan" />
+            <ClipboardList className="size-4 shrink-0 text-action" />
             <p className="min-w-0 flex-1 text-xs">
               <span className="font-medium">Plan ready.</span>{" "}
               <span className="text-muted-foreground">
@@ -467,7 +467,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
                 onClick={() => setGoal(t.command + " ")}
                 className="flex w-full items-start gap-2 border-b border-border/50 px-3 py-1.5 text-left last:border-0 hover:bg-surface-2/60"
               >
-                <code className="shrink-0 text-xs text-cyan">{t.command}</code>
+                <code className="shrink-0 text-xs text-action">{t.command}</code>
                 <span className="min-w-0">
                   <span className="text-xs">{t.label}</span>
                   <span className="block truncate text-2xs text-muted-foreground">
@@ -478,7 +478,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
             ))}
           </div>
         )}
-        <div className="rounded-xl border border-border bg-surface-2/50 p-2.5 focus-within:border-cyan/40">
+        <div className="rounded-xl border border-border bg-surface-2/50 p-2.5 focus-within:border-action/40">
           <textarea
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
@@ -585,7 +585,7 @@ function ModeToggle({
             "px-2 capitalize transition-colors disabled:opacity-60",
             mode === m
               ? m === "plan"
-                ? "bg-cyan/15 font-medium text-cyan"
+                ? "bg-action/15 font-medium text-action"
                 : "bg-surface-3 font-medium"
               : "text-muted-foreground hover:bg-surface-2",
           )}
@@ -630,7 +630,7 @@ function SessionRow({
             if (e.key === "Escape") setEditing(false);
           }}
           onBlur={() => setEditing(false)}
-          className="h-6 w-full rounded border border-border bg-surface px-1.5 text-xs outline-none focus:border-cyan/40"
+          className="h-6 w-full rounded border border-border bg-surface px-1.5 text-xs outline-none focus:border-action/40"
         />
       </div>
     );
@@ -734,7 +734,7 @@ function EventRow({ ev }: { ev: UiEvent }) {
           <div className="rounded-2xl border border-border bg-surface/60 px-3 py-2">
             <Markdown streaming={ev.streaming}>{ev.text}</Markdown>
             {ev.streaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-1 animate-caret-blink bg-cyan align-text-bottom" />
+              <span className="ml-0.5 inline-block h-3.5 w-1 animate-caret-blink bg-action align-text-bottom" />
             )}
           </div>
         )}
@@ -828,11 +828,11 @@ function ModelPicker({
                   <span className="truncate">{m.name}</span>
                   <span className="ml-auto flex items-center gap-1 text-2xs text-muted-foreground">
                     {modelAccess(m) === "free" ? (
-                      <Badge variant="success" className="px-1 py-0 text-[9px]">
+                      <Badge variant="success" className="px-1 py-0 text-2xs">
                         free
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="px-1 py-0 text-[9px]">
+                      <Badge variant="outline" className="px-1 py-0 text-2xs">
                         key
                       </Badge>
                     )}

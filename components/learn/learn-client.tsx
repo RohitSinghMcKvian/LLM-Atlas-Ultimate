@@ -233,7 +233,7 @@ export function LearnClient() {
                   {v.id === "practice" && dueCount > 0 && (
                     <span
                       aria-label={`${dueCount} items to review`}
-                      className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-danger text-[9px] font-bold text-white"
+                      className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-danger text-2xs font-bold text-white"
                     >
                       {dueCount > 9 ? "9+" : dueCount}
                     </span>
@@ -263,7 +263,7 @@ export function LearnClient() {
         >
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
             <motion.div
-              className="h-full rounded-full bg-gradient-primary"
+              className="h-full rounded-full bg-action"
               initial={false}
               animate={{ width: `${coverage.percent}%` }}
               transition={{ type: "spring", stiffness: 200, damping: 30 }}

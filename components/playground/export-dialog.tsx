@@ -49,7 +49,7 @@ export function ExportDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Code2 className="size-4 text-cyan" /> Export as code
+            <Code2 className="size-4 text-action" /> Export as code
           </DialogTitle>
           <DialogDescription>
             Reproduce this exact run against the Atlas Router — messages,
@@ -91,7 +91,7 @@ export function ExportDialog({
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             }}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-cyan/40 hover:text-foreground"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-action/40 hover:text-foreground"
           >
             {copied ? (
               <>
@@ -105,7 +105,7 @@ export function ExportDialog({
           </button>
         </div>
 
-        <pre className="max-h-[50vh] overflow-auto rounded-xl border border-border bg-[#0b0d14] p-4 font-mono text-[12px] leading-relaxed text-foreground/90">
+        <pre className="max-h-[50vh] overflow-auto rounded-xl border border-border bg-code p-4 font-mono text-xs leading-relaxed text-foreground/90">
           {code}
         </pre>
       </DialogContent>

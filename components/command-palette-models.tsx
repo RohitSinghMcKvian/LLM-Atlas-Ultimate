@@ -121,7 +121,7 @@ const ModelItem = React.memo(function ModelItem({
 }) {
   return (
     <CommandItem value={model.id} onSelect={() => onPick(model.id)}>
-      <Sparkles className={cn(active && "text-cyan")} />
+      <Sparkles className={cn(active && "text-action")} />
       <span>{model.name}</span>
       <span className="ml-2 text-xs text-muted-foreground">{model.provider}</span>
       {active && (

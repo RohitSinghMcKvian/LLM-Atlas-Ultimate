@@ -45,7 +45,7 @@ export function NewsClusterList({
               className="group flex items-start gap-2 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-surface-3"
             >
               <span
-                className="mt-0.5 grid size-4 shrink-0 place-items-center rounded text-[8px] font-bold text-background"
+                className="mt-0.5 grid size-5 shrink-0 place-items-center rounded text-2xs font-semibold text-background"
                 style={{ backgroundColor: sourceAccent(article.sourceId) }}
                 aria-hidden="true"
               >

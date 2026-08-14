@@ -19,7 +19,7 @@ interface Stage {
   detail: string;
   /** What the representation "knows" after this stage — the payoff line. */
   knows: string;
-  accent: "cyan" | "violet" | "amber";
+  accent: "ridge" | "shelf" | "upland";
 }
 
 const STAGES: Stage[] = [
@@ -29,7 +29,7 @@ const STAGES: Stage[] = [
     detail:
       "Each token id is looked up in the embedding table and combined with a positional signal, so the model can tell 'dog bites man' from 'man bites dog'.",
     knows: "What this token is, and where it sits.",
-    accent: "cyan",
+    accent: "ridge",
   },
   {
     id: "attn",
@@ -37,7 +37,7 @@ const STAGES: Stage[] = [
     detail:
       "Every token forms a query, key and value; each head blends the sequence by its own learned notion of relevance, and the heads are concatenated.",
     knows: "What this token is, in the company of the others.",
-    accent: "violet",
+    accent: "shelf",
   },
   {
     id: "norm1",
@@ -45,7 +45,7 @@ const STAGES: Stage[] = [
     detail:
       "The attention output is added back to the input and re-normalized. The residual path is what lets gradients survive fifty layers of depth.",
     knows: "The update, without having discarded the original.",
-    accent: "cyan",
+    accent: "ridge",
   },
   {
     id: "ffn",
@@ -53,7 +53,7 @@ const STAGES: Stage[] = [
     detail:
       "A position-wise MLP, usually 4x wider than the model dimension. Most of a model's parameters live here — and, on current evidence, most of its stored facts.",
     knows: "The token, transformed by what the model knows about it.",
-    accent: "amber",
+    accent: "upland",
   },
   {
     id: "norm2",
@@ -61,7 +61,7 @@ const STAGES: Stage[] = [
     detail:
       "Again: add, normalize, hand upward. The block is now complete and the next identical block receives a slightly better representation.",
     knows: "A refined representation, ready for the next block.",
-    accent: "cyan",
+    accent: "ridge",
   },
   {
     id: "head",
@@ -69,7 +69,7 @@ const STAGES: Stage[] = [
     detail:
       "After the final block, the last token's vector is projected back onto the vocabulary, producing one score per possible next token. Sampling takes it from there.",
     knows: "A score for every token that could come next.",
-    accent: "violet",
+    accent: "shelf",
   },
 ];
 
@@ -96,15 +96,15 @@ export function TransformerViz() {
                   className={cn(
                     "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
                     isActive
-                      ? "border-cyan/45 bg-cyan/10"
+                      ? "border-action/45 bg-action/10"
                       : "border-border bg-surface-2/40 hover:border-border-strong",
                   )}
                 >
                   <span
                     className={cn(
-                      "grid size-5 shrink-0 place-items-center rounded font-mono text-[10px]",
+                      "grid size-5 shrink-0 place-items-center rounded font-mono text-2xs",
                       isActive
-                        ? "bg-gradient-primary text-primary-foreground"
+                        ? "bg-action text-action-foreground"
                         : "bg-surface-3 text-muted-foreground",
                     )}
                   >
@@ -114,7 +114,7 @@ export function TransformerViz() {
                     {s.label}
                   </span>
                   {repeated && (
-                    <span className="shrink-0 rounded bg-surface-3 px-1 text-[9px] text-muted-foreground">
+                    <span className="shrink-0 rounded bg-surface-3 px-1 text-2xs text-muted-foreground">
                       ×N
                     </span>
                   )}
@@ -202,7 +202,7 @@ export function TransformerViz() {
           </svg>
 
           <div className="rounded-lg border border-border bg-surface-2/50 p-3">
-            <p className="text-xs font-semibold text-cyan">{stage.label}</p>
+            <p className="text-xs font-semibold text-action">{stage.label}</p>
             <p className="mt-1 text-xs leading-relaxed text-foreground/85">
               {stage.detail}
             </p>

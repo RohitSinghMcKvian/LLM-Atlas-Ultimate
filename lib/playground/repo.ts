@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowser, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseBrowser, remotePersistenceReady } from "@/lib/supabase/client";
 import type { Preset, RunRecord } from "./types";
 
 /**
@@ -190,9 +190,23 @@ function makeSupabaseRepo(): PlaygroundRepo {
   };
 }
 
-let cached: PlaygroundRepo | null = null;
+let cached: Promise<PlaygroundRepo> | null = null;
 
-export function playgroundRepo(): PlaygroundRepo {
-  if (!cached) cached = isSupabaseConfigured() ? makeSupabaseRepo() : localRepo;
+/**
+ * Async because driver choice depends on being signed in: with auth-scoped RLS
+ * (migration 0005) the Supabase driver drops every write for a signed-out
+ * visitor. See lib/chat/repo.ts for the same pattern.
+ */
+export function playgroundRepo(): Promise<PlaygroundRepo> {
+  if (!cached) {
+    cached = remotePersistenceReady().then((ready) =>
+      ready ? makeSupabaseRepo() : localRepo,
+    );
+  }
   return cached;
+}
+
+/** Re-pick the driver after a sign-in or sign-out. */
+export function resetPlaygroundRepo(): void {
+  cached = null;
 }

@@ -1,98 +1,82 @@
 import { NextRequest } from "next/server";
+import { providerById } from "@/lib/research/providers";
+import type { WebSource } from "@/lib/chat/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Keyless web search via DuckDuckGo's HTML endpoint. No API key, no account, and
-// nothing about the query is persisted or logged here — it's a pass-through that
-// returns titles/urls/snippets for the model to cite (§4.6). If DDG changes its
-// markup or rate-limits, we degrade to an empty result set rather than erroring.
+/**
+ * Web search, routed to whichever backend the user chose (§4.6).
+ *
+ * Was hard-wired to a keyless DuckDuckGo scrape. That remains the default and the
+ * only zero-configuration path; a user with a key for Brave, Tavily or Exa can
+ * point at one instead. The key arrives per-request in `x-search-key`, is
+ * forwarded once, and is never stored, logged or echoed — the same BYOK contract
+ * as the chat and embeddings routes (§1.3).
+ *
+ * How the request is built and how the response is read live in
+ * lib/research/providers.ts, so this route stays a fetch plus error handling and
+ * the provider quirks are unit-tested without a network.
+ *
+ * Search failure is never fatal to a chat turn: every path returns
+ * `{ sources: [] }` rather than an error status, because a research turn that
+ * degrades to "no results" is recoverable and one that throws is not.
+ */
 
-interface Source {
-  title: string;
-  url: string;
-  snippet: string;
-}
+const TIMEOUT_MS = 9_000;
 
-function decode(s: string): string {
-  return s
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** DDG wraps outbound links; unwrap `/l/?uddg=<encoded>` to the real URL. */
-function realUrl(href: string): string {
-  try {
-    const u = href.startsWith("http")
-      ? new URL(href)
-      : new URL(href, "https://duckduckgo.com");
-    const uddg = u.searchParams.get("uddg");
-    return uddg ? decodeURIComponent(uddg) : u.toString();
-  } catch {
-    return href;
-  }
-}
-
-function parse(html: string, limit: number): Source[] {
-  const out: Source[] = [];
-  // Each result: <a class="result__a" href="...">Title</a> … <a class="result__snippet">…</a>
-  const linkRe =
-    /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-  const snipRe =
-    /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-  const links: { url: string; title: string }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(html)) && links.length < limit * 2) {
-    links.push({ url: realUrl(m[1]), title: decode(m[2]) });
-  }
-  const snips: string[] = [];
-  while ((m = snipRe.exec(html)) && snips.length < limit * 2) {
-    snips.push(decode(m[1]));
-  }
-  for (let i = 0; i < links.length && out.length < limit; i++) {
-    const { url, title } = links[i];
-    if (!title || !url || url.includes("duckduckgo.com/y.js")) continue;
-    out.push({ title, url, snippet: snips[i] ?? "" });
-  }
-  return out;
+interface Body {
+  query?: string;
+  count?: number;
+  provider?: string;
 }
 
 export async function POST(req: NextRequest) {
-  let query = "";
-  let count = 5;
+  let body: Body;
   try {
-    const body = await req.json();
-    query = String(body.query ?? "").trim();
-    if (typeof body.count === "number") count = Math.min(8, Math.max(1, body.count));
+    body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+
+  const query = String(body.query ?? "").trim();
+  const count = Math.min(10, Math.max(1, Number(body.count) || 5));
   if (!query) return Response.json({ sources: [] });
 
+  const provider = providerById(body.provider);
+  const key = req.headers.get("x-search-key")?.trim() || undefined;
+
+  // A keyed provider selected without a key would otherwise produce a 401 the
+  // user cannot interpret. Say what is missing instead.
+  if (provider.needsKey && !key) {
+    return Response.json(
+      { sources: [], error: `${provider.label} needs an API key. Add one in settings.` },
+      { status: 200 },
+    );
+  }
+
+  const spec = provider.request(query, count, key);
   try {
-    const res = await fetch("https://html.duckduckgo.com/html/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
-      },
-      body: new URLSearchParams({ q: query }).toString(),
-      signal: AbortSignal.timeout(9000),
+    const res = await fetch(spec.url, {
+      method: spec.method,
+      headers: spec.headers,
+      body: spec.body,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: "no-store",
     });
-    if (!res.ok) return Response.json({ sources: [] });
-    const html = await res.text();
-    return Response.json({ sources: parse(html, count) });
+    if (!res.ok) {
+      // The provider's status, not its body: an error body can echo the query and
+      // sometimes the key, and neither belongs in a response Atlas relays.
+      return Response.json({
+        sources: [],
+        error: `${provider.label} returned HTTP ${res.status}.`,
+      });
+    }
+    const raw = spec.html ? await res.text() : await res.json();
+    const sources: WebSource[] = provider.parse(raw, count);
+    return Response.json({ sources, provider: provider.id });
   } catch {
-    // Timeout / network / markup change — never fail the chat over search.
-    return Response.json({ sources: [] });
+    // Timeout, network failure, or a markup change that broke the scrape.
+    return Response.json({ sources: [], error: `${provider.label} did not respond.` });
   }
 }

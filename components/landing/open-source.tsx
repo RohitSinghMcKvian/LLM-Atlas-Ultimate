@@ -5,17 +5,17 @@ import { useInView, useReducedMotion } from "framer-motion";
 import { Check, GitFork, Lock, Plug, Scale, Server } from "lucide-react";
 import { Reveal } from "@/components/motion/reveal";
 
-const LINES: { text: string; tone?: "muted" | "ok" | "cyan" }[] = [
-  { text: "$ git clone https://github.com/llm-atlas/atlas", tone: "cyan" },
+const LINES: { text: string; tone?: "muted" | "ok" | "ridge" }[] = [
+  { text: "$ git clone https://github.com/llm-atlas/atlas", tone: "ridge" },
   { text: "$ cp .env.example .env.local   # add a provider key", tone: "muted" },
-  { text: "$ docker compose up", tone: "cyan" },
+  { text: "$ docker compose up", tone: "ridge" },
   { text: "✔ postgres        ready", tone: "ok" },
   { text: "✔ redis           ready", tone: "ok" },
   { text: "✔ atlas-api       listening :4000", tone: "ok" },
   { text: "✔ atlas-workers   news · price · bench", tone: "ok" },
   { text: "✔ atlas-brain     sandbox runners online", tone: "ok" },
   { text: "✔ web             http://localhost:3000", tone: "ok" },
-  { text: "→ Atlas is live. The whole ecosystem, on your infra.", tone: "cyan" },
+  { text: "→ Atlas is live. The whole ecosystem, on your infra.", tone: "ridge" },
 ];
 
 const POINTS = [
@@ -49,7 +49,7 @@ function Terminal() {
   return (
     <div
       ref={ref}
-      className="overflow-hidden rounded-2xl border border-border bg-[#0b0d14] shadow-float"
+      className="overflow-hidden rounded-2xl border border-border bg-code shadow-float"
     >
       <div className="flex items-center gap-1.5 border-b border-border px-4 py-3">
         <span className="size-3 rounded-full bg-danger/70" />
@@ -59,15 +59,15 @@ function Terminal() {
           atlas — docker compose
         </span>
       </div>
-      <div className="min-h-[280px] space-y-1 p-4 font-mono text-[13px] leading-relaxed">
+      <div className="min-h-[280px] space-y-1 p-4 font-mono text-sm leading-relaxed">
         {LINES.slice(0, shown).map((l, i) => (
           <div
             key={i}
             className={
               l.tone === "ok"
                 ? "text-success"
-                : l.tone === "cyan"
-                  ? "text-cyan"
+                : l.tone === "ridge"
+                  ? "text-action"
                   : "text-muted-foreground"
             }
           >
@@ -75,7 +75,7 @@ function Terminal() {
           </div>
         ))}
         {shown < LINES.length && (
-          <span className="inline-block h-3.5 w-2 animate-caret-blink bg-cyan align-middle" />
+          <span className="inline-block h-3.5 w-2 animate-caret-blink bg-action align-middle" />
         )}
       </div>
     </div>
@@ -87,7 +87,7 @@ export function OpenSource() {
     <section className="relative border-y border-border bg-surface/30">
       <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-2 lg:gap-16">
         <Reveal>
-          <p className="mb-3 text-sm font-medium uppercase tracking-wider text-cyan">
+          <p className="mb-3 text-sm font-medium uppercase tracking-wider text-action">
             Built for the open future
           </p>
           <h2 className="text-balance font-display text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -102,7 +102,7 @@ export function OpenSource() {
             {POINTS.map((p) => (
               <div key={p.title} className="flex gap-3">
                 <div className="grid size-9 shrink-0 place-items-center rounded-xl border border-border bg-surface">
-                  <p.icon className="size-4 text-cyan" />
+                  <p.icon className="size-4 text-action" />
                 </div>
                 <div>
                   <p className="text-sm font-medium">{p.title}</p>

@@ -41,6 +41,12 @@ export interface OpenRouterModel {
     completion?: string | null;
     input_cache_read?: string | null;
     input_cache_write?: string | null;
+    /**
+     * Per-token price for the tokens a generated image is made of. Quoted in
+     * the same unit as `prompt`/`completion`, NOT per image — `image` (without
+     * the suffix) is the separate per-input-image vision price.
+     */
+    image_output?: string | null;
   } | null;
   top_provider?: {
     context_length?: number | null;

@@ -61,13 +61,13 @@ export const usePlaygroundStore = create<PlaygroundState>()(
         if (get().hydrated) return;
         try {
           const [presets, runs] = await Promise.all([
-            repo().listPresets(),
-            repo().listRuns(),
+            (await repo()).listPresets(),
+            (await repo()).listRuns(),
           ]);
-          set({ presets, runs, hydrated: true, remote: repo().remote });
+          set({ presets, runs, hydrated: true, remote: (await repo()).remote });
         } catch (e) {
           console.warn("[playground] failed to load presets/runs", e);
-          set({ hydrated: true, remote: repo().remote });
+          set({ hydrated: true, remote: (await repo()).remote });
         }
       },
 
@@ -149,7 +149,7 @@ export const usePlaygroundStore = create<PlaygroundState>()(
         };
         set((s) => ({ presets: [preset, ...s.presets] }));
         try {
-          await repo().savePreset(preset);
+          await (await repo()).savePreset(preset);
         } catch (e) {
           console.warn("[playground] failed to save preset", e);
         }
@@ -164,7 +164,7 @@ export const usePlaygroundStore = create<PlaygroundState>()(
       async deletePreset(id) {
         set((s) => ({ presets: s.presets.filter((p) => p.id !== id) }));
         try {
-          await repo().deletePreset(id);
+          await (await repo()).deletePreset(id);
         } catch (e) {
           console.warn("[playground] failed to delete preset", e);
         }
@@ -173,7 +173,7 @@ export const usePlaygroundStore = create<PlaygroundState>()(
       async recordRun(r) {
         set((s) => ({ runs: [r, ...s.runs].slice(0, 200) }));
         try {
-          await repo().addRun(r);
+          await (await repo()).addRun(r);
         } catch (e) {
           console.warn("[playground] failed to record run", e);
         }
@@ -187,7 +187,7 @@ export const usePlaygroundStore = create<PlaygroundState>()(
           runs: s.runs.map((r) => (r.id === id ? { ...r, starred } : r)),
         }));
         try {
-          await repo().updateRun(id, { starred });
+          await (await repo()).updateRun(id, { starred });
         } catch (e) {
           console.warn("[playground] failed to star run", e);
         }
@@ -198,7 +198,7 @@ export const usePlaygroundStore = create<PlaygroundState>()(
           runs: s.runs.map((r) => (r.id === id ? { ...r, note } : r)),
         }));
         try {
-          await repo().updateRun(id, { note });
+          await (await repo()).updateRun(id, { note });
         } catch (e) {
           console.warn("[playground] failed to set note", e);
         }
@@ -207,7 +207,7 @@ export const usePlaygroundStore = create<PlaygroundState>()(
       async deleteRun(id) {
         set((s) => ({ runs: s.runs.filter((r) => r.id !== id) }));
         try {
-          await repo().deleteRun(id);
+          await (await repo()).deleteRun(id);
         } catch (e) {
           console.warn("[playground] failed to delete run", e);
         }
@@ -216,7 +216,7 @@ export const usePlaygroundStore = create<PlaygroundState>()(
       async clearRuns() {
         set((s) => ({ runs: s.runs.filter((r) => r.starred) }));
         try {
-          await repo().clearRuns();
+          await (await repo()).clearRuns();
         } catch (e) {
           console.warn("[playground] failed to clear runs", e);
         }

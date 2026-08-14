@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { measureHealth, shouldSuggestSummarize, buildContinuationSummary } from "./health";
+import {
+  measureHealth,
+  messageChars,
+  shouldSuggestSummarize,
+} from "./health";
 import { estimateTokens } from "@/lib/engine/context";
 import type { ChatMessage } from "./types";
 
@@ -82,31 +86,69 @@ describe("shouldSuggestSummarize", () => {
   });
 });
 
-describe("buildContinuationSummary", () => {
-  it("includes pinned messages verbatim", () => {
-    const messages = [
-      msg("user", "Important context", { pinned: true }),
-      msg("assistant", "Noted"),
-      msg("user", "Follow up"),
-      msg("assistant", "Sure"),
-    ];
-    const summary = buildContinuationSummary(messages);
-    expect(summary).toContain("Important context");
-    expect(summary).toContain("Pinned context");
+/**
+ * What the meter counts, and what it deliberately does not.
+ *
+ * The rule is "whatever `toRouterMessages` puts in the request" — narrower than
+ * a `ChatMessage` carries. Getting this wrong is invisible in both directions:
+ * counting too little overflows the window, counting too much folds a
+ * conversation that had room left.
+ */
+describe("what counts toward the window", () => {
+  const attach = (over: Partial<{ kind: string; text: string; name: string }>) => ({
+    id: "a1",
+    name: "notes.txt",
+    kind: "text",
+    mime: "text/plain",
+    size: 10,
+    ...over,
+  }) as NonNullable<ChatMessage["attachments"]>[number];
+
+  it("counts attachment text, which is inlined into the user turn", () => {
+    // A 200KB PDF is 200KB of context. The meter could not see it before.
+    const body = "z".repeat(4000);
+    const bare = messageChars(msg("user", "hi"));
+    const withFile = messageChars(msg("user", "hi", { attachments: [attach({ text: body })] }));
+    expect(withFile - bare).toBeGreaterThan(body.length);
   });
 
-  it("includes recent messages", () => {
-    const messages = Array.from({ length: 10 }, (_, i) =>
-      msg(i % 2 === 0 ? "user" : "assistant", `Message ${i}`),
-    );
-    const summary = buildContinuationSummary(messages);
-    expect(summary).toContain("Message 9");
-    expect(summary).toContain("Recent messages");
+  it("ignores an image attachment, whose cost is tiles and not characters", () => {
+    const withImage = msg("user", "hi", {
+      attachments: [attach({ kind: "image", text: "z".repeat(4000) })],
+    });
+    expect(messageChars(withImage)).toBe(messageChars(msg("user", "hi")));
   });
 
-  it("returns non-empty string for minimal input", () => {
+  it("ignores reasoning and tool calls, which are never re-sent", () => {
+    // An assistant turn goes back as `{ role, content }` alone. Counting the
+    // thinking and the tool traffic would inflate every agentic conversation.
+    const noisy = msg("assistant", "done", {
+      reasoning: "r".repeat(50_000),
+      toolCalls: [{ id: "t1", name: "web_search", arguments: "{}", result: "x".repeat(50_000) }],
+    });
+    expect(messageChars(noisy)).toBe(messageChars(msg("assistant", "done")));
+  });
+
+  it("counts the system prompt", () => {
     const messages = [msg("user", "hi")];
-    const summary = buildContinuationSummary(messages);
-    expect(summary.length).toBeGreaterThan(0);
+    const without = measureHealth(messages, "some-model").estimatedTokens;
+    const withSystem = measureHealth(messages, "some-model", 24_000).estimatedTokens;
+    expect(withSystem - without).toBe(6_000);
+  });
+
+  it("can move a conversation from ok into warning on its own", () => {
+    // The point of the change: an 8k model with a full prompt has most of its
+    // window already spent before the first message.
+    const messages = [msg("user", "x".repeat(2_000))];
+    expect(measureHealth(messages, "tiny", 0).usage).toBeLessThan(
+      measureHealth(messages, "tiny", 24_000).usage,
+    );
+  });
+
+  it("defaults the system prompt to zero so existing callers are unchanged", () => {
+    const messages = [msg("user", "hello")];
+    expect(measureHealth(messages, "some-model").estimatedTokens).toBe(
+      measureHealth(messages, "some-model", 0).estimatedTokens,
+    );
   });
 });

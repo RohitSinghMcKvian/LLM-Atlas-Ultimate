@@ -34,9 +34,9 @@ import { cn } from "@/lib/utils";
  */
 
 const ACCENT_GLOW: Record<Accent, string> = {
-  cyan: "from-cyan/[0.16]",
-  violet: "from-violet/[0.16]",
-  amber: "from-amber/[0.14]",
+  ridge: "from-elev-4/[0.14]",
+  shelf: "from-elev-1/[0.14]",
+  upland: "from-elev-3/[0.12]",
 };
 
 export function LessonView({
@@ -106,12 +106,12 @@ export function LessonView({
                 aria-hidden
                 className={cn(
                   "pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent",
-                  ACCENT_GLOW[track?.accent ?? "cyan"],
+                  ACCENT_GLOW[track?.accent ?? "ridge"],
                 )}
               />
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 bg-grid-fade opacity-40"
+                className="pointer-events-none absolute inset-0 bg-graticule opacity-40"
               />
 
               <div className="relative">
@@ -119,7 +119,7 @@ export function LessonView({
                   aria-label="Breadcrumb"
                   className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs"
                 >
-                  <span className="font-semibold uppercase tracking-[0.16em] text-cyan">
+                  <span className="font-semibold uppercase tracking-[0.16em] text-action">
                     {track?.title}
                   </span>
                   {indexInTrack > 0 && (
@@ -157,7 +157,7 @@ export function LessonView({
                 <h1 className="font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
                   {lesson.title}
                 </h1>
-                <p className="mt-2 max-w-[60ch] text-[15px] leading-relaxed text-muted-foreground">
+                <p className="mt-2 max-w-[60ch] text-body leading-relaxed text-muted-foreground">
                   {lesson.summary}
                 </p>
 
@@ -168,7 +168,7 @@ export function LessonView({
                   </Chip>
                   <Chip>{DIFFICULTY_LABEL[lesson.difficulty]}</Chip>
                   <Chip>
-                    <Sparkles className="size-3 text-cyan" />
+                    <Sparkles className="size-3 text-action" />
                     {
                       lesson.blocks.filter((b) =>
                         ["viz", "figure", "annotated", "live"].includes(b.type),
@@ -189,11 +189,11 @@ export function LessonView({
             <div className="px-5 pt-6 sm:px-8">
               <div
                 className={cn(
-                  "rounded-2xl border border-cyan/25 bg-gradient-primary-soft p-4",
+                  "rounded-2xl border border-action/25 bg-action/10 p-4",
                   measure,
                 )}
               >
-                <p className="mb-2 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-cyan">
+                <p className="mb-2 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-action">
                   <Target className="size-3.5" />
                   By the end you can
                 </p>
@@ -203,7 +203,7 @@ export function LessonView({
                       key={o}
                       className="flex gap-2 text-sm leading-relaxed text-foreground/90"
                     >
-                      <Check className="mt-0.5 size-3.5 shrink-0 text-cyan" />
+                      <Check className="mt-0.5 size-3.5 shrink-0 text-action" />
                       {o}
                     </li>
                   ))}
@@ -316,11 +316,11 @@ export function LessonView({
                 onChange={(e) => onNote(e.target.value)}
                 rows={7}
                 placeholder="Saved locally as you type…"
-                className="w-full resize-y rounded-lg border border-border bg-surface-2/50 p-2 text-xs leading-relaxed outline-none transition-colors focus:border-cyan/40"
+                className="w-full resize-y rounded-lg border border-border bg-surface-2/50 p-2 text-xs leading-relaxed outline-none transition-colors focus:border-action/40"
               />
             </div>
 
-            <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
+            <p className="px-1 text-2xs leading-relaxed text-muted-foreground">
               Press{" "}
               <kbd className="rounded border border-border bg-surface-2 px-1">
                 [
@@ -451,7 +451,7 @@ export function ReadingProgress() {
   return (
     <div className="fixed inset-x-0 top-0 z-40 h-0.5 bg-transparent">
       <div
-        className="h-full bg-gradient-primary transition-[width] duration-100"
+        className="h-full bg-action transition-[width] duration-100"
         style={{ width: `${pct}%` }}
       />
     </div>

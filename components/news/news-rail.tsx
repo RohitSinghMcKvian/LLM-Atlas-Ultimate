@@ -27,8 +27,8 @@ const DIFF_STYLE = {
   price_change: {
     icon: TrendingDown,
     label: "Price change",
-    accent: "text-cyan",
-    border: "border-l-cyan",
+    accent: "text-action",
+    border: "border-l-action",
   },
   deprecation: {
     icon: AlertTriangle,
@@ -128,7 +128,7 @@ export function NewsRail({
                 <Link
                   key={id}
                   href={`/compare?models=${encodeURIComponent(id)}`}
-                  className="rounded-md border border-cyan/25 bg-cyan/5 px-2 py-1 text-2xs text-cyan transition-colors hover:bg-cyan/15"
+                  className="rounded-md border border-action/25 bg-action/5 px-2 py-1 text-2xs text-action transition-colors hover:bg-action/15"
                 >
                   {model?.name ?? id}
                 </Link>
@@ -155,7 +155,7 @@ export function NewsRail({
                   />
                   <span className="min-w-0 flex-1 truncate">{source.name}</span>
                   {source.tier === "first_party" && (
-                    <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px]">
+                    <Badge variant="outline" className="shrink-0 px-1 py-0 text-2xs">
                       1st
                     </Badge>
                   )}

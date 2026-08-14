@@ -48,7 +48,7 @@ export function ConnectKeyDialog() {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="mb-1 flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-xl bg-violet/15 text-[rgb(167_139_250)]">
+            <span className="grid size-9 place-items-center rounded-xl bg-accent/15 text-accent">
               <KeyRound className="size-4" />
             </span>
             <DialogTitle>Connect your OpenRouter key</DialogTitle>
@@ -60,7 +60,7 @@ export function ConnectKeyDialog() {
               href="https://openrouter.ai/keys"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-0.5 text-cyan hover:underline"
+              className="inline-flex items-center gap-0.5 text-action hover:underline"
             >
               OpenRouter key <ExternalLink className="size-3" />
             </a>
@@ -133,7 +133,9 @@ export function ConnectKeyDialog() {
 /** Small badge/button that opens the dialog and reflects connection state. */
 export function ConnectKeyButton({ className }: { className?: string }) {
   const setOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const connected = useKeysStore((s) => s.openrouterKey.length > 0);
+  // `keyPresent`, not `openrouterKey`: the key itself is decrypted async, and
+  // this badge only needs to know whether one exists.
+  const connected = useKeysStore((s) => s.keyPresent);
   return (
     <button
       onClick={() => setOpen(true)}

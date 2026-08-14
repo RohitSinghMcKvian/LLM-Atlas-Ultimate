@@ -204,9 +204,9 @@ const TONES: Record<
   },
   insight: {
     icon: Sparkles,
-    border: "border-cyan/30",
-    bg: "bg-gradient-primary-soft",
-    text: "text-cyan",
+    border: "border-action/30",
+    bg: "bg-action/10",
+    text: "text-action",
   },
   warn: {
     icon: TriangleAlert,
@@ -227,9 +227,9 @@ const TONES: Record<
    */
   plain: {
     icon: Lightbulb,
-    border: "border-violet/35",
-    bg: "bg-violet/[0.06]",
-    text: "text-violet",
+    border: "border-accent/35",
+    bg: "bg-accent/[0.06]",
+    text: "text-accent",
     eyebrow: "In plain English",
   },
 };
@@ -298,7 +298,7 @@ function CodeBlock({
   return (
     <figure className="not-prose overflow-hidden rounded-2xl border border-border bg-[rgb(var(--surface-2))]">
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span className="font-mono text-2xs uppercase tracking-wider text-muted-foreground">
           {lang}
         </span>
         {caption && (
@@ -318,7 +318,7 @@ function CodeBlock({
           )}
         </button>
       </div>
-      <pre className="overflow-x-auto p-3.5 font-mono text-[12.5px] leading-[1.65] text-foreground/85">
+      <pre className="overflow-x-auto p-3.5 font-mono text-xs leading-[1.65] text-foreground/85">
         <code>{code}</code>
       </pre>
     </figure>
@@ -401,7 +401,7 @@ function StepList({
       <ol className="relative space-y-3 border-l border-border pl-5">
         {steps.map((s, i) => (
           <li key={i} className="relative">
-            <span className="absolute -left-[1.6rem] top-0.5 grid size-5 place-items-center rounded-full border border-cyan/40 bg-surface text-[10px] font-semibold text-cyan">
+            <span className="absolute -left-[1.6rem] top-0.5 grid size-5 place-items-center rounded-full border border-action/40 bg-surface text-2xs font-semibold text-action">
               {i + 1}
             </span>
             <p className="text-sm font-medium">{s.title}</p>
@@ -440,7 +440,7 @@ function KeyTermList({
   return (
     <div className="not-prose overflow-hidden rounded-2xl border border-border bg-surface-2/40">
       <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-        <BookMarked className="size-3.5 text-violet" aria-hidden />
+        <BookMarked className="size-3.5 text-accent" aria-hidden />
         <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Key terms
         </p>
@@ -483,7 +483,7 @@ function KeyTermList({
         <dl className="space-y-2 p-4">
           {terms.map((t) => (
             <div key={t.term} className="sm:flex sm:gap-3">
-              <dt className="shrink-0 font-mono text-xs font-semibold text-cyan sm:w-40">
+              <dt className="shrink-0 font-mono text-xs font-semibold text-action sm:w-40">
                 {t.term}
               </dt>
               <dd className="text-xs leading-relaxed text-foreground/80">
@@ -554,7 +554,7 @@ function Flashcards({
       <div className="mb-2 flex items-center gap-2">
         <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-3">
           <div
-            className="h-full rounded-full bg-gradient-primary transition-[width] duration-300"
+            className="h-full rounded-full bg-action transition-[width] duration-300"
             style={{ width: `${(answered / terms.length) * 100}%` }}
           />
         </div>
@@ -566,7 +566,7 @@ function Flashcards({
       <button
         onClick={() => setFlipped((f) => !f)}
         aria-expanded={flipped}
-        className="grid min-h-[7rem] w-full place-items-center rounded-xl border border-violet/30 bg-gradient-primary-soft px-4 py-5 text-center transition-colors hover:border-violet/50"
+        className="grid min-h-[7rem] w-full place-items-center rounded-xl border border-accent/30 bg-action/10 px-4 py-5 text-center transition-colors hover:border-accent/50"
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
@@ -583,7 +583,7 @@ function Flashcards({
               </span>
             ) : (
               <>
-                <span className="block font-mono text-lg font-semibold text-cyan">
+                <span className="block font-mono text-lg font-semibold text-action">
                   {term.term}
                 </span>
                 <span className="mt-1 block text-2xs text-muted-foreground">

@@ -10,6 +10,8 @@ import {
   putNode,
   patchNode,
   treeFromList,
+  activeFromLeaf,
+  pathTo,
   type Tree,
 } from "./tree";
 import type { ChatMessage } from "./types";
@@ -220,5 +222,84 @@ describe("caching does not leak between distinct node maps", () => {
     expect(activePath(t)).toEqual(activePath(t));
     expect(siblingsOf(t, "b1")).toEqual(siblingsOf(t, "b1"));
     expect(childrenMap(t.nodes).get("a")).toEqual(["b1", "b2"]);
+  });
+});
+
+// ── activeFromLeaf ──────────────────────────────────────────────────────────
+// The persisted branch pointer: one leaf id must be enough to restore the whole
+// visible path across a reload or another device.
+
+describe("activeFromLeaf", () => {
+  const nodes = treeOf(
+    msg("root", null, 1),
+    msg("a", "root", 2),
+    msg("b", "root", 3),
+    msg("a1", "a", 4),
+    msg("b1", "b", 5),
+  ).nodes;
+
+  it("restores a non-default branch that activePath would otherwise skip", () => {
+    // "b" is the newest child of root, so without a pointer the path follows it.
+    expect(activePath({ nodes, active: {} }).map((m) => m.id)).toEqual(["root", "b", "b1"]);
+    const active = activeFromLeaf(nodes, "a1");
+    expect(activePath({ nodes, active }).map((m) => m.id)).toEqual(["root", "a", "a1"]);
+  });
+
+  it("names one child at every level from the leaf up", () => {
+    expect(activeFromLeaf(nodes, "a1")).toEqual({ [ROOT]: "root", root: "a", a: "a1" });
+  });
+
+  it("falls back to newest-child for an unknown leaf", () => {
+    expect(activeFromLeaf(nodes, "does-not-exist")).toEqual({});
+    expect(activeFromLeaf(nodes, null)).toEqual({});
+    expect(activeFromLeaf(nodes, undefined)).toEqual({});
+  });
+
+  it("round-trips with activeLeafId", () => {
+    const active = activeFromLeaf(nodes, "a1");
+    expect(activeLeafId({ nodes, active })).toBe("a1");
+  });
+
+  it("terminates on a cyclic parent chain", () => {
+    const cyclic: Record<string, ChatMessage> = {
+      x: { ...msg("x", "y", 1) },
+      y: { ...msg("y", "x", 2) },
+    };
+    expect(() => activeFromLeaf(cyclic, "x")).not.toThrow();
+  });
+});
+
+// ── pathTo ──────────────────────────────────────────────────────────────────
+
+describe("pathTo", () => {
+  const nodes = treeOf(
+    msg("root", null, 1),
+    msg("a", "root", 2),
+    msg("b", "root", 3),
+    msg("a1", "a", 4),
+  ).nodes;
+
+  it("returns root-first history along the node's own branch", () => {
+    expect(pathTo(nodes, "a1").map((m) => m.id)).toEqual(["root", "a", "a1"]);
+  });
+
+  it("excludes messages on sibling branches", () => {
+    expect(pathTo(nodes, "a1").map((m) => m.id)).not.toContain("b");
+  });
+
+  it("returns just the node for a root", () => {
+    expect(pathTo(nodes, "root").map((m) => m.id)).toEqual(["root"]);
+  });
+
+  it("returns empty for an unknown id", () => {
+    expect(pathTo(nodes, "ghost")).toEqual([]);
+  });
+
+  it("terminates on a cyclic parent chain", () => {
+    const cyclic: Record<string, ChatMessage> = {
+      x: { ...msg("x", "y", 1) },
+      y: { ...msg("y", "x", 2) },
+    };
+    expect(() => pathTo(cyclic, "x")).not.toThrow();
   });
 });

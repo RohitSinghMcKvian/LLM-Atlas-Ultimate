@@ -4,32 +4,127 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The Atlas mark — a constellation tracing an "A" / star-compass.
+ * The Atlas mark — a contour summit.
  *
- * Designed to read cleanly on both light and dark surfaces:
- *   • A rounded-square backing plate carries a soft brand tint that's
- *     brighter in light mode (so the mark doesn't disappear on white)
- *     and deeper in dark mode (so the glow feels luminous).
- *   • Strokes and nodes always ride the brand gradient, so the shape
- *     is unmistakable regardless of theme.
+ * Three nested contour lines around a peak, drawn the way a topographic sheet
+ * draws one: closed at the datum, packed tight on the steep west face and
+ * spread wide across the eastern shoulder, with a benchmark tick at the spot
+ * height. It reads as an "A" because a summit and a capital A are the same
+ * shape, which is the whole point — the name is doing the work, not a
+ * decoration bolted onto it.
+ *
+ * Colour discipline follows the rest of the system: the two outer contours
+ * take `currentColor`, so the mark sits correctly on any surface it is dropped
+ * onto, and only the summit contour and its tick carry the ridge hue.
  */
+
+/** Datum line the contours close against. */
+const DATUM = 25;
+
+/**
+ * One contour line, closing at its own elevation rather than at the datum.
+ *
+ * That distinction is the whole shape. Run every contour down to the ground
+ * and the inner ones come out tall and narrow — a spike, which reads as a
+ * rocket. A contour only exists above the level it traces, so each one here is
+ * a shallow arc sitting on its own `level`, and the three nest the way bands
+ * do on a real sheet.
+ *
+ * The cubics do the rest: outer control points near the level give each flank
+ * a shallow toe slope, inner ones near the apex round the crest over.
+ */
+function contour(
+  level: number,
+  left: number,
+  right: number,
+  apexX: number,
+  apexY: number,
+) {
+  const h = level - apexY;
+  const toe = level - 0.1 * h;
+  const crest = apexY + 0.32 * h;
+  return [
+    `M ${left} ${level}`,
+    `C ${left + 0.3 * (apexX - left)} ${toe},`,
+    `${apexX - 0.34 * (apexX - left)} ${crest},`,
+    `${apexX} ${apexY}`,
+    `C ${apexX + 0.34 * (right - apexX)} ${crest},`,
+    `${right - 0.3 * (right - apexX)} ${toe},`,
+    `${right} ${level}`,
+  ].join(" ");
+}
+
+/**
+ * The three contours, lowest elevation first, at levels 25 / 19 / 13.5.
+ *
+ * Each apex sits a little left of centre, which shortens the west flank
+ * against the east one — contours crowding a cliff on one side and opening out
+ * over a dip slope on the other, rather than a symmetrical triangle.
+ */
+const CONTOURS = [
+  { d: contour(DATUM, 4.5, 27.5, 14.8, 13.8), opacity: 0.28 },
+  { d: contour(19, 8.5, 23.5, 15, 10.5), opacity: 0.5 },
+  { d: contour(13.5, 11.5, 20.7, 15.2, 7.5), opacity: 1 },
+] as const;
+
+/** Below this the outermost contour closes up into mud — drop it. */
+const COLLAPSE_PX = 18;
+
+function Contours({
+  size,
+  className,
+  /** Per-ring animation timing, applied inline. Tailwind's JIT cannot see a
+   *  template-literal arbitrary class, so this has to be a style. */
+  ringStyle,
+}: {
+  size: number;
+  /** Applied to every contour path. */
+  className?: string;
+  ringStyle?: (index: number) => React.CSSProperties;
+}) {
+  const rings = size <= COLLAPSE_PX ? CONTOURS.slice(1) : CONTOURS;
+  const weight = size <= COLLAPSE_PX ? 2.4 : 1.7;
+
+  return (
+    <>
+      {rings.map((ring, i) => {
+        const summit = i === rings.length - 1;
+        return (
+          <path
+            key={ring.d}
+            d={ring.d}
+            pathLength={1}
+            fill="none"
+            strokeLinecap="round"
+            strokeWidth={summit ? weight + 0.2 : weight}
+            strokeOpacity={ring.opacity}
+            style={ringStyle?.(i)}
+            className={cn(
+              summit ? "stroke-[rgb(var(--elev-4))]" : "stroke-current",
+              className,
+            )}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 export function AtlasMark({
   className,
   size = 28,
   /** Drop the backing plate when the caller wants a bare mark
    *  (e.g. inside a coloured pill / avatar bubble). */
   bare = false,
+  /** Trace the contours outward on mount. Off by default — the mark appears in
+   *  18 places and animating all of them would be noise. */
+  draw = false,
 }: {
   className?: string;
   size?: number;
   bare?: boolean;
+  draw?: boolean;
 }) {
-  const uid = React.useId().replace(/:/g, "");
-  const gStroke = `mark-stroke-${uid}`;
-  const gPlate = `mark-plate-${uid}`;
-  const gGlow = `mark-glow-${uid}`;
-  const gApex = `mark-apex-${uid}`;
-
   return (
     <svg
       width={size}
@@ -39,93 +134,43 @@ export function AtlasMark({
       className={cn("shrink-0", className)}
       aria-hidden="true"
     >
-      <defs>
-        {/* Brand gradient — cyan → violet, used for lines & nodes */}
-        <linearGradient id={gStroke} x1="4" y1="4" x2="28" y2="28">
-          <stop offset="0%" stopColor="#22D3EE" />
-          <stop offset="55%" stopColor="#6366F1" />
-          <stop offset="100%" stopColor="#7C3AED" />
-        </linearGradient>
-
-        {/* Backing plate — subtle, theme-adaptive tint */}
-        <linearGradient id={gPlate} x1="0" y1="0" x2="32" y2="32">
-          <stop offset="0%" stopColor="#22D3EE" stopOpacity="0.14" />
-          <stop offset="100%" stopColor="#7C3AED" stopOpacity="0.14" />
-        </linearGradient>
-
-        {/* Inner luminance behind the apex star */}
-        <radialGradient id={gGlow} cx="50%" cy="42%" r="55%">
-          <stop offset="0%" stopColor="#22D3EE" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#22D3EE" stopOpacity="0" />
-        </radialGradient>
-
-        {/* Apex node — extra bright */}
-        <radialGradient id={gApex} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#FFFFFF" />
-          <stop offset="45%" stopColor="#67E8F9" />
-          <stop offset="100%" stopColor="#22D3EE" />
-        </radialGradient>
-      </defs>
-
       {!bare && (
-        <>
-          {/* Backing plate — rounded square, sits behind everything */}
-          <rect
-            x="1"
-            y="1"
-            width="30"
-            height="30"
-            rx="8"
-            fill={`url(#${gPlate})`}
-            stroke="currentColor"
-            strokeOpacity="0.14"
-            strokeWidth="1"
-          />
-          {/* Inner glow */}
-          <circle cx="16" cy="14" r="11" fill={`url(#${gGlow})`} />
-        </>
+        <rect
+          x="1"
+          y="1"
+          width="30"
+          height="30"
+          rx="8"
+          className="fill-[rgb(var(--surface-2))] stroke-current"
+          strokeOpacity="0.12"
+          strokeWidth="1"
+        />
       )}
 
-      {/* Constellation edges — the "A" */}
-      <g
-        stroke={`url(#${gStroke})`}
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      >
-        {/* Left leg */}
-        <path d="M16 5 L6.5 26.5" />
-        {/* Right leg */}
-        <path d="M16 5 L25.5 26.5" />
-        {/* Crossbar */}
-        <path d="M10.5 18.5 L21.5 18.5" />
-        {/* Thin plumb line from apex to crossbar (subtle) */}
-        <path d="M16 5 L16 18.5" strokeOpacity="0.35" strokeWidth="1.1" />
-      </g>
+      {/* Datum — the elevation the contours are measured from. */}
+      {size > COLLAPSE_PX && (
+        <path
+          d={`M 5 ${DATUM} H 27`}
+          className="stroke-current"
+          strokeOpacity="0.22"
+          strokeWidth="1"
+          strokeLinecap="round"
+        />
+      )}
 
-      {/* Nodes */}
-      <g fill={`url(#${gStroke})`}>
-        <circle cx="6.5" cy="26.5" r="2.1" />
-        <circle cx="25.5" cy="26.5" r="2.1" />
-        <circle cx="10.5" cy="18.5" r="1.5" />
-        <circle cx="21.5" cy="18.5" r="1.5" />
-      </g>
-
-      {/* Apex node — the North Star */}
-      <circle cx="16" cy="5" r="3.1" fill={`url(#${gApex})`} />
-      <circle
-        cx="16"
-        cy="5"
-        r="3.1"
-        fill="none"
-        stroke="#FFFFFF"
-        strokeOpacity="0.55"
-        strokeWidth="0.7"
+      <Contours
+        size={size}
+        className={draw ? "atlas-mark-draw" : undefined}
+        ringStyle={draw ? (i) => ({ animationDelay: `${i * 90}ms` }) : undefined}
       />
 
-      {/* Midpoint star on the crossbar */}
-      <circle cx="16" cy="18.5" r="1.3" fill="#FFFFFF" fillOpacity="0.9" />
+      {/* Spot height — the benchmark itself, marking the summit. */}
+      <circle
+        cx="15.2"
+        cy="7.5"
+        r={size <= COLLAPSE_PX ? 2.4 : 1.6}
+        className="fill-[rgb(var(--elev-4))]"
+      />
     </svg>
   );
 }
@@ -133,11 +178,10 @@ export function AtlasMark({
 /**
  * Loading variant of the Atlas mark.
  *
- * Layers on top of the same constellation:
- *   • A rotating conic sweep behind the plate.
- *   • A dashed orbit ring that spins around the mark.
- *   • Staggered pulses on the outer nodes.
- * All animation is suppressed under `prefers-reduced-motion`.
+ * The contours swell outward in sequence, each a beat behind the one inside
+ * it, so the peak reads as rising rather than blinking. Animation is suppressed
+ * under `prefers-reduced-motion` by the blanket rule in globals.css, which
+ * leaves the static mark behind — still legible, just still.
  */
 export function AtlasMarkLoading({
   className,
@@ -149,88 +193,28 @@ export function AtlasMarkLoading({
   size?: number;
   speed?: number;
 }) {
-  const uid = React.useId().replace(/:/g, "");
-  const spin = `${1.8 / speed}s`;
-  const pulse = `${1.4 / speed}s`;
-  const sweep = `${2.6 / speed}s`;
+  const periodMs = 1800 / speed;
 
   return (
-    <span
-      className={cn("relative inline-flex", className)}
-      style={{ width: size, height: size }}
-      aria-label="Loading"
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      className={cn("shrink-0", className)}
       role="status"
+      aria-label="Loading"
     >
-      {/* Rotating conic backing — soft, sits behind the mark */}
-      <span
-        className="atlas-loading-conic absolute inset-0 rounded-[26%] opacity-70 motion-reduce:hidden"
-        style={{ animationDuration: sweep }}
-        aria-hidden
+      <Contours
+        size={size}
+        className="atlas-mark-breathe"
+        ringStyle={(i) => ({
+          animationDuration: `${periodMs}ms`,
+          animationDelay: `${Math.round((periodMs / 7) * i)}ms`,
+        })}
       />
-
-      {/* Static mark on top */}
-      <AtlasMark size={size} className="relative z-10" />
-
-      {/* Orbit ring — dashed, spins */}
-      <svg
-        className="absolute inset-0 z-20 motion-reduce:hidden"
-        width={size}
-        height={size}
-        viewBox="0 0 32 32"
-        fill="none"
-        aria-hidden
-      >
-        <circle
-          cx="16"
-          cy="16"
-          r="14"
-          stroke="currentColor"
-          strokeOpacity="0.35"
-          strokeWidth="1"
-          strokeDasharray="2 4"
-          strokeLinecap="round"
-          className="atlas-loading-orbit"
-          style={{
-            animationDuration: spin,
-            transformOrigin: "16px 16px",
-          }}
-        />
-      </svg>
-
-      {/* Pulsing outer nodes — draw on top so they read on the plate */}
-      <svg
-        className="absolute inset-0 z-30 motion-reduce:hidden"
-        width={size}
-        height={size}
-        viewBox="0 0 32 32"
-        fill="none"
-        aria-hidden
-      >
-        <g fill="#22D3EE">
-          <circle
-            cx="6.5"
-            cy="26.5"
-            r="2.1"
-            className="atlas-loading-pulse"
-            style={{ animationDuration: pulse, animationDelay: "0s" }}
-          />
-          <circle
-            cx="25.5"
-            cy="26.5"
-            r="2.1"
-            className="atlas-loading-pulse"
-            style={{ animationDuration: pulse, animationDelay: `${0.35 / speed}s` }}
-          />
-          <circle
-            cx="16"
-            cy="5"
-            r="3.1"
-            className="atlas-loading-pulse"
-            style={{ animationDuration: pulse, animationDelay: `${0.7 / speed}s` }}
-          />
-        </g>
-      </svg>
-    </span>
+      <circle cx="15.2" cy="7.5" r={1.6} className="fill-[rgb(var(--elev-4))]" />
+    </svg>
   );
 }
 
@@ -242,7 +226,7 @@ export function Wordmark({ className }: { className?: string }) {
         className,
       )}
     >
-      LLM&nbsp;<span className="text-gradient">Atlas</span>
+      LLM&nbsp;Atlas
     </span>
   );
 }

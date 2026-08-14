@@ -29,7 +29,7 @@ export function PreviewCompare() {
   return (
     <div className="rounded-2xl border border-border bg-surface/60 p-4 shadow-glow">
       <div className="mb-3 flex items-center gap-2 rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-xs text-muted-foreground">
-        <GitCompareArrows className="size-3.5 text-cyan" />
+        <GitCompareArrows className="size-3.5 text-action" />
         Compare across models…
       </div>
       <div className="grid grid-cols-3 gap-2">
@@ -40,7 +40,7 @@ export function PreviewCompare() {
           >
             <div className="flex items-center justify-between">
               <span className="text-2xs font-medium">{c}</span>
-              <span className="size-1.5 animate-pulse-dot rounded-full bg-cyan" />
+              <span className="size-1.5 animate-pulse-dot rounded-full bg-action" />
             </div>
             {[0, 1, 2, 3].map((j) => (
               <motion.div
@@ -56,7 +56,7 @@ export function PreviewCompare() {
                   repeat: reduce ? 0 : Infinity,
                   delay: i * 0.25 + j * 0.3,
                 }}
-                className="h-1.5 origin-left rounded-full bg-gradient-to-r from-cyan/60 to-violet/40"
+                className="h-1.5 origin-left rounded-full bg-gradient-to-r from-action/60 to-accent/40"
               />
             ))}
           </div>
@@ -66,9 +66,9 @@ export function PreviewCompare() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
-        className="mt-3 rounded-xl border border-cyan/30 bg-gradient-primary-soft p-2.5"
+        className="mt-3 rounded-xl border border-action/30 bg-action/10 p-2.5"
       >
-        <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-semibold text-cyan">
+        <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-semibold text-action">
           <GitCompareArrows className="size-3" /> Synthesis
         </div>
         <div className="space-y-1.5">
@@ -113,7 +113,7 @@ export function PreviewBrainTrace() {
                 className={cn(
                   "grid size-7 shrink-0 place-items-center rounded-lg border transition-colors",
                   active
-                    ? "border-cyan/40 bg-cyan/10 text-cyan"
+                    ? "border-action/40 bg-action/10 text-action"
                     : "border-border bg-surface-2 text-muted-foreground/50",
                 )}
               >
@@ -134,14 +134,14 @@ export function PreviewBrainTrace() {
                     {s.label}
                   </span>
                   {isParallel && (
-                    <span className="rounded bg-violet/15 px-1 text-[9px] uppercase text-[#A78BFA]">
+                    <span className="rounded bg-accent/15 px-1 text-2xs uppercase text-accent">
                       parallel
                     </span>
                   )}
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-primary"
+                    className="h-full rounded-full bg-action"
                     initial={{ width: "0%" }}
                     animate={{ width: active ? "100%" : "0%" }}
                     transition={{ duration: 0.6 }}
@@ -161,10 +161,10 @@ export function PreviewBrainTrace() {
 
 /* --------------------------- Leaderboard FLIP ----------------------------- */
 const LB = [
-  { name: "Claude 3.7", color: "from-cyan to-violet" },
-  { name: "DeepSeek R1", color: "from-violet to-cyan" },
-  { name: "Gemini 2.0", color: "from-cyan/80 to-violet/70" },
-  { name: "Llama 3.3", color: "from-amber/70 to-cyan/70" },
+  { name: "Claude 3.7", color: "from-action to-accent" },
+  { name: "DeepSeek R1", color: "from-accent to-action" },
+  { name: "Gemini 2.0", color: "from-action/80 to-accent/70" },
+  { name: "Llama 3.3", color: "from-amber/70 to-action/70" },
 ];
 
 export function PreviewLeaderboard() {
@@ -259,9 +259,9 @@ export function PreviewCost() {
           budget ${Math.round(budget * 40)}
         </span>
       </div>
-      <div className="relative h-40 overflow-hidden rounded-xl border border-border bg-[#0b0d14]">
+      <div className="relative h-40 overflow-hidden rounded-xl border border-border bg-code">
         {/* grid */}
-        <div className="absolute inset-0 bg-grid-fade opacity-30" />
+        <div className="absolute inset-0 bg-graticule opacity-30" />
         {/* budget line */}
         <motion.div
           className="absolute inset-y-0 w-px bg-amber/60"
@@ -274,15 +274,14 @@ export function PreviewCost() {
               key={i}
               className={cn(
                 "absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors",
-                d.open ? "bg-cyan" : "bg-[#A78BFA]",
+                // Open on the shelf, closed on the ridge, matching the hero
+                // plot and the real cost chart this previews.
+                d.open ? "bg-accent" : "bg-action",
               )}
               style={{ left: `${d.x}%`, top: `${d.y}%` }}
               animate={{
                 scale: within ? 1.35 : 1,
                 opacity: within ? 1 : 0.4,
-                boxShadow: within
-                  ? "0 0 12px 2px rgba(34,211,238,0.5)"
-                  : "0 0 0 0 transparent",
               }}
             />
           );
@@ -290,12 +289,12 @@ export function PreviewCost() {
       </div>
       <div className="mt-2 flex gap-3 text-2xs text-muted-foreground">
         <span className="inline-flex items-center gap-1">
-          <span className="size-2 rounded-full bg-cyan" /> Open
+          <span className="size-2 rounded-full bg-accent" /> Open
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="size-2 rounded-full bg-[#A78BFA]" /> Closed
+          <span className="size-2 rounded-full bg-action" /> Closed
         </span>
-        <span className="ml-auto">within budget glows</span>
+        <span className="ml-auto">within budget stands out</span>
       </div>
     </div>
   );

@@ -166,7 +166,7 @@ export function ChunkingViz() {
           max={160}
           step={10}
           format={(v) => `${v} chars`}
-          accent="amber"
+          accent = "upland"
         />
       </div>
 
@@ -175,15 +175,15 @@ export function ChunkingViz() {
         <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           {chunks.length} chunks
         </p>
-        <p className="font-mono text-[11.5px] leading-[1.9]">
+        <p className="font-mono text-2xs leading-[1.9]">
           {chunks.map((c, i) => (
             <span
               key={c.index}
               className={cn(
                 "rounded px-0.5 py-px",
                 i % 2 === 0
-                  ? "bg-cyan/[0.13] text-foreground"
-                  : "bg-violet/[0.15] text-foreground",
+                  ? "bg-action/[0.13] text-foreground"
+                  : "bg-accent/[0.15] text-foreground",
               )}
               title={`Chunk ${c.index + 1} · ${c.text.length} chars`}
             >
@@ -230,7 +230,7 @@ export function ChunkingViz() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <VizStat label="Chunks" value={chunks.length} accent="cyan" />
+        <VizStat label="Chunks" value={chunks.length} accent = "ridge" />
         <VizStat
           label="Avg size"
           value={`${Math.round(
@@ -240,7 +240,7 @@ export function ChunkingViz() {
         <VizStat
           label="Top score"
           value={best ? best.score.toFixed(2) : "—"}
-          accent="amber"
+          accent = "upland"
         />
         <VizStat
           label="Answer intact"
@@ -257,19 +257,19 @@ export function ChunkingViz() {
             className={cn(
               "rounded-lg border px-2.5 py-1.5",
               i === 0
-                ? "border-cyan/40 bg-cyan/[0.06]"
+                ? "border-action/40 bg-action/[0.06]"
                 : "border-border bg-surface-2/40",
             )}
           >
             <div className="flex items-baseline gap-2">
-              <span className="font-mono text-2xs text-cyan">
+              <span className="font-mono text-2xs text-action">
                 chunk {row.chunk.index + 1}
               </span>
               <span className="ml-auto shrink-0 font-mono text-2xs tnum text-amber">
                 {row.score.toFixed(2)}
               </span>
             </div>
-            <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-foreground/80">
+            <p className="mt-0.5 line-clamp-2 text-2xs leading-snug text-foreground/80">
               {row.chunk.text}
             </p>
           </li>

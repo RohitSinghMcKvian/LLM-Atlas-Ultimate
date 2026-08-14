@@ -381,7 +381,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
           {/* Conversation */}
           <div className="space-y-3 rounded-2xl border border-border bg-surface/50 p-4">
             <div className="flex items-center gap-2 text-sm font-medium">
-              <MessageSquare className="size-4 text-cyan" /> Conversation
+              <MessageSquare className="size-4 text-action" /> Conversation
             </div>
             <div>
               <Label className="mb-1.5 block text-xs text-muted-foreground">
@@ -391,7 +391,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
                 value={system}
                 onChange={(e) => setConfig({ system: e.target.value })}
                 rows={2}
-                className="w-full resize-none rounded-xl border border-border bg-surface-2/50 p-2.5 text-sm outline-none focus:border-cyan/40"
+                className="w-full resize-none rounded-xl border border-border bg-surface-2/50 p-2.5 text-sm outline-none focus:border-action/40"
               />
             </div>
             {turns.map((t, i) => (
@@ -409,7 +409,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
                       "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-medium",
                       t.role === "user"
                         ? "bg-surface-3 text-foreground"
-                        : "bg-cyan/15 text-cyan",
+                        : "bg-action/15 text-action",
                     )}
                   >
                     {t.role === "user" ? (
@@ -440,7 +440,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
                   placeholder={
                     t.role === "user" ? "User message…" : "Assistant message…"
                   }
-                  className="w-full resize-none rounded-xl border border-border bg-surface-2/50 p-2.5 text-sm outline-none focus:border-cyan/40"
+                  className="w-full resize-none rounded-xl border border-border bg-surface-2/50 p-2.5 text-sm outline-none focus:border-action/40"
                 />
               </div>
             ))}
@@ -457,7 +457,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
           {vars.length > 0 && (
             <div className="space-y-3 rounded-2xl border border-border bg-surface/50 p-4">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <Braces className="size-4 text-violet" /> Variables
+                <Braces className="size-4 text-accent" /> Variables
               </div>
               {vars.map((v) => (
                 <div key={v}>
@@ -468,7 +468,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
                     value={variables[v] ?? ""}
                     onChange={(e) => setVariable(v, e.target.value)}
                     placeholder={`Value for ${v}`}
-                    className="h-9 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 text-sm outline-none focus:border-cyan/40"
+                    className="h-9 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 text-sm outline-none focus:border-action/40"
                   />
                 </div>
               ))}
@@ -493,7 +493,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
           <div className="rounded-2xl border border-border bg-surface/50 p-4">
             <div className="mb-2 flex items-center justify-between">
               <span className="inline-flex items-center gap-2 text-sm font-medium">
-                <Layers className="size-4 text-cyan" /> Models
+                <Layers className="size-4 text-action" /> Models
               </span>
               <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
                 <Coins className="size-3 text-amber" />
@@ -517,7 +517,7 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
                 <PopoverTrigger asChild>
                   <button
                     disabled={running}
-                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground hover:border-cyan hover:text-foreground disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground hover:border-action hover:text-foreground disabled:opacity-50"
                   >
                     <Plus className="size-3" /> Add
                   </button>
@@ -681,7 +681,7 @@ function RunColumn({
           <Dots />
         ) : null}
         {streaming && col.text && (
-          <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-caret-blink bg-cyan align-text-bottom" />
+          <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-caret-blink bg-action align-text-bottom" />
         )}
       </div>
 
@@ -737,7 +737,7 @@ function ParamsPanel({
     <div className="space-y-4 rounded-2xl border border-border bg-surface/50 p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <Settings2 className="size-4 text-cyan" /> Parameters
+          <Settings2 className="size-4 text-action" /> Parameters
         </div>
         <button
           onClick={onReset}
@@ -845,7 +845,7 @@ function ParamsPanel({
                   }}
                   onBlur={addStop}
                   placeholder="Add + Enter"
-                  className="h-7 w-24 rounded-md border border-border bg-surface-2/50 px-2 text-xs outline-none focus:border-cyan/40"
+                  className="h-7 w-24 rounded-md border border-border bg-surface-2/50 px-2 text-xs outline-none focus:border-action/40"
                 />
               )}
             </div>
@@ -863,7 +863,7 @@ function ParamsPanel({
               }
               inputMode="numeric"
               placeholder="e.g. 42"
-              className="h-8 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 font-mono text-xs outline-none focus:border-cyan/40"
+              className="h-8 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 font-mono text-xs outline-none focus:border-action/40"
             />
           </div>
 
@@ -924,7 +924,7 @@ function ToolsPanel({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 text-sm font-medium"
       >
-        <Wrench className={cn("size-4", active ? "text-cyan" : "text-muted-foreground")} />
+        <Wrench className={cn("size-4", active ? "text-action" : "text-muted-foreground")} />
         Tools
         {active && (
           <Badge variant="outline" className="text-2xs">
@@ -947,8 +947,8 @@ function ToolsPanel({
             spellCheck={false}
             placeholder='[{"type":"function","function":{"name":"…"}}]'
             className={cn(
-              "w-full resize-y rounded-xl border bg-[#0b0d14] p-2.5 font-mono text-[12px] leading-relaxed outline-none",
-              error ? "border-danger/50" : "border-border focus:border-cyan/40",
+              "w-full resize-y rounded-xl border bg-code p-2.5 font-mono text-xs leading-relaxed outline-none",
+              error ? "border-danger/50" : "border-border focus:border-action/40",
             )}
           />
           {error ? (
@@ -961,7 +961,7 @@ function ToolsPanel({
               {!toolsJson.trim() && (
                 <button
                   onClick={() => onChange(EXAMPLE_TOOLS)}
-                  className="text-2xs text-cyan hover:underline"
+                  className="text-2xs text-action hover:underline"
                 >
                   Insert example
                 </button>
@@ -1014,7 +1014,7 @@ function PresetsMenu({
               }
             }}
             placeholder="Save current as…"
-            className="h-8 flex-1 rounded-lg border border-border bg-surface-2/50 px-2.5 text-xs outline-none focus:border-cyan/40"
+            className="h-8 flex-1 rounded-lg border border-border bg-surface-2/50 px-2.5 text-xs outline-none focus:border-action/40"
           />
           <Button
             size="sm"
@@ -1101,7 +1101,7 @@ function SaveToLibrary({ onSave }: { onSave: (title: string) => void }) {
               }
             }}
             placeholder="Prompt name…"
-            className="h-8 flex-1 rounded-lg border border-border bg-surface-2/50 px-2.5 text-xs outline-none focus:border-cyan/40"
+            className="h-8 flex-1 rounded-lg border border-border bg-surface-2/50 px-2.5 text-xs outline-none focus:border-action/40"
           />
           <Button
             size="sm"
@@ -1135,8 +1135,8 @@ function StatusPill({ status, ms }: { status: Status; ms?: number }) {
   if (status === "error") return <AlertCircle className="size-4 text-danger" />;
   if (status === "streaming")
     return (
-      <span className="inline-flex items-center gap-1 text-2xs text-cyan">
-        <span className="size-1.5 animate-pulse-dot rounded-full bg-cyan" /> streaming
+      <span className="inline-flex items-center gap-1 text-2xs text-action">
+        <span className="size-1.5 animate-pulse-dot rounded-full bg-action" /> streaming
       </span>
     );
   return null;

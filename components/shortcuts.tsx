@@ -32,6 +32,17 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
       { keys: ["⌘", "⏎"], label: "Send / Run" },
       { keys: ["⇧", "⏎"], label: "Newline" },
       { keys: ["Esc"], label: "Stop streaming" },
+      { keys: ["⌘", "B"], label: "Toggle chat history" },
+    ],
+  },
+  {
+    group: "Resizable panels",
+    items: [
+      { keys: ["Drag"], label: "Resize — grab the divider between panels" },
+      { keys: ["2×"], label: "Double-click a divider to reset it" },
+      { keys: ["←", "→"], label: "Resize a focused divider (⇧ for larger steps)" },
+      { keys: ["Home", "End"], label: "Jump to minimum / maximum" },
+      { keys: ["⏎"], label: "Collapse or expand from a focused divider" },
     ],
   },
   {
@@ -54,6 +65,9 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
       { keys: ["⌘", "⏎"], label: "Run / approve diff" },
       { keys: ["⌘", "⌫"], label: "Reject diff" },
       { keys: ["Esc"], label: "Stop agent" },
+      { keys: ["⌘", "B"], label: "Toggle file explorer" },
+      { keys: ["⌘", "J"], label: "Toggle terminal" },
+      { keys: ["⌘", "I"], label: "Toggle agent panel" },
     ],
   },
 ];
@@ -100,7 +114,7 @@ export function Shortcuts() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Keyboard className="size-4 text-cyan" /> Keyboard shortcuts
+              <Keyboard className="size-4 text-action" /> Keyboard shortcuts
             </DialogTitle>
             <DialogDescription>Move through Atlas without the mouse.</DialogDescription>
           </DialogHeader>

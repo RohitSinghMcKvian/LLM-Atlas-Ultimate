@@ -144,8 +144,10 @@ const FIRST_PARTY: FeedSource[] = [
   {
     id: "google-ai-blog",
     name: "Google — The Keyword (AI)",
-    url: "https://blog.google/technology/ai/rss/",
-    homepage: "https://blog.google/technology/ai/",
+    // Moved under /innovation-and-ai/ in 2026. The old path 301s, and the
+    // fetcher does not follow redirects, so this reported as a dead source.
+    url: "https://blog.google/innovation-and-ai/technology/ai/rss/",
+    homepage: "https://blog.google/innovation-and-ai/technology/ai/",
     tier: "first_party",
     brand: "Google",
     weight: 0.95,

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Inter, Fraunces, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 // The highlight.js theme lives in components/markdown.tsx, next to the
 // rehype-highlight plugin that needs it, so it ships only with the routes that
@@ -13,10 +13,20 @@ const sans = Inter({
   display: "swap",
 });
 
-const display = Space_Grotesk({
+// Display only — Inter still sets every word of body and UI text, so nothing
+// anyone actually reads at length changes face. Fraunces is pinned to a high
+// optical size and the lowest SOFT so headlines read engraved, like the
+// lettering on an atlas plate, rather than as a decorative serif. WONK stays
+// off: its cursive-leaning alternates fight the technical register.
+// Italic is loaded because it is the product's only headline emphasis. The
+// palette has one chrome hue and it belongs to actions, so a highlighted word
+// in a heading earns its emphasis typographically rather than by spending it.
+const display = Fraunces({
   subsets: ["latin"],
   variable: "--font-display",
   display: "swap",
+  style: ["normal", "italic"],
+  axes: ["SOFT", "WONK", "opsz"],
 });
 
 const mono = JetBrains_Mono({
@@ -63,8 +73,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0A0B0F" },
-    { media: "(prefers-color-scheme: light)", color: "#F8F9FC" },
+    { media: "(prefers-color-scheme: dark)", color: "#101112" },
+    { media: "(prefers-color-scheme: light)", color: "#F7F6F4" },
   ],
   width: "device-width",
   initialScale: 1,

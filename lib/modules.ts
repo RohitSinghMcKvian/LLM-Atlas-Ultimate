@@ -18,8 +18,10 @@ import {
   NotebookPen,
 } from "lucide-react";
 
+import type { Accent } from "./accent";
+
 export type ModuleGroup = "Build" | "Research" | "Catalog" | "Learn";
-export type Accent = "cyan" | "violet" | "amber";
+export type { Accent };
 
 export interface ModuleDef {
   id: string;
@@ -37,11 +39,8 @@ export interface ModuleDef {
   flagship?: boolean;
 }
 
-export const ACCENT_HEX: Record<Accent, string> = {
-  cyan: "#22D3EE",
-  violet: "#A78BFA",
-  amber: "#F5A623",
-};
+/** @deprecated Import `ACCENT_RGB` from `lib/accent` — it follows the theme. */
+export { ACCENT_RGB as ACCENT_HEX } from "./accent";
 
 export const MODULES: ModuleDef[] = [
   {
@@ -54,7 +53,7 @@ export const MODULES: ModuleDef[] = [
     href: "/chat",
     icon: MessagesSquare,
     group: "Build",
-    accent: "cyan",
+    accent: "ridge",
     status: "live",
     flagship: true,
   },
@@ -68,7 +67,7 @@ export const MODULES: ModuleDef[] = [
     href: "/code",
     icon: SquareTerminal,
     group: "Build",
-    accent: "violet",
+    accent: "shelf",
     status: "live",
   },
   {
@@ -81,7 +80,7 @@ export const MODULES: ModuleDef[] = [
     href: "/flow",
     icon: Workflow,
     group: "Build",
-    accent: "cyan",
+    accent: "ridge",
     status: "live",
   },
   {
@@ -94,7 +93,7 @@ export const MODULES: ModuleDef[] = [
     href: "/playground",
     icon: FlaskConical,
     group: "Build",
-    accent: "amber",
+    accent: "upland",
     status: "live",
   },
   {
@@ -107,7 +106,7 @@ export const MODULES: ModuleDef[] = [
     href: "/compare",
     icon: GitCompareArrows,
     group: "Research",
-    accent: "cyan",
+    accent: "ridge",
     status: "live",
     flagship: true,
   },
@@ -121,7 +120,7 @@ export const MODULES: ModuleDef[] = [
     href: "/bench",
     icon: Gauge,
     group: "Research",
-    accent: "violet",
+    accent: "shelf",
     status: "live",
   },
   {
@@ -134,7 +133,7 @@ export const MODULES: ModuleDef[] = [
     href: "/datasets",
     icon: Database,
     group: "Research",
-    accent: "amber",
+    accent: "upland",
     status: "soon",
   },
   {
@@ -147,7 +146,7 @@ export const MODULES: ModuleDef[] = [
     href: "/notebooks",
     icon: NotebookPen,
     group: "Research",
-    accent: "violet",
+    accent: "shelf",
     status: "soon",
   },
   {
@@ -160,7 +159,7 @@ export const MODULES: ModuleDef[] = [
     href: "/leaderboard",
     icon: Trophy,
     group: "Catalog",
-    accent: "amber",
+    accent: "upland",
     status: "live",
     flagship: true,
   },
@@ -174,7 +173,7 @@ export const MODULES: ModuleDef[] = [
     href: "/cost",
     icon: Calculator,
     group: "Catalog",
-    accent: "violet",
+    accent: "shelf",
     status: "live",
     flagship: true,
   },
@@ -188,7 +187,7 @@ export const MODULES: ModuleDef[] = [
     href: "/news",
     icon: Newspaper,
     group: "Catalog",
-    accent: "cyan",
+    accent: "ridge",
     status: "live",
   },
   {
@@ -201,7 +200,7 @@ export const MODULES: ModuleDef[] = [
     href: "/router",
     icon: Router,
     group: "Catalog",
-    accent: "cyan",
+    accent: "ridge",
     status: "live",
   },
   {
@@ -214,7 +213,7 @@ export const MODULES: ModuleDef[] = [
     href: "/learn",
     icon: GraduationCap,
     group: "Learn",
-    accent: "violet",
+    accent: "shelf",
     status: "live",
   },
   {
@@ -227,7 +226,7 @@ export const MODULES: ModuleDef[] = [
     href: "/prompt",
     icon: Library,
     group: "Learn",
-    accent: "cyan",
+    accent: "ridge",
     status: "live",
   },
   {
@@ -240,7 +239,7 @@ export const MODULES: ModuleDef[] = [
     href: "/hub",
     icon: Boxes,
     group: "Catalog",
-    accent: "amber",
+    accent: "upland",
     status: "live",
     flagship: true,
   },
@@ -254,7 +253,7 @@ export const MODULES: ModuleDef[] = [
     href: "/vault",
     icon: KeyRound,
     group: "Learn",
-    accent: "violet",
+    accent: "shelf",
     status: "live",
   },
 ];

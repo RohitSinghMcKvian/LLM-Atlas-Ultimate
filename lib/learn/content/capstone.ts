@@ -18,7 +18,7 @@ export const CAPSTONE: Track = {
   blurb:
     "Critique a flawed design, then design, defend and ship a complete LLM system.",
   level: "expert",
-  accent: "amber",
+  accent: "upland",
   prereqs: ["production", "context-engineering"],
   lessons: [
     // -----------------------------------------------------------------------
@@ -465,22 +465,22 @@ gets a wrong tag, reversibly.`,
               {
                 label: "Risk — tenant isolation, injection via uploads, action blast radius",
                 note: "The layer that makes a launch unshippable if it's wrong. Structural controls only.",
-                accent: "amber",
+                accent: "upland",
               },
               {
                 label: "Quality — eval set, slices, production golden set",
                 note: "Without this you cannot show any other decision worked.",
-                accent: "violet",
+                accent: "shelf",
               },
               {
                 label: "Latency — perceived wait, streaming, prefix caching",
                 note: "What determines whether users adopt it at all.",
-                accent: "violet",
+                accent: "shelf",
               },
               {
                 label: "Cost — retrieval size, routing, caching, output caps",
                 note: "The constraint that shapes everything above it at $0.006/request.",
-                accent: "cyan",
+                accent: "ridge",
               },
             ],
           },

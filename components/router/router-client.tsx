@@ -38,6 +38,7 @@ import { useMounted } from "@/lib/hooks/use-media-query";
 import { useKeysStore } from "@/lib/store/keys-store";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
 import { postSSE, SSEHttpError } from "@/lib/sse-client";
+import { ACCENT_TEXT } from "@/lib/accent";
 import { cn, formatUSD, formatContext, formatCompact } from "@/lib/utils";
 
 interface LogEntry {
@@ -177,13 +178,13 @@ export function RouterClient() {
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat icon={Activity} tone="cyan" label="Requests / 24h">
+        <Stat icon={Activity} tone="ridge" label="Requests / 24h">
           <CountUp value={48213} />
         </Stat>
-        <Stat icon={Zap} tone="violet" label="Avg latency">
+        <Stat icon={Zap} tone="shelf" label="Avg latency">
           <CountUp value={512} suffix="ms" />
         </Stat>
-        <Stat icon={Database} tone="amber" label="Cache hit rate">
+        <Stat icon={Database} tone="upland" label="Cache hit rate">
           <CountUp value={34} suffix="%" />
         </Stat>
         <Stat icon={Coins} tone="success" label="Spend / 24h">
@@ -240,7 +241,7 @@ export function RouterClient() {
         {/* Routing policy */}
         <Card className="p-5">
           <div className="mb-4 flex items-center gap-2 text-sm font-medium">
-            <ShieldCheck className="size-4 text-cyan" /> Cost-aware routing
+            <ShieldCheck className="size-4 text-action" /> Cost-aware routing
           </div>
           <p className="mb-4 text-xs text-muted-foreground">
             Pick the cheapest model that satisfies your constraints — Atlas
@@ -273,7 +274,7 @@ export function RouterClient() {
             </div>
           </div>
 
-          <div className="mt-5 rounded-xl border border-cyan/30 bg-gradient-primary-soft p-4">
+          <div className="mt-5 rounded-xl border border-action/30 bg-action/10 p-4">
             {chosen ? (
               <>
                 <div className="flex items-center justify-between">
@@ -331,7 +332,7 @@ export function RouterClient() {
         {/* Live log */}
         <Card className="p-5">
           <div className="mb-4 flex items-center gap-2 text-sm font-medium">
-            <Activity className="size-4 text-cyan" /> Live requests
+            <Activity className="size-4 text-action" /> Live requests
             <span className="ml-auto inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
               <span className="size-1.5 animate-pulse-dot rounded-full bg-success" />
               streaming
@@ -371,18 +372,23 @@ export function RouterClient() {
   );
 }
 
+/**
+ * Provider tints. Keyed by the `accent` names in `lib/catalog/providers.ts`,
+ * which predate the elevation ramp — the keys are legacy labels, the values are
+ * bands. Five providers, five bands, so every provider is distinguishable.
+ */
 const ACCENT: Record<string, string> = {
-  cyan: "#22D3EE",
-  violet: "#A78BFA",
-  amber: "#F5A623",
-  blue: "#60A5FA",
-  orange: "#FB923C",
+  cyan: "rgb(var(--elev-1))",
+  violet: "rgb(var(--elev-0))",
+  amber: "rgb(var(--elev-3))",
+  blue: "rgb(var(--elev-2))",
+  orange: "rgb(var(--elev-4))",
 };
 
 function StatusTag({ status }: { status: LogEntry["status"] }) {
   const map = {
     ok: { label: "ok", cls: "text-success" },
-    cached: { label: "cached", cls: "text-cyan" },
+    cached: { label: "cached", cls: "text-action" },
     fallback: { label: "fallback", cls: "text-amber" },
   }[status];
   return <span className={cn("text-2xs", map.cls)}>{map.label}</span>;
@@ -396,15 +402,10 @@ function Stat({
 }: {
   icon: React.ElementType;
   label: string;
-  tone: "cyan" | "violet" | "amber" | "success";
+  tone: "ridge" | "shelf" | "upland" | "success";
   children: React.ReactNode;
 }) {
-  const cls = {
-    cyan: "text-cyan",
-    violet: "text-[#A78BFA]",
-    amber: "text-amber",
-    success: "text-success",
-  }[tone];
+  const cls = { ...ACCENT_TEXT, success: "text-success" }[tone];
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 text-2xs uppercase tracking-wide text-muted-foreground">

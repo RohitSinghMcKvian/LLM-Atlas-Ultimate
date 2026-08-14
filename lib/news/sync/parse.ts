@@ -43,6 +43,16 @@ export interface ParsedFeed {
   items: RawFeedItem[];
   /** A limit in the XML reader was hit, so items may be missing. */
   truncated: boolean;
+  /**
+   * The document was a well-formed feed — an `<rss>`, `<feed>` or `<rdf>` root.
+   *
+   * This is what separates "this source published nothing today" from "this URL
+   * now serves an HTML error page with HTTP 200". Both yield zero items, and
+   * only the second is a failure worth naming in the UI. arXiv, for one,
+   * declares `<skipDays>Saturday, Sunday</skipDays>` and serves a valid,
+   * item-less channel all weekend.
+   */
+  recognized: boolean;
 }
 
 // --- Dates ------------------------------------------------------------------
@@ -259,7 +269,7 @@ function toItem(node: XmlNode, now: number): RawFeedItem | null {
 
 // --- Entry point ------------------------------------------------------------
 
-const EMPTY: ParsedFeed = { title: "", items: [], truncated: false };
+const EMPTY: ParsedFeed = { title: "", items: [], truncated: false, recognized: false };
 
 /**
  * Parse a feed document into items.
@@ -281,6 +291,8 @@ export function parseFeed(xml: string, options: { now?: number; maxItems?: numbe
 
   let feedTitle = "";
   let itemNodes: XmlNode[] = [];
+  const recognized =
+    root.local === "feed" || root.local === "rss" || root.local === "rdf";
 
   if (root.local === "feed") {
     // Atom 1.0
@@ -315,7 +327,9 @@ export function parseFeed(xml: string, options: { now?: number; maxItems?: numbe
     if (item) items.push(item);
   }
 
-  return { title: htmlToText(feedTitle), items, truncated };
+  // An unrecognised root that nonetheless yielded items (an RSS document wrapped
+  // in an outer element) is a feed by the only test that matters.
+  return { title: htmlToText(feedTitle), items, truncated, recognized: recognized || items.length > 0 };
 }
 
 /** Best available prose for an item — the excerpt, falling back to the body. */

@@ -196,7 +196,7 @@ export function ToolLoopViz() {
               className={cn(
                 "rounded-full border px-2 py-0.5 transition-colors",
                 i === stage
-                  ? "border-cyan/50 bg-cyan/10 font-semibold text-cyan"
+                  ? "border-action/50 bg-action/10 font-semibold text-action"
                   : i < stage
                     ? "border-border bg-surface-2 text-muted-foreground"
                     : "border-border text-muted-foreground/50",
@@ -231,26 +231,26 @@ export function ToolLoopViz() {
                   : "text-foreground/85",
               )}
             >
-              <span className="font-mono text-cyan">get_order_status</span> —{" "}
+              <span className="font-mono text-action">get_order_status</span> —{" "}
               {schema.description}
             </p>
             <ul className="space-y-1">
               {schema.params.map((p) => (
-                <li key={p.name} className="flex flex-wrap items-baseline gap-1.5 text-[11px]">
+                <li key={p.name} className="flex flex-wrap items-baseline gap-1.5 text-2xs">
                   <span className="font-mono font-semibold">{p.name}</span>
                   <span
                     className={cn(
                       "font-mono",
                       defect === "loosetype" && p.name === "order_id"
                         ? "text-danger"
-                        : "text-violet",
+                        : "text-accent",
                     )}
                   >
                     {p.type}
                   </span>
                   <span
                     className={cn(
-                      "rounded px-1 text-[9px] font-semibold uppercase",
+                      "rounded px-1 text-2xs font-semibold uppercase",
                       p.required
                         ? "bg-amber/20 text-amber"
                         : "bg-surface-3 text-muted-foreground",
@@ -267,7 +267,7 @@ export function ToolLoopViz() {
 
         {stage >= 2 && (
           <Panel title="model → tool call">
-            <pre className="overflow-x-auto font-mono text-[11.5px] leading-relaxed text-foreground/90">
+            <pre className="overflow-x-auto font-mono text-2xs leading-relaxed text-foreground/90">
               <code>{`get_order_status(${JSON.stringify(call, null, 2)})`}</code>
             </pre>
           </Panel>
@@ -318,7 +318,7 @@ export function ToolLoopViz() {
                 {ok ? (
                   <p className="text-xs leading-relaxed">
                     Tool returns{" "}
-                    <span className="font-mono text-cyan">
+                    <span className="font-mono text-action">
                       {`{ status: "in_transit", eta: "2026-08-01" }`}
                     </span>
                     . The model has a fact it did not have, and answers from it.
@@ -369,7 +369,7 @@ function Panel({
         tone === "neutral" && "border-border bg-surface-2/40",
       )}
     >
-      <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+      <p className="mb-1 font-mono text-2xs uppercase tracking-wider text-muted-foreground">
         {title}
       </p>
       {children}

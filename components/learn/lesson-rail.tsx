@@ -63,11 +63,11 @@ export function LessonRail({
             >
               <span
                 className={cn(
-                  "grid size-5 shrink-0 place-items-center rounded text-[10px] font-semibold",
+                  "grid size-5 shrink-0 place-items-center rounded text-2xs font-semibold",
                   coverage.complete
                     ? "bg-success/15 text-success"
                     : coverage.done > 0
-                      ? "bg-cyan/15 text-cyan"
+                      ? "bg-action/15 text-action"
                       : unlocked
                         ? "bg-surface-3 text-muted-foreground"
                         : "bg-surface-3 text-muted-foreground/50",
@@ -84,7 +84,7 @@ export function LessonRail({
               <span className="min-w-0 flex-1 truncate text-xs font-semibold">
                 {track.title}
               </span>
-              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+              <span className="shrink-0 font-mono text-2xs text-muted-foreground">
                 {coverage.done}/{coverage.total}
               </span>
             </button>
@@ -112,7 +112,7 @@ export function LessonRail({
                             done
                               ? "bg-success"
                               : current
-                                ? "bg-cyan"
+                                ? "bg-action"
                                 : "bg-border-strong",
                           )}
                         />
@@ -122,7 +122,7 @@ export function LessonRail({
                         {bookmarkSet.has(lesson.id) && (
                           <Bookmark className="size-3 shrink-0 fill-amber text-amber" />
                         )}
-                        <span className="shrink-0 text-[10px] opacity-60">
+                        <span className="shrink-0 text-2xs opacity-60">
                           {lesson.minutes}m
                         </span>
                       </button>

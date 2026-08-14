@@ -63,7 +63,7 @@ export function renderInline(text: string): React.ReactNode[] {
           <a
             key={key++}
             href={safe}
-            className="text-cyan underline-offset-2 hover:underline"
+            className="text-action underline-offset-2 hover:underline"
             {...(safe.startsWith("http")
               ? { target: "_blank", rel: "noreferrer noopener" }
               : {})}
@@ -108,7 +108,7 @@ export function RichText({
           <ul key={i} className="my-2 space-y-1 pl-1">
             {block.items.map((item, j) => (
               <li key={j} className="flex gap-2">
-                <span className="mt-[0.55em] size-1 shrink-0 rounded-full bg-cyan" />
+                <span className="mt-[0.55em] size-1 shrink-0 rounded-full bg-action" />
                 <span>{renderInline(item)}</span>
               </li>
             ))}

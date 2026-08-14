@@ -43,6 +43,7 @@ import {
   type Workload,
   type SelfHostAssumptions,
 } from "@/lib/cost/engine";
+import { ACCENT_TEXT } from "@/lib/accent";
 import { cn, formatUSD, formatCompact } from "@/lib/utils";
 
 // recharts is the heaviest dependency on this route and is only needed for the
@@ -172,7 +173,7 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
           <Card className="p-5">
             <div className="mb-4 flex items-center gap-2 text-sm font-medium">
-              <Coins className="size-4 text-cyan" /> Workload
+              <Coins className="size-4 text-action" /> Workload
             </div>
             <div className="space-y-4">
               <NumberField
@@ -260,21 +261,21 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
           <div className="grid gap-4 sm:grid-cols-3">
             <SummaryCard
               icon={Coins}
-              tone="cyan"
+              tone="ridge"
               label="Cheapest API"
               value={cheapest ? formatUSD(cheapest.cost.total) : "—"}
               sub={cheapest ? `${cheapest.model.name} / mo` : ""}
             />
             <SummaryCard
               icon={Server}
-              tone="amber"
+              tone="upland"
               label="Self-host TCO"
               value={formatUSD(selfHost.monthly)}
               sub={`${selfhost.gpuCount}× GPU · ${formatUSD(selfHost.costPerMtok, { precise: true })}/Mtok`}
             />
             <SummaryCard
               icon={TrendingDown}
-              tone="violet"
+              tone="shelf"
               label="Self-host break-even"
               value={
                 breakEven && isFinite(breakEven)
@@ -289,7 +290,7 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
           <Card className="overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <Cpu className="size-4 text-cyan" /> Monthly cost by model
+                <Cpu className="size-4 text-action" /> Monthly cost by model
               </div>
               <div className="flex items-center gap-2">
                 <AddModel
@@ -319,7 +320,7 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
                   <div className="hidden items-center gap-2 sm:flex">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
                       <div
-                        className="h-full rounded-full bg-gradient-primary transition-all duration-500"
+                        className="h-full rounded-full bg-action transition-all duration-500"
                         style={{ width: `${(r.cost.total / maxCost) * 100}%` }}
                       />
                     </div>
@@ -382,15 +383,18 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
                 <FrontierChart data={frontier} />
               </React.Suspense>
             </div>
+            {/* Open on the shelf, closed on the ridge — matching
+                `FrontierChart`'s `Cell` fills and the hero plot. These two were
+                the wrong way round against the chart they label. */}
             <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-cyan" /> Open
+                <span className="size-2.5 rounded-full bg-accent" /> Open
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-[#A78BFA]" /> Closed
+                <span className="size-2.5 rounded-full bg-action" /> Closed
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full border border-white bg-cyan" />{" "}
+                <span className="size-2.5 rounded-full border border-foreground bg-accent" />{" "}
                 In your selection
               </span>
             </div>
@@ -427,13 +431,9 @@ function SummaryCard({
   label: string;
   value: string;
   sub: string;
-  tone: "cyan" | "amber" | "violet";
+  tone: "ridge" | "upland" | "shelf";
 }) {
-  const toneClass = {
-    cyan: "text-cyan",
-    amber: "text-amber",
-    violet: "text-[#A78BFA]",
-  }[tone];
+  const toneClass = ACCENT_TEXT[tone];
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">

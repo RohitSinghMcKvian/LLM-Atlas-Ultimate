@@ -106,14 +106,12 @@ export function sourceMonogram(name: string): string {
  * and a scrolled feed reads as organised rather than random.
  */
 export const SOURCE_ACCENTS = [
-  "rgb(var(--cyan))",
-  "rgb(var(--violet))",
-  "rgb(var(--amber))",
-  "rgb(56 189 248)",
-  "rgb(167 139 250)",
-  "rgb(52 211 153)",
-  "rgb(251 146 60)",
-  "rgb(244 114 182)",
+  "rgb(var(--elev-0))",
+  "rgb(var(--elev-1))",
+  "rgb(var(--elev-2))",
+  "rgb(var(--elev-3))",
+  "rgb(var(--elev-4))",
+  "rgb(var(--elev-5))",
 ] as const;
 
 export function sourceAccent(sourceId: string): string {

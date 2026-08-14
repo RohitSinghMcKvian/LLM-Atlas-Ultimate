@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>LLM Atlas</title>
+  <rect x="0" y="0" width="32" height="32" rx="7" fill="#191A1C"/>
+  <path d="M 5 25 H 27" stroke="#E9E9EA" stroke-opacity="0.22" stroke-width="1" stroke-linecap="round"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M 4.5 25 C 7.59 23.88, 11.298 17.384, 14.8 13.8 C 19.118 17.384, 23.69 23.88, 27.5 25" stroke="#E9E9EA" stroke-opacity="0.28" stroke-width="1.7"/>
+    <path d="M 8.5 19 C 10.45 18.15, 12.79 13.22, 15 10.5 C 17.89 13.22, 20.95 18.15, 23.5 19" stroke="#E9E9EA" stroke-opacity="0.5" stroke-width="1.7"/>
+    <path d="M 11.5 13.5 C 12.61 12.9, 13.942 9.42, 15.2 7.5 C 17.07 9.42, 19.05 12.9, 20.7 13.5" stroke="#D9752F" stroke-width="1.9"/>
+  </g>
+  <circle cx="15.2" cy="7.5" r="1.6" fill="#D9752F"/>
+</svg>

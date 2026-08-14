@@ -114,9 +114,9 @@ export function SamplingViz() {
     >
       <p className="mb-3 font-mono text-xs text-muted-foreground">
         {PROMPT}
-        <span className="ml-1 inline-block animate-caret-blink text-cyan">▍</span>
+        <span className="ml-1 inline-block animate-caret-blink text-action">▍</span>
         {sampled && (
-          <span className="ml-1 rounded bg-cyan/15 px-1 text-cyan">
+          <span className="ml-1 rounded bg-action/15 px-1 text-action">
             {sampled.trim()}
           </span>
         )}
@@ -146,7 +146,7 @@ export function SamplingViz() {
           max={1}
           step={0.01}
           format={(v) => v.toFixed(2)}
-          accent="violet"
+          accent = "shelf"
         />
       </div>
 
@@ -155,7 +155,7 @@ export function SamplingViz() {
           <li key={row.token} className="flex items-center gap-2">
             <span
               className={cn(
-                "w-20 shrink-0 truncate font-mono text-[12px]",
+                "w-20 shrink-0 truncate font-mono text-xs",
                 row.kept ? "text-foreground" : "text-muted-foreground/50",
               )}
             >
@@ -165,7 +165,7 @@ export function SamplingViz() {
               <motion.div
                 className={cn(
                   "h-full rounded",
-                  row.kept ? "bg-gradient-primary" : "bg-surface-3",
+                  row.kept ? "bg-action" : "bg-surface-3",
                 )}
                 animate={{ width: `${Math.max(row.prob * 100, 0.4)}%` }}
                 transition={{ type: "spring", stiffness: 300, damping: 32 }}
@@ -173,8 +173,8 @@ export function SamplingViz() {
             </div>
             <span
               className={cn(
-                "w-14 shrink-0 text-right font-mono text-[11px] tnum",
-                row.kept ? "text-cyan" : "text-muted-foreground/50",
+                "w-14 shrink-0 text-right font-mono text-2xs tnum",
+                row.kept ? "text-action" : "text-muted-foreground/50",
               )}
             >
               {(row.prob * 100).toFixed(1)}%
@@ -184,16 +184,16 @@ export function SamplingViz() {
       </ul>
 
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <VizStat label="In nucleus" value={keptRows.length} accent="cyan" />
+        <VizStat label="In nucleus" value={keptRows.length} accent = "ridge" />
         <VizStat
           label="Mass kept"
           value={`${(keptMass * 100).toFixed(0)}%`}
-          accent="violet"
+          accent = "shelf"
         />
         <VizStat
           label="Top token"
           value={`${(top.prob * 100).toFixed(0)}%`}
-          accent={top.prob > 0.9 ? "success" : top.prob < 0.35 ? "amber" : undefined}
+          accent={top.prob > 0.9 ? "success" : top.prob < 0.35 ? "upland" : undefined}
         />
       </div>
     </VizFrame>

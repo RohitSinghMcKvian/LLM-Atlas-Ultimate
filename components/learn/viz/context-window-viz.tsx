@@ -30,9 +30,9 @@ interface Segment {
 }
 
 const SEGMENTS: Segment[] = [
-  { id: "system", label: "System prompt", color: "var(--violet)", priority: 4 },
+  { id: "system", label: "System prompt", color: "var(--elev-0)", priority: 4 },
   { id: "retrieval", label: "Retrieved docs", color: "var(--amber)", priority: 1 },
-  { id: "history", label: "Conversation history", color: "var(--cyan)", priority: 2 },
+  { id: "history", label: "Conversation history", color: "var(--elev-1)", priority: 2 },
   { id: "user", label: "User message", color: "var(--success)", priority: 5 },
   { id: "output", label: "Reserved for output", color: "var(--muted-foreground)", priority: 6 },
 ];
@@ -109,7 +109,7 @@ export function ContextWindowViz() {
               title={`${seg.label}: ${fmt(packed[seg.id])}`}
             >
               {width > 12 && (
-                <span className="absolute inset-0 grid place-items-center px-1 text-center text-[10px] font-medium text-foreground">
+                <span className="absolute inset-0 grid place-items-center px-1 text-center text-2xs font-medium text-foreground">
                   {fmt(packed[seg.id])}
                 </span>
               )}
@@ -118,7 +118,7 @@ export function ContextWindowViz() {
         })}
         {total < limit && (
           <div className="h-full flex-1 bg-surface-3/40">
-            <span className="grid h-full place-items-center text-[10px] text-muted-foreground">
+            <span className="grid h-full place-items-center text-2xs text-muted-foreground">
               {fmt(limit - total)} free
             </span>
           </div>
@@ -145,7 +145,7 @@ export function ContextWindowViz() {
           max={4000}
           step={100}
           format={fmt}
-          accent="violet"
+          accent = "shelf"
         />
         <VizSlider
           label="Retrieved docs"
@@ -155,7 +155,7 @@ export function ContextWindowViz() {
           max={Math.min(limit, 120000)}
           step={500}
           format={fmt}
-          accent="amber"
+          accent = "upland"
         />
         <VizSlider
           label="Conversation history"
@@ -181,7 +181,7 @@ export function ContextWindowViz() {
         {SEGMENTS.map((s) => (
           <span
             key={s.id}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-2xs text-muted-foreground"
           >
             <span
               className="size-1.5 rounded-full"

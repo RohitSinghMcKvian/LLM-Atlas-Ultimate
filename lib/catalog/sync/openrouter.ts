@@ -1,4 +1,4 @@
-import type { BenchmarkScore, CatalogModel, Modality } from "../types";
+import type { BenchmarkScore, CatalogModel, Modality, OutputModality } from "../types";
 import { brandFor, titleizeModelId } from "./brands";
 import { isChatCapable } from "./denylist";
 import {
@@ -24,9 +24,11 @@ export const DESIGN_ARENA_SOURCE_URL = "https://designarena.ai";
 
 function isChatModel(m: OpenRouterModel): boolean {
   const outputs = m.architecture?.output_modalities;
-  // Every entry OpenRouter lists today is text-output, but an image or audio
-  // generation model would break every downstream assumption in the app.
-  if (outputs && outputs.length > 0 && !outputs.includes("text")) return false;
+  // Text and image output are both handled now (P12). Audio is not: nothing in
+  // the app can play or store it, so an audio generation model would be a
+  // picker entry that produces nothing.
+  if (outputs && outputs.length > 0 && !outputs.some((o) => o === "text" || o === "image"))
+    return false;
   // Shares NVIDIA's denylist: safety classifiers like `llama-guard-4-12b` and
   // `gpt-oss-safeguard-20b` speak the chat-completions protocol but are not chat
   // models, and listing them in the picker offers the user a classifier.
@@ -39,6 +41,18 @@ function modalitiesOf(m: OpenRouterModel): Modality[] {
   if (inputs.includes("image")) out.push("vision");
   if (inputs.includes("audio")) out.push("audio");
   return out;
+}
+
+/**
+ * What the model emits, from OpenRouter's own `output_modalities`.
+ *
+ * Returns undefined for a plain text model rather than `["text"]`: the field is
+ * optional precisely so the common case adds nothing to every snapshot row.
+ */
+function outputModalitiesOf(m: OpenRouterModel): OutputModality[] | undefined {
+  const outputs = m.architecture?.output_modalities ?? [];
+  if (!outputs.includes("image")) return undefined;
+  return outputs.includes("text") ? ["text", "image"] : ["image"];
 }
 
 function capabilitiesOf(m: OpenRouterModel): CatalogModel["capabilities"] {
@@ -206,12 +220,18 @@ export function normalizeOpenRouter(
     );
 
     const modalities = modalitiesOf(m);
+    const outputModalities = outputModalitiesOf(m);
     const capabilities = capabilitiesOf(m);
     const license: CatalogModel["license"] = m.hugging_face_id ? "open" : "proprietary";
 
     const inputPerM = perMillion(m.pricing?.prompt);
     const outputPerM = perMillion(m.pricing?.completion);
     const cachedInputPerM = perMillion(m.pricing?.input_cache_read);
+    // Deliberately left out of `blended`: the blend drives the free-tier test
+    // and the leaderboard's price axis, both of which compare models on a text
+    // turn. Folding in a rate that only applies when the model draws would make
+    // an image model look expensive for work it does at the ordinary rate.
+    const imageOutputPerM = perMillion(m.pricing?.image_output);
     const blended = (inputPerM * 3 + outputPerM) / 4;
 
     // Routes, in failover order: a free serving tier always precedes the paid one.
@@ -248,11 +268,13 @@ export function normalizeOpenRouter(
         contextWindow,
         maxOutput,
         modalities,
+        ...(outputModalities ? { outputModalities } : {}),
         capabilities,
         pricing: {
           inputPerM,
           outputPerM,
           ...(cachedInputPerM > 0 ? { cachedInputPerM } : {}),
+          ...(imageOutputPerM > 0 ? { imageOutputPerM } : {}),
           effectiveFrom: today,
         },
         benchmarks: benchmarksOf(m, today),

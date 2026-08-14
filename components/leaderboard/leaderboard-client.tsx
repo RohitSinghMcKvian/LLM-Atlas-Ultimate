@@ -14,6 +14,7 @@ import {
   Brain,
   Wrench,
   Eye,
+  Image as ImageIcon,
   Zap,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ import {
   getBenchmark,
   getModelById,
   modelAccess,
+  producesImages,
 } from "@/lib/catalog";
 import type { CatalogModel } from "@/lib/catalog/types";
 import { cn, formatContext, formatUSD } from "@/lib/utils";
@@ -69,6 +71,8 @@ interface FilterState {
   reasoning: boolean;
   tools: boolean;
   vision: boolean;
+  /** Model can *produce* an image, not merely read one (§P13). */
+  imageOutput: boolean;
   caching: boolean;
   minContext: number;
   maxPrice: number;
@@ -83,6 +87,7 @@ const DEFAULT_FILTERS: FilterState = {
   reasoning: false,
   tools: false,
   vision: false,
+  imageOutput: false,
   caching: false,
   minContext: 0,
   maxPrice: 60,
@@ -110,6 +115,7 @@ function matches(m: CatalogModel, f: FilterState): boolean {
   if (f.reasoning && !m.capabilities.reasoning) return false;
   if (f.tools && !m.capabilities.toolUse) return false;
   if (f.vision && !m.modalities.includes("vision")) return false;
+  if (f.imageOutput && !producesImages(m)) return false;
   if (f.caching && !m.capabilities.caching) return false;
   if (m.contextWindow < f.minContext) return false;
   if (m.status !== "upcoming" && f.maxPrice < 60 && blended(m) > f.maxPrice)
@@ -211,9 +217,13 @@ export function LeaderboardClient({
     (filters.access !== "all" ? 1 : 0) +
     (filters.license !== "all" ? 1 : 0) +
     filters.providers.size +
-    [filters.reasoning, filters.tools, filters.vision, filters.caching].filter(
-      Boolean,
-    ).length +
+    [
+      filters.reasoning,
+      filters.tools,
+      filters.vision,
+      filters.imageOutput,
+      filters.caching,
+    ].filter(Boolean).length +
     (filters.minContext > 0 ? 1 : 0) +
     (filters.maxPrice < 60 ? 1 : 0);
 
@@ -255,7 +265,7 @@ export function LeaderboardClient({
               <Button variant="secondary" className="lg:hidden">
                 <SlidersHorizontal className="size-4" />
                 {activeFilterCount > 0 && (
-                  <span className="ml-0.5 rounded bg-cyan/20 px-1.5 text-xs text-cyan">
+                  <span className="ml-0.5 rounded bg-action/20 px-1.5 text-xs text-action">
                     {activeFilterCount}
                   </span>
                 )}
@@ -464,8 +474,8 @@ const ModelRow = React.memo(function ModelRow({
             className={cn(
               "grid size-5 shrink-0 place-items-center rounded-md border transition-colors",
               inCompare
-                ? "border-transparent bg-gradient-primary text-primary-foreground"
-                : "border-border-strong text-transparent hover:border-cyan",
+                ? "border-transparent bg-action text-action-foreground"
+                : "border-border-strong text-transparent hover:border-action",
             )}
             aria-label="Add to compare"
           >
@@ -480,7 +490,7 @@ const ModelRow = React.memo(function ModelRow({
                 </Badge>
               )}
               <Badge
-                variant={modelAccess(model) === "free" ? "success" : "violet"}
+                variant={modelAccess(model) === "free" ? "success" : "accent"}
                 className="hidden shrink-0 sm:inline-flex"
               >
                 {modelAccess(model) === "free" ? "Free" : "Your key"}
@@ -502,7 +512,7 @@ const ModelRow = React.memo(function ModelRow({
         <div className="hidden items-center gap-2 md:flex">
           <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-3">
             <div
-              className="h-full rounded-full bg-gradient-primary"
+              className="h-full rounded-full bg-action"
               style={{ width: `${Math.min(100, intel)}%` }}
             />
           </div>
@@ -589,7 +599,7 @@ function FilterControls({
         {activeCount > 0 && (
           <button
             onClick={reset}
-            className="text-xs text-cyan hover:underline"
+            className="text-xs text-action hover:underline"
           >
             Reset ({activeCount})
           </button>
@@ -657,6 +667,7 @@ function FilterControls({
           { k: "reasoning", label: "Reasoning", icon: Brain },
           { k: "tools", label: "Tool use", icon: Wrench },
           { k: "vision", label: "Vision", icon: Eye },
+          { k: "imageOutput", label: "Image output", icon: ImageIcon },
           { k: "caching", label: "Caching", icon: Zap },
         ].map((c) => (
           <label

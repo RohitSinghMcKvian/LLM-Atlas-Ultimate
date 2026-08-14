@@ -235,3 +235,38 @@ export function reasoningHint(providerId: string): boolean {
 export function visionHint(providerId: string): boolean {
   return VISION_HINT.test(providerId);
 }
+
+/**
+ * Instruction-tuned families that ship an OpenAI-compatible tool-calling
+ * template. NIM serves these through `/chat/completions` with `tools` intact.
+ */
+const TOOL_USE_HINT =
+  /(^|[-/])(llama-3\.[13]|llama-4|llama3\.[13]|qwen-?[23](\.\d)?|qwen3|mistral|mixtral|magistral|devstral|ministral|nemotron|deepseek|glm-4|kimi|command-?[ar]|granite-3|gpt-oss|phi-4|gemma-3|hermes|firefunction|minimax|seed-oss)/i;
+
+/**
+ * Families that cannot take `tools`, regardless of what else the id matches.
+ *
+ * Base and completion checkpoints have no chat template at all; embedding,
+ * reranking and guard heads are not chat models; and a `-vl-`/`-vision` head is
+ * usually served by a captioning endpoint that rejects the field. Checked first,
+ * so `llama-guard` does not inherit the `llama-3.1` verdict.
+ */
+const TOOL_USE_DENY =
+  /(^|[-/])(.*-base|.*-pt|guard|shield|embed|embedding|rerank|reward|nemoretriever|nv-embed|codestral-mamba)|(-vl-|-vision)/i;
+
+/**
+ * Whether a model reconstructed from its id alone probably accepts `tools`.
+ *
+ * A *hint*, and treated as one — `metaConfidence` stays `"derived"`, so a
+ * curated entry still wins in `merge.ts`. It exists because the previous answer
+ * was a flat `false` for the whole NIM catalog, which the chat client read as a
+ * gate and used to run every one of those models with its agent loop switched
+ * off. Being wrong in the optimistic direction now costs one downgraded round
+ * trip, recovered by `lib/router/index.ts` and remembered by
+ * `lib/store/tool-support-store.ts`; being wrong in the pessimistic direction
+ * cost the entire feature.
+ */
+export function toolUseHint(providerId: string): boolean {
+  if (TOOL_USE_DENY.test(providerId)) return false;
+  return TOOL_USE_HINT.test(providerId);
+}

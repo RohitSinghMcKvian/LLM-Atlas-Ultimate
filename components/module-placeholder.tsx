@@ -89,10 +89,10 @@ export function ModulePlaceholder({ id }: { id: string }) {
 
   return (
     <div className="relative mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-20">
-      <div className="bg-grid-fade pointer-events-none absolute inset-x-0 top-0 h-72" />
+      <div className="bg-graticule pointer-events-none absolute inset-x-0 top-0 h-72" />
       <Reveal className="relative flex flex-col items-center text-center">
         <div className="relative mb-6">
-          <div className="absolute -inset-6 rounded-full bg-gradient-primary opacity-20 blur-2xl" />
+          <div className="absolute -inset-6 rounded-full bg-action opacity-20 blur-2xl" />
           <div className="relative grid size-24 place-items-center rounded-3xl border border-border bg-surface shadow-glow">
             <ModuleGlyph seed={mod.id} accent={mod.accent} size={64} animated />
           </div>
@@ -119,8 +119,8 @@ export function ModulePlaceholder({ id }: { id: string }) {
           <ul className="grid gap-3 sm:grid-cols-2">
             {features.map((f) => (
               <li key={f} className="flex items-start gap-2.5 text-sm">
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-gradient-primary-soft">
-                  <Check className="size-3 text-cyan" />
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-action/10">
+                  <Check className="size-3 text-action" />
                 </span>
                 <span className="text-pretty">{f}</span>
               </li>

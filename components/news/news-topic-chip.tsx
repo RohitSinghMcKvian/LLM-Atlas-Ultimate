@@ -41,7 +41,7 @@ export function NewsTopicChip({
             "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
             active
-              ? "border-transparent bg-gradient-primary text-primary-foreground shadow-[0_4px_16px_-6px_rgb(var(--cyan)/0.7)]"
+              ? "border-transparent bg-action text-action-foreground shadow-[0_4px_16px_-6px_rgb(var(--elev-1)/0.7)]"
               : "border-border bg-surface-2 text-muted-foreground hover:border-border-strong hover:text-foreground",
             count === 0 && !active && "cursor-not-allowed opacity-40",
           )}

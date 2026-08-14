@@ -21,7 +21,7 @@ const COMMUNITY = [
 export function Footer() {
   return (
     <footer className="relative border-t border-border bg-surface/30">
-      <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan/50 to-transparent" />
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-action/50 to-transparent" />
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
         <div className="grid gap-10 lg:grid-cols-[1.4fr_2.6fr]">
           <div>

@@ -147,7 +147,7 @@ export function ScalingViz() {
         <polyline
           points={frontier.map((p) => `${p.x},${p.y}`).join(" ")}
           fill="none"
-          stroke="rgb(var(--cyan))"
+          stroke="rgb(var(--elev-1))"
           strokeWidth={1.5}
           strokeOpacity={0.6}
           strokeDasharray="5 3"
@@ -163,7 +163,7 @@ export function ScalingViz() {
               r={isActive ? 6 : p.onFrontier ? 4.5 : 3}
               fill={
                 p.onFrontier
-                  ? "rgb(var(--cyan))"
+                  ? "rgb(var(--elev-1))"
                   : "rgb(var(--muted-foreground))"
               }
               fillOpacity={p.onFrontier ? 0.95 : 0.35}
@@ -209,9 +209,9 @@ export function ScalingViz() {
           <span className="text-xs font-semibold">{active.model.name}</span>
           <span
             className={cn(
-              "rounded-full border px-1.5 py-0.5 text-[10px]",
+              "rounded-full border px-1.5 py-0.5 text-2xs",
               active.onFrontier
-                ? "border-cyan/40 bg-cyan/10 text-cyan"
+                ? "border-action/40 bg-action/10 text-action"
                 : "border-border text-muted-foreground",
             )}
           >
@@ -222,7 +222,7 @@ export function ScalingViz() {
           </span>
           <Link
             href={`/leaderboard?model=${active.model.id}`}
-            className="ml-auto inline-flex items-center gap-0.5 text-2xs text-cyan hover:underline"
+            className="ml-auto inline-flex items-center gap-0.5 text-2xs text-action hover:underline"
           >
             Leaderboard <ArrowUpRight className="size-3" />
           </Link>

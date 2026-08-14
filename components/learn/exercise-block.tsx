@@ -114,7 +114,7 @@ export function ExerciseBlock({ block }: { block: ExerciseBlock }) {
         {record && (
           <span
             className={cn(
-              "ml-auto inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+              "ml-auto inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-2xs font-semibold",
               isPassing(record.percent)
                 ? "border-success/40 bg-success/10 text-success"
                 : "border-danger/40 bg-danger/10 text-danger",
@@ -152,7 +152,7 @@ export function ExerciseBlock({ block }: { block: ExerciseBlock }) {
             <ul className="space-y-1.5 px-3 pb-3">
               {block.rubric.map((c) => (
                 <li key={c.id} className="flex gap-2 text-xs">
-                  <span className="mt-0.5 w-9 shrink-0 rounded bg-surface-3 px-1 text-center font-mono text-[10px] text-muted-foreground">
+                  <span className="mt-0.5 w-9 shrink-0 rounded bg-surface-3 px-1 text-center font-mono text-2xs text-muted-foreground">
                     {Math.round((c.weight / totalWeight) * 100)}%
                   </span>
                   <span>
@@ -175,7 +175,7 @@ export function ExerciseBlock({ block }: { block: ExerciseBlock }) {
           rows={12}
           spellCheck
           placeholder="Write your answer here…"
-          className="mt-3 w-full resize-y rounded-xl border border-border bg-surface-2/50 p-3 font-mono text-[13px] leading-relaxed outline-none transition-colors focus:border-amber/50"
+          className="mt-3 w-full resize-y rounded-xl border border-border bg-surface-2/50 p-3 font-mono text-sm leading-relaxed outline-none transition-colors focus:border-amber/50"
         />
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -342,7 +342,7 @@ function GradeCard({
         </div>
       )}
 
-      <p className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
+      <p className="border-t border-border px-4 py-2 text-2xs text-muted-foreground">
         Assessed by {result.gradedBy ?? "your selected model"} against the rubric
         above. Resubmitting keeps your best grade.
       </p>

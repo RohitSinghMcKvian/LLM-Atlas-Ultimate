@@ -145,7 +145,8 @@ function stablePricing(
     previous &&
     previous.inputPerM === next.inputPerM &&
     previous.outputPerM === next.outputPerM &&
-    previous.cachedInputPerM === next.cachedInputPerM
+    previous.cachedInputPerM === next.cachedInputPerM &&
+    previous.imageOutputPerM === next.imageOutputPerM
   ) {
     return { ...next, effectiveFrom: previous.effectiveFrom };
   }

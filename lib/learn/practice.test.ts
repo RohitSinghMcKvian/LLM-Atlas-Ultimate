@@ -108,7 +108,7 @@ const TRACK: Track = {
   title: "Test track",
   blurb: "For tests",
   level: "beginner",
-  accent: "cyan",
+  accent: "ridge",
   lessons: [LESSON_A, LESSON_B],
 };
 

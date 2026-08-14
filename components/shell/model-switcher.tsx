@@ -43,7 +43,7 @@ export function ModelSwitcher({ className }: { className?: string }) {
             className,
           )}
         >
-          <Cpu className="size-4 text-cyan" />
+          <Cpu className="size-4 text-action" />
           <span className="max-w-[10rem] truncate">
             {mounted ? <ModelSwitcherLabel modelId={activeModelId} /> : "Select model"}
           </span>

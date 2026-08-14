@@ -29,9 +29,9 @@ export function ChangeSetReview({
   const rejectedCount = hunks.filter((h) => !h.accepted).length;
 
   return (
-    <div className="border-t border-violet/30 bg-violet/5 px-3 py-2.5">
+    <div className="border-t border-accent/30 bg-accent/5 px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2">
-        <FileDiff className="size-4 shrink-0 text-violet" />
+        <FileDiff className="size-4 shrink-0 text-accent" />
         <p className="min-w-0 flex-1 text-xs">
           <span className="font-medium">Review change set — {changeSet.label}.</span>{" "}
           <span className="text-muted-foreground">
@@ -121,7 +121,7 @@ function FileHunks({
               <DiffViewer
                 oldText={h.before}
                 newText={h.after}
-                className={cn("rounded-none border-0 text-[11px]", !h.accepted && "opacity-50")}
+                className={cn("rounded-none border-0 text-2xs", !h.accepted && "opacity-50")}
               />
             </div>
           ))}

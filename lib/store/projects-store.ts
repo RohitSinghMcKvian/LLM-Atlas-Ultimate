@@ -85,8 +85,12 @@ export const useProjectsStore = create<ProjectsState>()(
               : p,
           ),
         })),
-      remove: (id) =>
-        set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
+      remove: (id) => {
+        set((s) => ({ projects: s.projects.filter((p) => p.id !== id) }));
+        // Drop any RAG chunk index for the deleted project. Fire-and-forget and
+        // dynamically imported so this store stays free of the IndexedDB layer.
+        void import("@/lib/chat/rag").then((m) => m.clearProjectIndex(id)).catch(() => {});
+      },
     }),
     { name: "atlas-chat-projects" },
   ),

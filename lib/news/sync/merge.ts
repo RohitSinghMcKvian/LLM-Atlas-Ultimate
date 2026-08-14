@@ -82,8 +82,14 @@ export function mergeNews(options: MergeOptions): MergeResult {
   // deploy, a clock so wrong that TLS fails — not of 37 publishers going down
   // together. Publishing an empty corpus on that evidence would be wrong.
   const attempted = outcomes.filter((o) => o.result.status !== "disabled");
+  // `skipped` counts as a success here: the publisher answered with a valid feed
+  // that had nothing in it. It contributed no articles, but it is evidence that
+  // our egress works, which is the only thing this gate is testing for.
   const succeeded = attempted.filter(
-    (o) => o.result.status === "ok" || o.result.status === "not_modified",
+    (o) =>
+      o.result.status === "ok" ||
+      o.result.status === "not_modified" ||
+      o.result.status === "skipped",
   );
 
   if (attempted.length > 0 && succeeded.length === 0) {

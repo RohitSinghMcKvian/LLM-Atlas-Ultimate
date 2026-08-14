@@ -49,7 +49,7 @@ function Title({ text, query }: { text: string; query?: string }) {
     <>
       {highlightSegments(text, query).map((segment, i) =>
         segment.match ? (
-          <mark key={i} className="rounded bg-cyan/20 px-0.5 text-foreground">
+          <mark key={i} className="rounded bg-action/20 px-0.5 text-foreground">
             {segment.text}
           </mark>
         ) : (
@@ -63,7 +63,7 @@ function Title({ text, query }: { text: string; query?: string }) {
 function SourceMark({ article }: { article: NewsArticle }) {
   return (
     <span
-      className="grid size-5 shrink-0 place-items-center rounded-md text-[9px] font-bold text-background"
+      className="grid size-5 shrink-0 place-items-center rounded-md text-2xs font-bold text-background"
       style={{ backgroundColor: sourceAccent(article.sourceId) }}
       aria-hidden="true"
     >
@@ -185,7 +185,7 @@ export function NewsCard({
         "hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lift",
         "focus-within:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
         read && "opacity-70",
-        read && "border-l-2 border-l-cyan/50",
+        read && "border-l-2 border-l-action/50",
         className,
       )}
     >
@@ -196,7 +196,7 @@ export function NewsCard({
           className="pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100 max-[900px]:hidden"
           style={{
             background:
-              "radial-gradient(320px circle at var(--mx) var(--my), rgb(var(--cyan) / 0.07), transparent 70%)",
+              "radial-gradient(320px circle at var(--mx) var(--my), rgb(var(--elev-1) / 0.07), transparent 70%)",
           }}
         />
       )}
@@ -252,7 +252,7 @@ export function NewsCard({
             isMagazine ? "line-clamp-3 text-base" : "line-clamp-2 text-sm",
           )}
         >
-          <span className="transition-colors group-hover:text-cyan">
+          <span className="transition-colors group-hover:text-action">
             <Title text={article.title} query={query} />
           </span>
         </h3>
@@ -275,7 +275,7 @@ export function NewsCard({
                 key={id}
                 href={`/compare?models=${encodeURIComponent(id)}`}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded-md border border-cyan/25 bg-cyan/5 px-1.5 py-0.5 font-mono text-2xs text-cyan transition-colors hover:bg-cyan/15"
+                className="rounded-md border border-action/25 bg-action/5 px-1.5 py-0.5 font-mono text-2xs text-action transition-colors hover:bg-action/15"
               >
                 {id}
               </Link>
@@ -299,7 +299,7 @@ export function NewsCard({
                   setExpanded((v) => !v);
                 }}
                 aria-expanded={expanded}
-                className="flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-cyan transition-colors hover:bg-cyan/10"
+                className="flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-action transition-colors hover:bg-action/10"
               >
                 <Layers className="size-3" aria-hidden="true" />+{siblings.length} source
                 {siblings.length === 1 ? "" : "s"}
@@ -319,7 +319,7 @@ export function NewsCard({
                   className="grid size-7 place-items-center rounded-md transition-colors hover:bg-surface-3 hover:text-foreground"
                 >
                   {saved ? (
-                    <BookmarkCheck className="size-3.5 text-cyan" aria-hidden="true" />
+                    <BookmarkCheck className="size-3.5 text-action" aria-hidden="true" />
                   ) : (
                     <Bookmark className="size-3.5" aria-hidden="true" />
                   )}

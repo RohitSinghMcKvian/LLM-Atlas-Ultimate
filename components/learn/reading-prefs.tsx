@@ -33,7 +33,7 @@ export const MEASURE_CLASS: Record<ReadingPrefs["measure"], string> = {
 
 /** Body type scale per setting. Line height rises with size, as it should. */
 export const SIZE_CLASS: Record<ReadingPrefs["size"], string> = {
-  s: "text-[15px] leading-[1.72]",
+  s: "text-body leading-[1.72]",
   m: "text-[17px] leading-[1.75]",
   l: "text-[19px] leading-[1.78]",
 };
@@ -117,7 +117,7 @@ export function ReadingPrefsMenu() {
             onClick={() => setReadingPrefs({ focus: !prefs.focus })}
             className={cn(
               "relative h-4 w-7 rounded-full transition-colors",
-              prefs.focus ? "bg-gradient-primary" : "bg-surface-3",
+              prefs.focus ? "bg-action" : "bg-surface-3",
             )}
           >
             <span
@@ -129,7 +129,7 @@ export function ReadingPrefsMenu() {
           </button>
         </Row>
 
-        <p className="mt-2 border-t border-border pt-2 text-[10px] leading-relaxed text-muted-foreground">
+        <p className="mt-2 border-t border-border pt-2 text-2xs leading-relaxed text-muted-foreground">
           Focus mode dims the contents and notes rails while you read. Saved on
           this device.
         </p>

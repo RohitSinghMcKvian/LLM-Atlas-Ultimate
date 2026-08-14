@@ -30,7 +30,7 @@ export function ChangesView({
 
   if (changes.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-[#0b0d14] text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-2 bg-code text-center">
         <FileDiff className="size-6 text-muted-foreground/40" />
         <p className="text-sm text-muted-foreground">
           No changes yet — diffs appear here as files are written.
@@ -40,7 +40,7 @@ export function ChangesView({
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0b0d14] p-3">
+    <div className="h-full overflow-y-auto bg-code p-3">
       <div className="space-y-2">
         {ordered.map((c) => {
           const { added, removed } = diffStat(diffLines(c.before ?? "", c.after ?? ""));
@@ -59,7 +59,7 @@ export function ChangesView({
                       open && "rotate-90",
                     )}
                   />
-                  <Icon className="size-3.5 shrink-0 text-cyan" />
+                  <Icon className="size-3.5 shrink-0 text-action" />
                   <span className="truncate font-mono">{c.path}</span>
                   {c.after === null ? (
                     <span className="text-danger">deleted</span>

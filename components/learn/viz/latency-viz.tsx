@@ -54,8 +54,8 @@ export function LatencyViz() {
 
   const segments = [
     { label: "Overhead", ms: p.overhead, color: "var(--muted-foreground)" },
-    { label: "Prefill", ms: prefillMs, color: "var(--violet)" },
-    { label: "Decode", ms: decodeMs, color: "var(--cyan)" },
+    { label: "Prefill", ms: prefillMs, color: "var(--elev-0)" },
+    { label: "Decode", ms: decodeMs, color: "var(--elev-1)" },
   ];
 
   return (
@@ -92,7 +92,7 @@ export function LatencyViz() {
           max={60000}
           step={200}
           format={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v))}
-          accent="violet"
+          accent = "shelf"
         />
         <VizSlider
           label="Output tokens"
@@ -121,7 +121,7 @@ export function LatencyViz() {
             title={`${s.label}: ${fmtMs(s.ms)}`}
           >
             {s.ms / total > 0.14 && (
-              <span className="px-1 text-center font-mono text-[10px] font-medium tnum">
+              <span className="px-1 text-center font-mono text-2xs font-medium tnum">
                 {fmtMs(s.ms)}
               </span>
             )}
@@ -129,7 +129,7 @@ export function LatencyViz() {
         ))}
       </div>
 
-      <div className="mt-1.5 flex items-center gap-3 text-[10px] text-muted-foreground">
+      <div className="mt-1.5 flex items-center gap-3 text-2xs text-muted-foreground">
         {segments.map((s) => (
           <span key={s.label} className="inline-flex items-center gap-1">
             <span
@@ -143,12 +143,12 @@ export function LatencyViz() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <VizStat label="Time to first token" value={fmtMs(ttft)} accent="violet" />
-        <VizStat label="Generation" value={fmtMs(decodeMs)} accent="cyan" />
+        <VizStat label="Time to first token" value={fmtMs(ttft)} accent = "shelf" />
+        <VizStat label="Generation" value={fmtMs(decodeMs)} accent = "ridge" />
         <VizStat
           label="Perceived wait"
           value={fmtMs(perceived)}
-          accent={perceived > 2000 ? "danger" : perceived > 800 ? "amber" : "success"}
+          accent={perceived > 2000 ? "danger" : perceived > 800 ? "upland" : "success"}
         />
         <VizStat
           label="Decode share"

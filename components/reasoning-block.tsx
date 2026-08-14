@@ -32,19 +32,19 @@ export function ReasoningBlock({
       }`;
 
   return (
-    <div className="my-2 overflow-hidden rounded-xl border border-violet/20 bg-violet/5">
+    <div className="my-2 overflow-hidden rounded-xl border border-accent/20 bg-accent/5">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground/80 hover:bg-violet/10"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground/80 hover:bg-accent/10"
       >
-        <Brain className={cn("size-3.5 text-violet", streaming && "animate-pulse")} />
+        <Brain className={cn("size-3.5 text-accent", streaming && "animate-pulse")} />
         <span className="font-medium">{summary}</span>
         {streaming && (
           <span className="inline-flex gap-0.5">
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
-                className="size-1 animate-pulse-dot rounded-full bg-violet/70"
+                className="size-1 animate-pulse-dot rounded-full bg-accent/70"
                 style={{ animationDelay: `${i * 0.18}s` }}
               />
             ))}
@@ -65,10 +65,10 @@ export function ReasoningBlock({
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
-            <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-violet/15 px-3 py-2.5 font-mono text-[12px] leading-relaxed text-muted-foreground">
+            <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-accent/15 px-3 py-2.5 font-mono text-xs leading-relaxed text-muted-foreground">
               {text}
               {streaming && (
-                <span className="ml-0.5 inline-block h-3 w-1 animate-caret-blink bg-violet align-text-bottom" />
+                <span className="ml-0.5 inline-block h-3 w-1 animate-caret-blink bg-accent align-text-bottom" />
               )}
             </pre>
           </motion.div>

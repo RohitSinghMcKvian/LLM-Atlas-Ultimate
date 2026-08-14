@@ -5,6 +5,8 @@
 import { PROVIDERS, PROVIDER_LIST, getModelById } from "@/lib/catalog";
 import { modelAvailability, type RouteEnv } from "@/lib/catalog/availability";
 import type { CatalogModel, ProviderId, ModelRoute } from "@/lib/catalog/types";
+import { MAX_IMAGES_PER_TURN, readImages, type GeneratedImage } from "./images";
+import { rejectsTools } from "@/lib/chat/tool-support";
 
 /** A single part of a multimodal message (vision). */
 export type ChatContentPart =
@@ -53,6 +55,14 @@ export interface Usage {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  /**
+   * The subset of `completionTokens` that a generated image is made of (§P13).
+   *
+   * A subset, not an addition — providers count image tokens inside the
+   * completion total — so a consumer must subtract before pricing the rest, or
+   * it charges those tokens twice.
+   */
+  imageTokens?: number;
 }
 
 /**
@@ -65,13 +75,22 @@ export interface Usage {
 export type RouterEvent =
   | { type: "token"; text: string }
   | { type: "reasoning"; text: string }
+  /** An image the model produced, as a data: or https: URL. */
+  | { type: "image"; image: GeneratedImage }
   | { type: "tool_call"; call: ToolCall }
   | { type: "usage"; usage: Usage }
   | { type: "done"; finishReason?: string }
   /** The provider that actually served the request — may differ from the
    *  caller's pre-flight resolveRoute() when a free model fell through to a
    *  backup provider after a 429/5xx from the first-choice one. */
-  | { type: "provider"; provider: ProviderId };
+  | { type: "provider"; provider: ProviderId }
+  /**
+   * The request was retried with something removed because the route rejected
+   * it. Emitted before the first token so the caller can both tell the user and
+   * remember the fact — sending `tools` to a route that has already refused them
+   * costs a round trip on every subsequent turn.
+   */
+  | { type: "capability"; capability: "tools"; supported: false };
 
 /**
  * User-supplied keys, forwarded from the browser for a single request.
@@ -352,11 +371,21 @@ function rejectsStreamOptions(status: number, body: string): boolean {
   return (status === 422 || status === 400) && /stream_options/i.test(body);
 }
 
+/**
+ * `rejectsTools` — whether a 400/422 is the provider objecting to `tools` — is
+ * the exact counterpart of `rejectsStreamOptions` above, with the same remedy:
+ * re-queue the route with the offending field removed rather than burning it. It
+ * lives in `lib/chat/tool-support.ts` because the client needs the same verdict
+ * to decide whether to keep offering tools, and one matcher cannot drift from
+ * itself. That module is where it is tested against real provider bodies.
+ */
+
 /** Build the OpenAI-compatible request body, omitting undefined params. */
 function buildBody(
   route: ModelRoute,
   p: StreamParams,
   omitStreamOptions = false,
+  omitTools = false,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: route.model,
@@ -374,7 +403,7 @@ function buildBody(
   if (p.presencePenalty !== undefined) body.presence_penalty = p.presencePenalty;
   if (p.reasoningEffort) body.reasoning_effort = p.reasoningEffort;
   if (p.responseFormat) body.response_format = p.responseFormat;
-  if (p.tools && p.tools.length) {
+  if (!omitTools && p.tools && p.tools.length) {
     body.tools = p.tools;
     if (p.toolChoice) body.tool_choice = p.toolChoice;
   }
@@ -403,6 +432,148 @@ export const FIRST_CHUNK_TIMEOUT_MS = 20_000;
  * output has already been shown — so this ends the stream instead.
  */
 export const IDLE_TIMEOUT_MS = 60_000;
+
+/**
+ * Ceiling on the idle gap, however slow the model claims to be.
+ *
+ * Past this a silent connection is more likely dead than thinking, and holding
+ * it open costs the user the turn either way.
+ */
+export const MAX_IDLE_TIMEOUT_MS = 300_000;
+
+/** Throughput at which the 60-second constant above was a comfortable gap. */
+const BASELINE_TPS = 100;
+
+/**
+ * The idle gap for a specific model.
+ *
+ * `IDLE_TIMEOUT_MS` answers "has this connection died", and 60 s answers it well
+ * for a model that emits tokens continuously. It answers it wrongly for a large
+ * reasoning model: measured live, mid-build, Nemotron 3 Ultra streamed a hundred
+ * reasoning deltas, went quiet while it composed the next step, and was cut off
+ * at sixty seconds — reported as `finish_reason: "stalled"`.
+ *
+ * That is the worst of the failure modes found here, because `stalled` is the
+ * one finish reason nothing retries: {@link shouldContinue} declines it by
+ * design, on the correct reasoning that a hung connection is the failover
+ * layer's problem — and the failover layer cannot act, because the route was
+ * committed long ago. So the build ended with an empty assistant message and no
+ * error, having spent two rounds and produced nothing.
+ *
+ * Scaled inversely with throughput and floored at today's value, so a fast model
+ * keeps exactly the gap it has now. `GENERATION_SLOWDOWN`'s margin is folded in
+ * for the same reason it exists in `build-budget.ts`: the catalog's throughput
+ * is a vendor best case, measured at roughly half on the one model this was
+ * tested against.
+ */
+export function idleTimeoutFor(model?: { throughputTps?: number } | null): number {
+  const tps = model?.throughputTps;
+  if (!tps || tps <= 0) return IDLE_TIMEOUT_MS;
+  const scaled = IDLE_TIMEOUT_MS * (BASELINE_TPS / tps) * 2;
+  return Math.min(MAX_IDLE_TIMEOUT_MS, Math.max(IDLE_TIMEOUT_MS, Math.round(scaled)));
+}
+
+/**
+ * How long a **parked** route gets once every other candidate has failed.
+ *
+ * The two deadlines above are failover deadlines: they answer "should I try
+ * somewhere else yet", and ten seconds is the right answer to that. They were
+ * being used to answer a second question they cannot answer — "is this provider
+ * ever going to reply" — and on a large model the answer to the two questions
+ * differs by a minute.
+ *
+ * Measured, repeatedly, on `nvidia/nemotron-3-ultra-550b-a55b`: **56–60 s to
+ * first byte** for a five-token prompt, against 2.6 s for the 120B in the same
+ * family and 0.3 s for the 30B. NVIDIA NIM withholds response headers until
+ * generation starts, so a 550B model's queue and prefill land inside the connect
+ * window. Every route timed out, and a model with a million-token window — the
+ * one model in the catalog that exists to do long-context work — could not be
+ * called at all.
+ *
+ * The fix is not a bigger number: raising `CONNECT_TIMEOUT_MS` would make a
+ * genuinely dead provider hold the user for a minute before failing over. It is
+ * to stop treating "slow" as "dead". A route that misses the eager deadline is
+ * **parked, not aborted** — the request stays in flight, the queue moves on to
+ * the next candidate immediately, and only if nothing else answers do we come
+ * back and wait. Failover stays as fast as it was; the slow route is simply no
+ * longer thrown away while it was still working.
+ *
+ * Parking rather than re-issuing also matters for cost, which is the whole point
+ * on a long-context model: aborting and retrying would pay prefill twice on a
+ * prompt that can be hundreds of thousands of tokens.
+ *
+ * Three minutes, because the caller's own `AbortSignal` is still live — Stop
+ * works throughout — so this is a backstop against a provider that never
+ * answers, not the mechanism the user waits on.
+ */
+export const PATIENT_DEADLINE_MS = 180_000;
+
+/** Marker for "this promise has not settled inside the deadline". */
+const SLOW = Symbol("slow");
+type Slow = typeof SLOW;
+
+/**
+ * Await `p`, or give up waiting at `ms` — **without** disturbing `p`.
+ *
+ * The distinction from {@link readWithTimeout} is the whole of the fix above:
+ * this reports that something is taking too long, and leaves the caller to
+ * decide whether that means abandoning it.
+ */
+function raceDeadline<T>(p: Promise<T>, ms: number): Promise<T | Slow> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const clear = () => {
+    if (timer) clearTimeout(timer);
+  };
+  return Promise.race([
+    p.then(
+      (v) => {
+        clear();
+        return v;
+      },
+      (e) => {
+        clear();
+        throw e;
+      },
+    ),
+    new Promise<Slow>((resolve) => {
+      timer = setTimeout(() => resolve(SLOW), ms);
+    }),
+  ]);
+}
+
+/**
+ * Read until the stream produces its first `data:` frame.
+ *
+ * A route that has sent *bytes* has not necessarily answered. OpenRouter opens
+ * every stream with `: OPENROUTER PROCESSING` comment lines while the upstream
+ * provider is still queueing — measured on
+ * `nvidia/nemotron-3-ultra-550b-a55b:free`, two of them before anything else.
+ * Treating those as "this route works" is how a keepalive beats a route that was
+ * about to send real tokens: the committed stream then delivers nothing, the
+ * better route has already been abandoned, and the turn ends with an empty
+ * assistant message and no error to explain it. Seen live, mid-build.
+ *
+ * Every chunk consumed here is handed back so the parser sees the stream whole.
+ */
+async function readUntilData(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<{ chunks: Uint8Array[] } | { empty: true } | { err: Error }> {
+  const chunks: Uint8Array[] = [];
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (;;) {
+      const r = await reader.read();
+      if (r.done) return { empty: true };
+      if (!r.value) continue;
+      chunks.push(r.value);
+      text += decoder.decode(r.value, { stream: true });
+      if (/^data:/m.test(text)) return { chunks };
+    }
+  } catch (err) {
+    return { err: err as Error };
+  }
+}
 
 class ReadTimeout extends Error {}
 
@@ -505,24 +676,54 @@ export async function* streamChatEvents(
   const preferred = candidates[0].route.provider;
 
   const attempts: RouteAttempt[] = [];
-  let committed: {
+
+  interface Committed {
     reader: ReadableStreamDefaultReader<Uint8Array>;
     provider: ProviderId;
-    first: Uint8Array | undefined;
-  } | null = null;
+    /** Chunks consumed while waiting for the first data frame, replayed intact. */
+    first: Uint8Array[];
+    /** The committed attempt ran without the `tools` the caller supplied. */
+    toolsDropped: boolean;
+  }
+  interface QueueItem {
+    cand: ResolvedRoute;
+    omitStreamOptions: boolean;
+    omitTools: boolean;
+  }
+  /** A route still in flight past its failover deadline. See PATIENT_DEADLINE_MS. */
+  interface ParkedRoute {
+    /** Wait on it properly, now that nothing else has answered. */
+    resume: () => Promise<Committed | null>;
+    /** Another route won; stop this one so it is not billed for output nobody reads. */
+    abandon: () => void;
+  }
+  type Outcome =
+    | { kind: "committed"; value: Committed }
+    | { kind: "requeue"; item: QueueItem }
+    | { kind: "failed" }
+    | { kind: "slow"; parked: ParkedRoute };
+
+  let committed: Committed | null = null;
 
   // A work queue rather than a plain loop, so one candidate can be re-queued with
   // a reduced body (see `rejectsStreamOptions`) without duplicating the attempt
   // machinery or letting a compatibility quirk consume a whole route.
-  const queue: { cand: ResolvedRoute; omitStreamOptions: boolean }[] = candidates.map((cand) => ({
+  const queue: QueueItem[] = candidates.map((cand) => ({
     cand,
     omitStreamOptions: false,
+    omitTools: false,
   }));
+  const parked: ParkedRoute[] = [];
 
-  while (queue.length > 0) {
-    const { cand, omitStreamOptions } = queue.shift()!;
-    if (params.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-
+  /**
+   * One attempt at one route.
+   *
+   * `patient` is set on the second pass, where there is nothing left to fail
+   * over to: missing the deadline there is a real failure rather than a reason
+   * to look elsewhere, so nothing is parked.
+   */
+  const attemptOne = async (item: QueueItem, patient: boolean): Promise<Outcome> => {
+    const { cand, omitStreamOptions, omitTools } = item;
     const started = Date.now();
     const record = (patch: Partial<RouteAttempt>) =>
       attempts.push({
@@ -538,183 +739,412 @@ export async function* streamChatEvents(
     const ac = new AbortController();
     const onCallerAbort = () => ac.abort();
     params.signal?.addEventListener("abort", onCallerAbort, { once: true });
-    let connectTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(
-      () => ac.abort(),
-      CONNECT_TIMEOUT_MS,
+    const release = () => params.signal?.removeEventListener("abort", onCallerAbort);
+
+    // Settled into a value rather than left to reject, so `raceDeadline` can
+    // report "still waiting" without also having to catch.
+    const fetching = fetch(`${cand.runtime.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: cand.runtime.headers,
+      body: JSON.stringify(buildBody(cand.route, params, omitStreamOptions, omitTools)),
+      signal: ac.signal,
+    }).then(
+      (res) => ({ res }) as const,
+      (err: unknown) => ({ err: err as Error }) as const,
     );
 
-    let res: Response;
-    try {
-      res = await fetch(`${cand.runtime.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: cand.runtime.headers,
-        body: JSON.stringify(buildBody(cand.route, params, omitStreamOptions)),
-        signal: ac.signal,
-      });
-    } catch (e) {
-      clearTimeout(connectTimer);
-      params.signal?.removeEventListener("abort", onCallerAbort);
-      // A caller abort is the user pressing stop — never failover, never mask it.
-      if (params.signal?.aborted) throw e;
-      record({ error: ac.signal.aborted ? "timeout" : "network", detail: (e as Error).message });
-      continue;
-    }
-    clearTimeout(connectTimer);
-    connectTimer = undefined;
-
-    if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => "");
-      params.signal?.removeEventListener("abort", onCallerAbort);
-      // Retry this same route once without `stream_options` before giving up on
-      // it — the model works, the provider just will not accept that one field.
-      if (!omitStreamOptions && rejectsStreamOptions(res.status, text)) {
-        queue.unshift({ cand, omitStreamOptions: true });
-        continue;
+    /** Everything from the first data frame on. Shared, so the passes cannot drift. */
+    const commitOrFail = (
+      res: Response,
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      read: Awaited<ReturnType<typeof readUntilData>>,
+    ): Outcome => {
+      release();
+      if ("err" in read) {
+        void reader.cancel().catch(() => undefined);
+        ac.abort();
+        if (params.signal?.aborted) throw read.err;
+        record({ error: "network" });
+        return { kind: "failed" };
       }
-      record({ status: res.status, detail: scrubSecrets(text).slice(0, 200) });
-      continue;
-    }
-
-    // Headers are not enough — read one chunk before committing, so a provider
-    // that accepts and then hangs still falls through to the next route.
-    const reader = res.body.getReader();
-    try {
-      const first = await readWithTimeout(reader, FIRST_CHUNK_TIMEOUT_MS);
-      if (first.done) {
-        // Accepted, streamed nothing. Not a usable answer; try the next route.
-        params.signal?.removeEventListener("abort", onCallerAbort);
+      if ("empty" in read) {
+        // Accepted, streamed no data frame at all — keepalives at most. Not a
+        // usable answer; try the next route.
         record({ status: res.status, detail: "empty stream" });
-        continue;
+        return { kind: "failed" };
       }
-      committed = { reader, provider: cand.route.provider, first: first.value };
-      params.signal?.removeEventListener("abort", onCallerAbort);
-      break;
-    } catch (e) {
-      await reader.cancel().catch(() => undefined);
+      return {
+        kind: "committed",
+        value: {
+          reader,
+          provider: cand.route.provider,
+          first: read.chunks,
+          toolsDropped: omitTools && !!params.tools?.length,
+        },
+      };
+    };
+
+    /** Headers have arrived (or failed). Everything downstream of that. */
+    const afterHeaders = async (
+      settled: { res: Response } | { err: Error },
+      firstChunkMs: number,
+    ): Promise<Outcome> => {
+      if ("err" in settled) {
+        release();
+        // A caller abort is the user pressing stop — never failover, never mask it.
+        if (params.signal?.aborted) throw settled.err;
+        record({ error: ac.signal.aborted ? "timeout" : "network", detail: settled.err.message });
+        return { kind: "failed" };
+      }
+      const res = settled.res;
+
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => "");
+        release();
+        // Retry this same route once without `stream_options` before giving up on
+        // it — the model works, the provider just will not accept that one field.
+        if (!omitStreamOptions && rejectsStreamOptions(res.status, text)) {
+          return { kind: "requeue", item: { cand, omitStreamOptions: true, omitTools } };
+        }
+        // Same remedy for `tools`. Without it, a route that rejects tool calling
+        // is spent rather than downgraded — and since most NIM-only models have
+        // exactly one route, the queue empties and the whole turn fails with
+        // `all_routes_failed` instead of answering. The retry costs one round trip
+        // on a request that streamed nothing and is not billed.
+        if (!omitTools && params.tools?.length && rejectsTools(res.status, text)) {
+          return { kind: "requeue", item: { cand, omitStreamOptions, omitTools: true } };
+        }
+        record({ status: res.status, detail: scrubSecrets(text).slice(0, 200) });
+        return { kind: "failed" };
+      }
+
+      // Headers are not enough — read until a real data frame before committing,
+      // so a provider that accepts and then hangs, or that only sends
+      // keepalives, still falls through to the next route.
+      const reader = res.body.getReader();
+      const reading = readUntilData(reader);
+      const first = await raceDeadline(reading, firstChunkMs);
+      if (first !== SLOW) return commitOrFail(res, reader, first);
+
+      if (patient) {
+        release();
+        void reader.cancel().catch(() => undefined);
+        ac.abort();
+        record({ error: "timeout" });
+        return { kind: "failed" };
+      }
+      return {
+        kind: "slow",
+        parked: {
+          resume: async () => {
+            const late = await raceDeadline(reading, PATIENT_DEADLINE_MS);
+            if (late === SLOW) {
+              release();
+              void reader.cancel().catch(() => undefined);
+              ac.abort();
+              record({ error: "timeout" });
+              return null;
+            }
+            const out = commitOrFail(res, reader, late);
+            return out.kind === "committed" ? out.value : null;
+          },
+          abandon: () => {
+            release();
+            void reader.cancel().catch(() => undefined);
+            ac.abort();
+          },
+        },
+      };
+    };
+
+    const settled = await raceDeadline(fetching, patient ? PATIENT_DEADLINE_MS : CONNECT_TIMEOUT_MS);
+    if (settled !== SLOW) return afterHeaders(settled, patient ? PATIENT_DEADLINE_MS : FIRST_CHUNK_TIMEOUT_MS);
+
+    if (patient) {
+      release();
       ac.abort();
-      params.signal?.removeEventListener("abort", onCallerAbort);
-      if (params.signal?.aborted) throw e;
-      record({ error: e instanceof ReadTimeout ? "timeout" : "network" });
-      continue;
+      record({ error: "timeout" });
+      return { kind: "failed" };
     }
+    return {
+      kind: "slow",
+      parked: {
+        resume: async () => {
+          const late = await raceDeadline(fetching, PATIENT_DEADLINE_MS);
+          if (late === SLOW) {
+            release();
+            ac.abort();
+            record({ error: "timeout" });
+            return null;
+          }
+          const out = await afterHeaders(late, PATIENT_DEADLINE_MS);
+          if (out.kind === "committed") return out.value;
+          // A provider that answered late *and* rejected one field is rare
+          // enough to re-issue rather than complicate the parked path — and by
+          // this point the first request streamed nothing, so nothing is
+          // re-paid for.
+          if (out.kind === "requeue") {
+            const retry = await attemptOne(out.item, true);
+            return retry.kind === "committed" ? retry.value : null;
+          }
+          return null;
+        },
+        abandon: () => {
+          release();
+          ac.abort();
+        },
+      },
+    };
+  };
+
+  // Pass one: every candidate, on the failover deadlines. A route that is merely
+  // slow is set aside rather than killed, so this pass moves at exactly the
+  // speed it always did.
+  while (queue.length > 0) {
+    const item = queue.shift()!;
+    if (params.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const out = await attemptOne(item, false);
+    if (out.kind === "committed") {
+      committed = out.value;
+      break;
+    }
+    if (out.kind === "requeue") queue.unshift(out.item);
+    else if (out.kind === "slow") parked.push(out.parked);
   }
 
-  if (!committed) throw aggregateFailure(model, attempts);
-
-  if (committed.provider !== preferred) {
-    yield { type: "provider", provider: committed.provider };
+  // Pass two: nothing answered in time, but something may still be thinking.
+  // This is the only path on which a 550B model is reachable at all.
+  while (!committed && parked.length > 0) {
+    if (params.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    committed = await parked.shift()!.resume();
   }
 
-  const reader = committed.reader;
-  const decoder = new TextDecoder();
-  let buffer = "";
+  if (!committed) {
+    for (const p of parked) p.abandon();
+    throw aggregateFailure(model, attempts);
+  }
 
-  // Reasoning models (DeepSeek R1/V4, o-series, gpt-oss, …) stream their visible
-  // text in `reasoning_content`/`reasoning`; we surface it as a separate
-  // `reasoning` stream. If a response produces NO content at all, the string
-  // wrapper below falls back to reasoning so the model never appears silent.
-  let finishReason: string | undefined;
-  // Tool calls arrive as indexed fragments; accumulate then flush at the end.
-  const toolAcc: Record<number, { id: string; name: string; args: string }> = {};
+  const readUsage = (u: any): Usage | null => {
+    if (!u) return null;
+    // Where image-output tokens land is not standardized — chat-completions
+    // never had a field for them, so each provider put them somewhere
+    // plausible. All three spellings below are read and the first finite one
+    // wins; an absent count simply means the turn is priced as plain text.
+    const details = u.completion_tokens_details ?? u.output_tokens_details;
+    const imageTokens = [
+      details?.image_tokens,
+      details?.image_output_tokens,
+      u.image_tokens,
+    ].find((n) => typeof n === "number" && Number.isFinite(n) && n > 0);
+    return {
+      promptTokens: u.prompt_tokens,
+      completionTokens: u.completion_tokens,
+      totalTokens: u.total_tokens,
+      ...(imageTokens ? { imageTokens } : {}),
+    };
+  };
 
-  const flushTools = function* (): Generator<RouterEvent> {
-    for (const k of Object.keys(toolAcc)) {
-      const t = toolAcc[Number(k)];
-      if (t.name || t.args)
-        yield { type: "tool_call", call: { id: t.id, name: t.name, arguments: t.args } };
+  /**
+   * A committed stream that produced no answer at all.
+   *
+   * Distinguished from a normal end so the caller can fall back: a route that
+   * committed and then said nothing has told us nothing except that it was the
+   * wrong route.
+   */
+  const BARREN = Symbol("barren");
+
+  /** Read one committed stream to its end, or report that it carried nothing. */
+  const drain = async function* (
+    c: Committed,
+  ): AsyncGenerator<RouterEvent, typeof BARREN | undefined, unknown> {
+    const reader = c.reader;
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    // Reasoning models (DeepSeek R1/V4, o-series, gpt-oss, …) stream their
+    // visible text in `reasoning_content`/`reasoning`; we surface it as a
+    // separate `reasoning` stream. If a response produces NO content at all, the
+    // string wrapper below falls back to reasoning so the model never appears
+    // silent.
+    let finishReason: string | undefined;
+    // Tool calls arrive as indexed fragments; accumulate then flush at the end.
+    const toolAcc: Record<number, { id: string; name: string; args: string }> = {};
+    /** Anything the caller could actually show or act on. */
+    let answered = false;
+
+    const flushTools = function* (): Generator<RouterEvent> {
+      for (const k of Object.keys(toolAcc)) {
+        const t = toolAcc[Number(k)];
+        if (t.name || t.args) {
+          answered = true;
+          yield { type: "tool_call", call: { id: t.id, name: t.name, arguments: t.args } };
+        }
+      }
+    };
+
+    // The chunks consumed to commit this route are replayed here, so no tokens
+    // are lost to the read-ahead above.
+    const replay = [...c.first];
+    let stalled = false;
+
+    // De-duplicated across the whole stream, not per delta: providers repeat the
+    // finished image on the final chunk, and some send it on both `delta` and
+    // `message`.
+    const seenImages = new Set<string>();
+    let imageCount = 0;
+
+    try {
+      for (;;) {
+        let value: Uint8Array | undefined;
+        if (replay.length) {
+          value = replay.shift();
+        } else {
+          let chunk: ReadableStreamReadResult<Uint8Array>;
+          try {
+            chunk = await readWithTimeout(reader, idleTimeoutFor(model));
+          } catch (e) {
+            if (params.signal?.aborted) throw e;
+            // Past the first chunk the caller has already seen output, so
+            // failing over is not an option — end the stream and say why.
+            if (e instanceof ReadTimeout) {
+              stalled = true;
+              break;
+            }
+            throw e;
+          }
+          if (chunk.done) break;
+          value = chunk.value;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line || !line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") {
+            yield* flushTools();
+            if (!answered) return BARREN;
+            yield { type: "done", finishReason };
+            return undefined;
+          }
+          try {
+            const json = JSON.parse(data);
+
+            // A provider error delivered *inside* the stream. `choices` is
+            // absent on these, so every field below reads as empty and the turn
+            // used to end looking like a model that had nothing to say. Seen
+            // live: an OpenRouter free route erroring mid-build, reported to the
+            // user as a blank assistant message.
+            const err = json.error;
+            if (err && (typeof err === "string" || err.message || err.code)) {
+              throw new RouterError(
+                "upstream_error",
+                typeof err === "string"
+                  ? err
+                  : (err.message ?? `${c.provider} reported an error mid-stream.`),
+                502,
+                attempts,
+              );
+            }
+
+            const choice = json.choices?.[0];
+            const delta = choice?.delta ?? {};
+            if (choice?.finish_reason) finishReason = choice.finish_reason;
+
+            // Guarded on the type, not just on truthiness: `content` is an array
+            // of typed parts when the model emits an image, and yielding that as
+            // a token would put "[object Object]" in the transcript.
+            const content: unknown = delta.content;
+            const reasoning: string | undefined = delta.reasoning_content ?? delta.reasoning;
+            if (typeof content === "string" && content) {
+              answered = true;
+              yield { type: "token", text: content };
+            }
+            if (reasoning) {
+              answered = true;
+              yield { type: "reasoning", text: reasoning };
+            }
+
+            // Image output. Checked on the message as well as the delta: a
+            // provider that does not stream images still sends them, once, on a
+            // final non-delta choice.
+            for (const image of [...readImages(delta), ...readImages(choice?.message)]) {
+              if (imageCount >= MAX_IMAGES_PER_TURN) break;
+              if (seenImages.has(image.url)) continue;
+              seenImages.add(image.url);
+              imageCount++;
+              answered = true;
+              yield { type: "image", image };
+            }
+
+            if (Array.isArray(delta.tool_calls)) {
+              for (const tc of delta.tool_calls) {
+                const idx: number = tc.index ?? 0;
+                const cur = toolAcc[idx] ?? { id: "", name: "", args: "" };
+                if (tc.id) cur.id = tc.id;
+                if (tc.function?.name) cur.name = tc.function.name;
+                if (tc.function?.arguments) cur.args += tc.function.arguments;
+                toolAcc[idx] = cur;
+              }
+            }
+
+            const usage = readUsage(json.usage);
+            if (usage) yield { type: "usage", usage };
+          } catch (e) {
+            if (e instanceof RouterError) throw e;
+            // partial JSON across chunks — ignore; it'll arrive next read
+          }
+        }
+      }
+
+      // Stream ended without an explicit [DONE], or stalled past the idle timeout.
+      yield* flushTools();
+      if (!answered && !stalled) return BARREN;
+      yield { type: "done", finishReason: stalled ? "stalled" : finishReason };
+      return undefined;
+    } finally {
+      // Release the connection on every exit path, including the consumer
+      // abandoning the generator — otherwise a stopped chat leaks a socket.
+      await reader.cancel().catch(() => undefined);
     }
   };
 
-  const readUsage = (u: any): Usage | null =>
-    u
-      ? {
-          promptTokens: u.prompt_tokens,
-          completionTokens: u.completion_tokens,
-          totalTokens: u.total_tokens,
-        }
-      : null;
-
-  // The chunk consumed to commit this route is replayed here, so no tokens are
-  // lost to the first-chunk read-ahead above.
-  let pending: Uint8Array | undefined = committed.first;
-  let stalled = false;
-
-  try {
-  while (true) {
-    let value: Uint8Array | undefined;
-    if (pending) {
-      value = pending;
-      pending = undefined;
-    } else {
-      let chunk: ReadableStreamReadResult<Uint8Array>;
-      try {
-        chunk = await readWithTimeout(reader, IDLE_TIMEOUT_MS);
-      } catch (e) {
-        if (params.signal?.aborted) throw e;
-        // Past the first chunk the caller has already seen output, so failing
-        // over is not an option — end the stream and say why.
-        if (e instanceof ReadTimeout) {
-          stalled = true;
-          break;
-        }
-        throw e;
-      }
-      if (chunk.done) break;
-      value = chunk.value;
+  // A route that committed and then said nothing has not answered, and the
+  // routes parked behind it may still be about to. Measured live: an OpenRouter
+  // free route won the race with keepalives and an error frame while the NVIDIA
+  // route that would have produced the page sat parked and was discarded.
+  for (;;) {
+    if (committed.provider !== preferred) {
+      yield { type: "provider", provider: committed.provider };
+    }
+    // Before the first token, so the caller can say so at the top of the turn
+    // rather than explaining afterwards why the model ignored every tool it was
+    // supposedly given.
+    if (committed.toolsDropped) {
+      yield { type: "capability", capability: "tools", supported: false };
     }
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+    const outcome = yield* drain(committed);
+    if (outcome !== BARREN) break;
 
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line || !line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (data === "[DONE]") {
-        yield* flushTools();
-        yield { type: "done", finishReason };
-        return;
-      }
-      try {
-        const json = JSON.parse(data);
-        const choice = json.choices?.[0];
-        const delta = choice?.delta ?? {};
-        if (choice?.finish_reason) finishReason = choice.finish_reason;
-
-        const content: string | undefined = delta.content;
-        const reasoning: string | undefined =
-          delta.reasoning_content ?? delta.reasoning;
-        if (content) yield { type: "token", text: content };
-        if (reasoning) yield { type: "reasoning", text: reasoning };
-
-        if (Array.isArray(delta.tool_calls)) {
-          for (const tc of delta.tool_calls) {
-            const idx: number = tc.index ?? 0;
-            const cur = toolAcc[idx] ?? { id: "", name: "", args: "" };
-            if (tc.id) cur.id = tc.id;
-            if (tc.function?.name) cur.name = tc.function.name;
-            if (tc.function?.arguments) cur.args += tc.function.arguments;
-            toolAcc[idx] = cur;
-          }
-        }
-
-        const usage = readUsage(json.usage);
-        if (usage) yield { type: "usage", usage };
-      } catch {
-        // partial JSON across chunks — ignore; it'll arrive next read
-      }
+    attempts.push({
+      provider: committed.provider,
+      routeModel: model.id,
+      ms: 0,
+      detail: "committed but streamed no answer",
+    });
+    const next = parked.length ? await parked.shift()!.resume() : null;
+    if (!next) {
+      for (const p of parked) p.abandon();
+      throw aggregateFailure(model, attempts);
     }
+    committed = next;
   }
 
-  // Stream ended without an explicit [DONE], or stalled past the idle timeout.
-  yield* flushTools();
-  yield { type: "done", finishReason: stalled ? "stalled" : finishReason };
-  } finally {
-    // Release the connection on every exit path, including the consumer
-    // abandoning the generator — otherwise a stopped chat leaks a socket.
-    await reader.cancel().catch(() => undefined);
-  }
+  for (const p of parked) p.abandon();
 }
 
 /**

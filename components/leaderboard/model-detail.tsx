@@ -19,6 +19,7 @@ import {
   MessagesSquare,
   Wrench,
   Eye,
+  Image as ImageIcon,
   Database,
   Zap,
   Gauge,
@@ -28,19 +29,27 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BENCHMARK_MAP, modelAccess } from "@/lib/catalog";
+import { BENCHMARK_MAP, modelAccess, producesImages } from "@/lib/catalog";
 import { useKeysStore } from "@/lib/store/keys-store";
 import type { CatalogModel } from "@/lib/catalog/types";
+import { seriesAt, useChartColors } from "@/lib/charts/palette";
 import { formatContext, formatUSD, formatCompact } from "@/lib/utils";
 
+/**
+ * Benchmark categories onto the elevation ramp. These are unordered categories,
+ * so which band each gets is arbitrary — what matters is that there are exactly
+ * as many bands as categories and they all come from one scale. The previous
+ * table mixed four palette colours with three (`#34C799`, `#38BDF8`, `#F472B6`)
+ * that appeared nowhere else in the product.
+ */
 const CAT_COLOR: Record<string, string> = {
-  reasoning: "#A78BFA",
-  coding: "#22D3EE",
-  math: "#F5A623",
-  knowledge: "#34C799",
-  agentic: "#7C3AED",
-  vision: "#38BDF8",
-  overall: "#F472B6",
+  reasoning: seriesAt(1),
+  coding: seriesAt(4),
+  math: seriesAt(3),
+  knowledge: seriesAt(2),
+  agentic: seriesAt(0),
+  vision: seriesAt(5),
+  overall: seriesAt(4),
 };
 
 function CapChip({
@@ -56,7 +65,7 @@ function CapChip({
     <span
       className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs ${
         on
-          ? "border-cyan/30 bg-cyan/10 text-cyan"
+          ? "border-action/30 bg-action/10 text-action"
           : "border-border bg-surface-2/50 text-muted-foreground/60 line-through"
       }`}
     >
@@ -68,8 +77,9 @@ function CapChip({
 
 export function ModelDetail({ model }: { model: CatalogModel }) {
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const hasKey = useKeysStore((s) => s.openrouterKey.length > 0);
+  const hasKey = useKeysStore((s) => s.keyPresent);
   const free = modelAccess(model) === "free";
+  const c = useChartColors();
   const chartData = model.benchmarks.map((b) => ({
     key: b.key,
     label: BENCHMARK_MAP[b.key]?.label ?? b.key,
@@ -91,6 +101,7 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
           <CapChip on={model.capabilities.reasoning} icon={Brain} label="Reasoning" />
           <CapChip on={model.capabilities.toolUse} icon={Wrench} label="Tools" />
           <CapChip on={model.modalities.includes("vision")} icon={Eye} label="Vision" />
+          <CapChip on={producesImages(model)} icon={ImageIcon} label="Image output" />
           <CapChip on={model.capabilities.caching} icon={Zap} label="Caching" />
         </div>
 
@@ -115,15 +126,15 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
                     type="category"
                     dataKey="label"
                     width={92}
-                    tick={{ fill: "#8B91A3", fontSize: 11 }}
+                    tick={{ fill: c.axis, fontSize: 12 }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip
-                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                    cursor={{ fill: `${c.axis}14` }}
                     contentStyle={{
-                      background: "rgb(18 20 29)",
-                      border: "1px solid rgb(52 57 73)",
+                      background: c.surface,
+                      border: `1px solid ${c.border}`,
                       borderRadius: 12,
                       fontSize: 12,
                     }}
@@ -134,7 +145,7 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
                   />
                   <Bar dataKey="score" radius={[0, 6, 6, 0]} barSize={14}>
                     {chartData.map((d, i) => (
-                      <Cell key={i} fill={CAT_COLOR[d.category] ?? "#22D3EE"} />
+                      <Cell key={i} fill={CAT_COLOR[d.category] ?? seriesAt(4)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -205,7 +216,7 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
             className={`flex items-center gap-2.5 rounded-xl border p-3 ${
               free
                 ? "border-success/25 bg-success/5"
-                : "border-violet/25 bg-violet/5"
+                : "border-accent/25 bg-accent/5"
             }`}
           >
             {free ? (
@@ -221,9 +232,9 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
               </>
             ) : (
               <>
-                <KeyRound className="size-4 shrink-0 text-[rgb(167_139_250)]" />
+                <KeyRound className="size-4 shrink-0 text-accent" />
                 <div className="min-w-0 text-xs">
-                  <span className="font-medium text-[rgb(167_139_250)]">
+                  <span className="font-medium text-accent">
                     Bring your own key
                   </span>
                   <span className="text-muted-foreground">
@@ -312,7 +323,7 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
                     href={b.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-cyan hover:underline"
+                    className="inline-flex items-center gap-1 text-action hover:underline"
                   >
                     {b.source} <ExternalLink className="size-3" />
                   </a>

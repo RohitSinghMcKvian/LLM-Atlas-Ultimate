@@ -35,14 +35,14 @@ export interface FlowEdge {
 export interface KindMeta {
   label: string;
   icon: LucideIcon;
-  accent: "cyan" | "violet" | "amber" | "success";
+  accent: "ridge" | "shelf" | "upland" | "success";
 }
 
 export const KIND_META: Record<NodeKind, KindMeta> = {
-  trigger: { label: "Trigger", icon: Webhook, accent: "cyan" },
-  agent: { label: "Agent", icon: Bot, accent: "violet" },
-  tool: { label: "Tool", icon: Wrench, accent: "amber" },
-  condition: { label: "Condition", icon: GitBranch, accent: "cyan" },
+  trigger: { label: "Trigger", icon: Webhook, accent: "ridge" },
+  agent: { label: "Agent", icon: Bot, accent: "shelf" },
+  tool: { label: "Tool", icon: Wrench, accent: "upland" },
+  condition: { label: "Condition", icon: GitBranch, accent: "ridge" },
   output: { label: "Output", icon: Flag, accent: "success" },
 };
 

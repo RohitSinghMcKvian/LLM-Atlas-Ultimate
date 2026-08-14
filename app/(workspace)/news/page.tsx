@@ -2,8 +2,18 @@ import type { Metadata } from "next";
 import { CatalogScope } from "@/components/catalog/catalog-scope";
 import { NewsClient } from "@/components/news/news-client";
 import { getCatalogSnapshot } from "@/lib/catalog/store";
-import { getNewsSnapshot } from "@/lib/news/store";
+import { getNewsSnapshot, toWireNews } from "@/lib/news/store";
 import { parseNewsSearchParams } from "@/lib/news/select";
+
+/**
+ * Articles embedded in the RSC payload. The rest are paged in by `NewsClient`
+ * immediately after mount from `/api/v1/news?offset=`.
+ *
+ * Not a performance nicety: the corpus reached 238 articles in testing and the
+ * untruncated document was 2.2 MB, which is enough to exhaust a dev server's
+ * heap on repeat renders. See `toWireNews` in `lib/news/snapshot.ts`.
+ */
+const PAGE_ARTICLE_LIMIT = 60;
 
 export const metadata: Metadata = {
   title: "Atlas News",
@@ -42,7 +52,8 @@ export default async function NewsPage({
   return (
     <CatalogScope snapshot={catalog}>
       <NewsClient
-        snapshot={news}
+        snapshot={toWireNews(news, { limit: PAGE_ARTICLE_LIMIT })}
+        totalArticles={news.articles.length}
         catalogDiff={catalog.diff}
         initial={parseNewsSearchParams(params)}
         // The operator can remove the public Refresh surface entirely; the

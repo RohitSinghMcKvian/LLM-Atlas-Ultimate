@@ -60,7 +60,7 @@ export function NewsDetailBody({
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span
-            className="grid size-5 place-items-center rounded-md text-[9px] font-bold text-background"
+            className="grid size-5 place-items-center rounded-md text-2xs font-bold text-background"
             style={{ backgroundColor: sourceAccent(article.sourceId) }}
             aria-hidden="true"
           >
@@ -110,8 +110,8 @@ export function NewsDetailBody({
           tell at a glance which sentences came from the publisher's own feed and
           which a model produced. */}
       {article.abstract && (
-        <aside className="rounded-xl border border-violet/25 bg-violet/5 p-3">
-          <p className="mb-1.5 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-[rgb(167_139_250)]">
+        <aside className="rounded-xl border border-accent/25 bg-accent/5 p-3">
+          <p className="mb-1.5 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-accent">
             <Sparkles className="size-3" aria-hidden="true" />
             AI-generated abstract — verify against the source
           </p>
@@ -129,7 +129,7 @@ export function NewsDetailBody({
         {onToggleSave && (
           <Button variant="outline" onClick={() => onToggleSave(article.id)} aria-pressed={saved}>
             {saved ? (
-              <BookmarkCheck className="text-cyan" aria-hidden="true" />
+              <BookmarkCheck className="text-action" aria-hidden="true" />
             ) : (
               <Bookmark aria-hidden="true" />
             )}
@@ -177,7 +177,7 @@ export function NewsDetailBody({
                         {` · index ${intelligenceIndex(model).toFixed(0)}`}
                       </span>
                     </span>
-                    <span className="shrink-0 text-2xs text-cyan">Compare →</span>
+                    <span className="shrink-0 text-2xs text-action">Compare →</span>
                   </Link>
                 </li>
               );

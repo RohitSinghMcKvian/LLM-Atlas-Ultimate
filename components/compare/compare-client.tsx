@@ -288,7 +288,7 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
           }}
           rows={3}
           placeholder="Ask anything — e.g. 'Explain the trade-offs between RAG and long-context for a 200-page knowledge base.'"
-          className="w-full resize-none bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/60"
+          className="w-full resize-none bg-transparent text-body outline-none placeholder:text-muted-foreground/60"
         />
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           {selected.map((id) => {
@@ -309,7 +309,7 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
             <PopoverTrigger asChild>
               <button
                 disabled={running}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-cyan hover:text-foreground disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-action hover:text-foreground disabled:opacity-50"
               >
                 <Plus className="size-3" /> Add model
               </button>
@@ -385,15 +385,15 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
             animate={{ opacity: 1, y: 0 }}
             className="mt-6"
           >
-            <div className="rounded-2xl border border-cyan/25 bg-gradient-primary-soft p-5 shadow-glow">
+            <div className="rounded-2xl border border-action/25 bg-action/10 p-5 shadow-glow">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  <span className="grid size-6 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
+                  <span className="grid size-6 place-items-center rounded-lg bg-action text-action-foreground">
                     <GitCompareArrows className="size-3.5" />
                   </span>
                   Synthesis
                   {synth.status === "streaming" && (
-                    <span className="inline-block h-3 w-1.5 animate-caret-blink bg-cyan align-middle" />
+                    <span className="inline-block h-3 w-1.5 animate-caret-blink bg-action align-middle" />
                   )}
                 </div>
                 <Button
@@ -514,7 +514,7 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
                       <ThinkingDots />
                     )}
                     {col.status === "streaming" && col.text && (
-                      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-caret-blink bg-cyan align-text-bottom" />
+                      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-caret-blink bg-action align-text-bottom" />
                     )}
                   </div>
                 </div>
@@ -543,8 +543,8 @@ function ColStatusIcon({ status }: { status: ColStatus }) {
     return <AlertCircle className="size-4 text-danger" />;
   if (status === "streaming")
     return (
-      <span className="flex items-center gap-1 text-2xs text-cyan">
-        <span className="size-1.5 animate-pulse-dot rounded-full bg-cyan" />
+      <span className="flex items-center gap-1 text-2xs text-action">
+        <span className="size-1.5 animate-pulse-dot rounded-full bg-action" />
         thinking
       </span>
     );

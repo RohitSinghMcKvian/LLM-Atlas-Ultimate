@@ -27,13 +27,13 @@ const KIND_META: Record<
   RefKind,
   { icon: LucideIcon; label: string; tint: string }
 > = {
-  paper: { icon: ScrollText, label: "Paper", tint: "text-violet" },
-  docs: { icon: FileText, label: "Docs", tint: "text-cyan" },
-  article: { icon: Newspaper, label: "Article", tint: "text-cyan" },
+  paper: { icon: ScrollText, label: "Paper", tint: "text-accent" },
+  docs: { icon: FileText, label: "Docs", tint: "text-action" },
+  article: { icon: Newspaper, label: "Article", tint: "text-action" },
   video: { icon: PlayCircle, label: "Video", tint: "text-amber" },
   course: { icon: GraduationCap, label: "Course", tint: "text-amber" },
   repo: { icon: Github, label: "Code", tint: "text-muted-foreground" },
-  spec: { icon: BookOpen, label: "Spec", tint: "text-violet" },
+  spec: { icon: BookOpen, label: "Spec", tint: "text-accent" },
 };
 
 /** `https://arxiv.org/abs/1706.03762` → `arxiv.org`. Shown so the target is legible. */
@@ -62,8 +62,8 @@ export function ReferenceList({
         className,
       )}
     >
-      <div className="flex items-center gap-2 border-b border-border bg-gradient-primary-soft px-4 py-3">
-        <span className="grid size-6 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
+      <div className="flex items-center gap-2 border-b border-border bg-action/10 px-4 py-3">
+        <span className="grid size-6 place-items-center rounded-lg bg-action text-action-foreground">
           <BookOpen className="size-3.5" />
         </span>
         <h2
@@ -85,7 +85,7 @@ export function ReferenceList({
         ))}
       </ul>
 
-      <p className="border-t border-border bg-surface-2/30 px-4 py-2 text-[10px] leading-relaxed text-muted-foreground">
+      <p className="border-t border-border bg-surface-2/30 px-4 py-2 text-2xs leading-relaxed text-muted-foreground">
         External sources, opened in a new tab. Atlas is not affiliated with any
         of these publishers.
       </p>
@@ -117,13 +117,13 @@ function ReferenceRow({ reference }: { reference: Reference }) {
 
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-sm font-medium leading-snug text-foreground group-hover:text-cyan">
+          <span className="text-sm font-medium leading-snug text-foreground group-hover:text-action">
             {reference.title}
           </span>
           <ArrowUpRight className="size-3 shrink-0 -translate-x-0.5 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
         </span>
 
-        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
           <span className="rounded border border-border px-1 py-px font-medium uppercase tracking-wider">
             {meta.label}
           </span>

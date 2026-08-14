@@ -89,7 +89,7 @@ export function NewsFilterBar(props: NewsFilterBarProps) {
         >
           <SlidersHorizontal className="size-3.5" aria-hidden="true" />
           Filters
-          {active && <span className="size-1.5 rounded-full bg-cyan" aria-hidden="true" />}
+          {active && <span className="size-1.5 rounded-full bg-action" aria-hidden="true" />}
         </Button>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">

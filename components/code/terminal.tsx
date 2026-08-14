@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Eraser } from "lucide-react";
+import { ChevronDown, ChevronUp, Eraser } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface TermLine {
@@ -15,6 +15,8 @@ export function Terminal({
   runtimeLabel = "sandbox",
   onCommand,
   onClear,
+  collapsed = false,
+  onToggleCollapsed,
 }: {
   lines: TermLine[];
   active: boolean;
@@ -22,6 +24,9 @@ export function Terminal({
   /** When provided, renders an input row that executes shell commands. */
   onCommand?: (cmd: string) => void;
   onClear?: () => void;
+  /** Drawer is collapsed to header height — the body/input are not reachable. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const [cmd, setCmd] = React.useState("");
@@ -42,27 +47,44 @@ export function Terminal({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#0b0d14]">
-      <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+    <div className="flex h-full flex-col bg-code">
+      {/* h-8 exactly, so the collapsed drawer height is arithmetic rather than a guess. */}
+      <div
+        className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3"
+        onDoubleClick={onToggleCollapsed}
+      >
         <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           Terminal
         </span>
-        <span className="ml-auto font-mono text-2xs text-muted-foreground/60">
+        <span className="ml-auto truncate font-mono text-2xs text-muted-foreground/60">
           {runtimeLabel}
         </span>
         {onClear && lines.length > 0 && (
           <button
             title="Clear terminal"
             onClick={onClear}
-            className="text-muted-foreground/60 hover:text-foreground"
+            onDoubleClick={(e) => e.stopPropagation()}
+            className="shrink-0 text-muted-foreground/60 hover:text-foreground"
           >
             <Eraser className="size-3.5" />
+          </button>
+        )}
+        {onToggleCollapsed && (
+          <button
+            title={collapsed ? "Expand terminal (Ctrl+J)" : "Collapse terminal (Ctrl+J)"}
+            aria-label={collapsed ? "Expand terminal" : "Collapse terminal"}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapsed}
+            onDoubleClick={(e) => e.stopPropagation()}
+            className="shrink-0 text-muted-foreground/60 hover:text-foreground"
+          >
+            {collapsed ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
           </button>
         )}
       </div>
       <div
         ref={ref}
-        className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-3 font-mono text-[12px] leading-relaxed"
+        className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-3 font-mono text-xs leading-relaxed"
       >
         {lines.length === 0 && (
           <div className="text-muted-foreground/50">
@@ -76,7 +98,7 @@ export function Terminal({
               "whitespace-pre-wrap break-all",
               l.tone === "ok" && "text-success",
               l.tone === "err" && "text-danger",
-              l.tone === "cmd" && "text-cyan",
+              l.tone === "cmd" && "text-action",
               l.tone === "dim" && "text-muted-foreground/60",
               !l.tone && "text-foreground/85",
             )}
@@ -85,12 +107,12 @@ export function Terminal({
           </div>
         ))}
         {active && (
-          <span className="inline-block h-3.5 w-2 animate-caret-blink bg-cyan align-middle" />
+          <span className="inline-block h-3.5 w-2 animate-caret-blink bg-action align-middle" />
         )}
       </div>
       {onCommand && (
-        <div className="flex items-center gap-2 border-t border-border/60 px-3 py-1.5">
-          <span className="font-mono text-xs text-cyan">$</span>
+        <div className="flex shrink-0 items-center gap-2 border-t border-border/60 px-3 py-1.5">
+          <span className="font-mono text-xs text-action">$</span>
           <input
             value={cmd}
             onChange={(e) => {
@@ -115,7 +137,7 @@ export function Terminal({
             }}
             placeholder="npm test"
             spellCheck={false}
-            className="h-6 flex-1 bg-transparent font-mono text-[12px] outline-none placeholder:text-muted-foreground/40"
+            className="h-6 flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/40"
           />
         </div>
       )}

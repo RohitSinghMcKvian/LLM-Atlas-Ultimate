@@ -2,16 +2,34 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brain, FileDiff, X, Dot, Save, Loader2, Globe, ExternalLink, RotateCw } from "lucide-react";
+import {
+  Brain,
+  FileDiff,
+  X,
+  Dot,
+  Save,
+  Loader2,
+  Globe,
+  ExternalLink,
+  RotateCw,
+  PanelLeft,
+  PanelLeftClose,
+  PanelRight,
+  PanelRightClose,
+} from "lucide-react";
 import { CodeEditor } from "@/components/code/editor";
 import { FileTree } from "@/components/code/file-tree";
 import { Terminal } from "@/components/code/terminal";
 import { AgentPanel } from "@/components/code/agent-panel";
 import { ChangesView } from "@/components/code/changes-view";
 import { Button } from "@/components/ui/button";
+import { ResizeHandle } from "@/components/ui/resizable";
 import { useShallow } from "zustand/react/shallow";
 import { useCodeStore } from "@/lib/store/code-store";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
+import { useMediaQueryLayout } from "@/lib/hooks/use-media-query";
+import { useResizableSurface, type PanelSpec } from "@/lib/hooks/use-panel-resize";
+import { CODE_AGENT, CODE_CENTER_MIN, CODE_EDITOR_MIN, CODE_EXPLORER, CODE_TERMINAL } from "@/lib/panels";
 import { cn } from "@/lib/utils";
 import { popEscalation } from "@/lib/chat/escalate";
 
@@ -72,7 +90,7 @@ export function CodeClient() {
   const activePath = useCodeStore((s) => s.activePath);
   const buffer = useCodeStore((s) => s.buffer);
   const savedBuffer = useCodeStore((s) => s.savedBuffer);
-  const terminal = useCodeStore((s) => s.terminal);
+  const terminalLines = useCodeStore((s) => s.terminal);
   const changes = useCodeStore((s) => s.changes);
   const running = useCodeStore((s) => s.running);
   const previewUrl = useCodeStore((s) => s.previewUrl);
@@ -102,6 +120,63 @@ export function CodeClient() {
   const [previewNonce, setPreviewNonce] = React.useState(0);
   const [agentOpen, setAgentOpen] = React.useState(false);
   const isolationDecided = useCrossOriginIsolationReload();
+
+  // ── Resizable frames ────────────────────────────────────────────────────────
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const centerRef = React.useRef<HTMLDivElement>(null);
+  const explorerToggleRef = React.useRef<HTMLButtonElement>(null);
+  const agentToggleRef = React.useRef<HTMLButtonElement>(null);
+
+  // Layout-effect media queries: these decide *sizes*, and the post-paint
+  // variant would show one frame with a hidden panel still holding its share of
+  // the width budget — visibly wrong at 1024px, where the agent is off-screen.
+  const explorerVisible = useMediaQueryLayout("(min-width: 768px)");
+  const agentVisible = useMediaQueryLayout("(min-width: 1280px)");
+
+  const specs = React.useMemo<PanelSpec[]>(
+    () => [
+      {
+        key: "codeExplorer",
+        cssVar: "--atlas-code-explorer",
+        constraints: CODE_EXPLORER,
+        axis: "x",
+        anchoredRight: false,
+        centerMin: CODE_CENTER_MIN,
+        label: "File explorer",
+        active: explorerVisible,
+        toggleRef: explorerToggleRef,
+      },
+      {
+        key: "codeAgent",
+        cssVar: "--atlas-code-agent",
+        constraints: CODE_AGENT,
+        axis: "x",
+        anchoredRight: true,
+        centerMin: CODE_CENTER_MIN,
+        label: "Agent panel",
+        active: agentVisible,
+        toggleRef: agentToggleRef,
+      },
+      {
+        key: "codeTerminal",
+        cssVar: "--atlas-code-terminal",
+        constraints: CODE_TERMINAL,
+        axis: "y",
+        anchoredRight: true,
+        centerMin: CODE_EDITOR_MIN,
+        label: "Terminal",
+        // The center column, never the viewport: on mobile the root carries
+        // `pb-16` for the tab bar, so the two differ by 64px.
+        containerRef: centerRef,
+      },
+    ],
+    [explorerVisible, agentVisible],
+  );
+
+  const panels = useResizableSurface(rootRef, specs);
+  const explorer = panels.codeExplorer;
+  const agent = panels.codeAgent;
+  const terminal = panels.codeTerminal;
 
   const ingestEscalation = useCodeStore((s) => s.ingestEscalation);
   const escalationHandled = React.useRef(false);
@@ -145,15 +220,47 @@ export function CodeClient() {
     return () => window.removeEventListener("keydown", onKey);
   }, [saveActiveFile]);
 
+  // Panel toggles. Registered in the capture phase and stopped there, unlike
+  // the Ctrl+S handler above: Monaco owns several of these chords on its hidden
+  // textarea, and a bubble-phase listener is one keybinding change away from
+  // silently losing the event.
+  const togglesRef = React.useRef({ explorer, terminal, agent });
+  togglesRef.current = { explorer, terminal, agent };
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      const t = togglesRef.current;
+      const key = e.key.toLowerCase();
+      const target = key === "b" ? t.explorer : key === "j" ? t.terminal : key === "i" ? t.agent : null;
+      if (!target) return;
+      e.preventDefault();
+      e.stopPropagation();
+      target.toggle();
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, []);
+
   const dirty = buffer !== savedBuffer;
   const fileName = activePath?.split("/").pop() ?? "—";
 
   const agentPanel = <AgentPanel keyHeaders={keyHeaders} />;
 
   return (
-    <div className="-mb-24 flex h-[calc(100dvh-4rem)] overflow-hidden pb-16 lg:mb-0 lg:pb-0">
-      {/* File tree */}
-      <aside className="hidden w-52 shrink-0 flex-col border-r border-border bg-surface/40 md:flex">
+    <div
+      ref={rootRef}
+      className="-mb-24 flex h-[calc(100dvh-4rem)] overflow-hidden pb-16 lg:mb-0 lg:pb-0"
+    >
+      {/* File tree. The width lives in a CSS var so a drag can update it
+          without re-rendering this tree, Monaco and the agent timeline; the
+          fallback is the 13rem it used to be hardcoded to. The right border is
+          the resize handle's line, not the aside's. */}
+      <aside
+        id={explorer.id}
+        data-collapsed={explorer.collapsed}
+        className="atlas-panel hidden w-[var(--atlas-code-explorer,13rem)] shrink-0 flex-col overflow-hidden bg-surface/40 md:flex"
+      >
         <div className="min-h-0 flex-1 overflow-y-auto">
           {status === "booting" || status === "idle" ? (
             <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
@@ -177,11 +284,35 @@ export function CodeClient() {
           </div>
         )}
       </aside>
+      <ResizeHandle
+        {...explorer.handleProps}
+        orientation="vertical"
+        className="hidden md:block"
+      />
 
       {/* Editor + terminal */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div ref={centerRef} className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-10 items-center gap-2 border-b border-border bg-surface/30 px-3">
-          <div className="flex items-center gap-1.5 rounded-t-lg border-x border-t border-border bg-[#0b0d14] px-3 py-1.5 text-xs">
+          {/* Mirrors the panel's physical position — that is the whole point of
+              the affordance, and it is the only way back from a collapsed rail
+              for anyone who does not know about Ctrl+B. */}
+          <Button
+            ref={explorerToggleRef}
+            variant="ghost"
+            size="icon-sm"
+            className="-ml-1 hidden shrink-0 md:inline-flex"
+            aria-expanded={!explorer.collapsed}
+            aria-controls={explorer.id}
+            title={explorer.collapsed ? "Show explorer (Ctrl+B)" : "Hide explorer (Ctrl+B)"}
+            onClick={explorer.toggle}
+          >
+            {explorer.collapsed ? (
+              <PanelLeft className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </Button>
+          <div className="flex items-center gap-1.5 rounded-t-lg border-x border-t border-border bg-code px-3 py-1.5 text-xs">
             <span className="font-mono">{fileName}</span>
             {dirty && <Dot className="size-4 text-amber" />}
           </div>
@@ -218,12 +349,28 @@ export function CodeClient() {
                 </span>
               )}
             </Button>
+            <Button
+              ref={agentToggleRef}
+              variant="ghost"
+              size="icon-sm"
+              className="hidden shrink-0 xl:inline-flex"
+              aria-expanded={!agent.collapsed}
+              aria-controls={agent.id}
+              title={agent.collapsed ? "Show agent (Ctrl+I)" : "Hide agent (Ctrl+I)"}
+              onClick={agent.toggle}
+            >
+              {agent.collapsed ? (
+                <PanelRight className="size-4" />
+              ) : (
+                <PanelRightClose className="size-4" />
+              )}
+            </Button>
           </div>
         </div>
 
         <div className="min-h-0 flex-1">
           {view === "preview" && previewUrl ? (
-            <div className="flex h-full flex-col bg-[#0b0d14]">
+            <div className="flex h-full flex-col bg-code">
               <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2">
                 <span className="min-w-0 flex-1 truncate font-mono text-2xs text-muted-foreground">
                   {previewUrl}
@@ -277,15 +424,24 @@ export function CodeClient() {
               onChange={setBuffer}
             />
           ) : (
-            <div className="flex h-full items-center justify-center bg-[#0b0d14] text-xs text-muted-foreground">
+            <div className="flex h-full items-center justify-center bg-code text-xs text-muted-foreground">
               {status === "booting" ? "Starting workspace…" : "Select a file"}
             </div>
           )}
         </div>
 
-        <div className="h-44 shrink-0 border-t border-border">
+        {/* Occupies layout rather than overlaying: a hit area hanging over the
+            editor's bottom edge would land on Monaco's 8px horizontal
+            scrollbar and steal the drag. */}
+        <ResizeHandle {...terminal.handleProps} orientation="horizontal" inline />
+        {/* Collapses to the terminal's h-8 header, VS Code style, so clicking
+            the header is always a way back — hence no `data-collapsed` here. */}
+        <div
+          id={terminal.id}
+          className="atlas-panel h-[var(--atlas-code-terminal,11rem)] shrink-0 overflow-hidden"
+        >
           <Terminal
-            lines={terminal}
+            lines={terminalLines}
             active={running}
             runtimeLabel={
               wsKind === "webcontainer"
@@ -296,27 +452,40 @@ export function CodeClient() {
             }
             onCommand={runManualCommand}
             onClear={clearTerminal}
+            collapsed={terminal.collapsed}
+            onToggleCollapsed={terminal.toggle}
           />
         </div>
       </div>
 
+      <ResizeHandle {...agent.handleProps} orientation="vertical" className="hidden xl:block" />
       {/* Agent panel (desktop) */}
-      <aside className="hidden w-[400px] shrink-0 border-l border-border xl:flex">
-        {agentPanel}
+      <aside
+        id={agent.id}
+        data-collapsed={agent.collapsed}
+        className="atlas-panel hidden w-[var(--atlas-code-agent,400px)] shrink-0 overflow-hidden xl:flex"
+      >
+        {/* `hidden xl:flex` is display:none, which still mounts — so below xl
+            this has to render nothing or the sheet below would be a duplicate. */}
+        {agentVisible && agentPanel}
       </aside>
 
       {/* Agent FAB (smaller screens) */}
       <button
         onClick={() => setAgentOpen(true)}
-        className="fixed bottom-24 right-4 z-30 inline-flex items-center gap-2 rounded-2xl bg-gradient-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-glow-primary xl:hidden"
+        className="fixed bottom-24 right-4 z-30 inline-flex items-center gap-2 rounded-2xl bg-action px-4 py-3 text-sm font-medium text-action-foreground shadow-glow xl:hidden"
       >
         <Brain className="size-4" /> Agent
         {running && <span className="size-1.5 animate-pulse-dot rounded-full bg-white" />}
       </button>
 
-      {/* Agent sheet */}
+      {/* Agent sheet. Gated on the breakpoint, not just `agentOpen`: the
+          escalation handler above calls setAgentOpen(true) unconditionally, so
+          on desktop this used to mount a *second* AgentPanel — with its own
+          store subscription and its own trace render — behind an xl:hidden
+          overlay nobody could see. */}
       <AnimatePresence>
-        {agentOpen && (
+        {agentOpen && !agentVisible && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -332,7 +501,7 @@ export function CodeClient() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
-              className="absolute inset-y-0 right-0 w-[90%] max-w-md border-l border-border bg-surface"
+              className="absolute inset-y-0 right-0 w-[90%] max-w-md border-l border-border bg-surface md:max-w-lg"
             >
               <button
                 onClick={() => setAgentOpen(false)}
