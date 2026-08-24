@@ -25,6 +25,7 @@ const ALL: ToolAvailability = {
   codeExecution: true,
   hasFoldedContext: true,
   subagents: true,
+  atlasTools: true,
 };
 /** Every flag off. Written out rather than derived, so adding one fails here. */
 const NONE: ToolAvailability = {
@@ -38,6 +39,7 @@ const NONE: ToolAvailability = {
   codeExecution: false,
   hasFoldedContext: false,
   subagents: false,
+  atlasTools: false,
 };
 const names = (o: Partial<ToolAvailability>) =>
   toolDefsFor({ ...ALL, ...o }).map((d) => d.function.name);
@@ -125,6 +127,7 @@ describe("toolDefsFor", () => {
         codeExecution: false,
         hasFoldedContext: false,
         subagents: false,
+        atlasTools: false,
       }),
     ).toEqual([]);
   });
