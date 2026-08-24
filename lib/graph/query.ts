@@ -141,6 +141,18 @@ export interface RankOptions {
   reverseDamping?: number;
   /** Restrict the walk to these nodes. Pass an expansion's `depth` keys. */
   within?: Iterable<string>;
+  /**
+   * How strongly each seed was matched. Normalised internally; missing seeds
+   * default to 1.
+   *
+   * This is not a refinement, it is the difference between working and not.
+   * With uniform seed mass, a question whose best match scored 0.51 was
+   * outranked by three brand nodes that scored 0.15, purely because brands sit
+   * in a denser neighbourhood - the walk had no way to know which seed the
+   * question was actually about. The personalisation vector is exactly where
+   * match confidence belongs.
+   */
+  weights?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -215,9 +227,22 @@ export function rank(
     );
   }
 
-  const seedMass = 1 / live.length;
   const personal = new Map<string, number>();
-  for (const s of live) personal.set(s, (personal.get(s) ?? 0) + seedMass);
+  let totalSeedWeight = 0;
+  for (const s of live) {
+    const w = Math.max(0, opts.weights?.get(s) ?? 1);
+    if (w > 0) {
+      personal.set(s, (personal.get(s) ?? 0) + w);
+      totalSeedWeight += w;
+    }
+  }
+  if (totalSeedWeight === 0) {
+    // Every seed was given zero weight. Fall back to uniform rather than
+    // returning nothing: the caller asked about these nodes either way.
+    for (const s of live) personal.set(s, 1 / live.length);
+  } else {
+    for (const [s, w] of personal) personal.set(s, w / totalSeedWeight);
+  }
 
   let current = new Map<string, number>(personal);
   for (let i = 0; i < iterations; i++) {
