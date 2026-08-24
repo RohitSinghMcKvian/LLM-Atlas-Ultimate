@@ -47,6 +47,14 @@ export interface GraphContext {
   /** The whole expansion - a superset of `cited`, for the Map. */
   scope: { nodes: RetrievedNode[]; edges: GraphEdge[]; truncated: boolean };
   seeds: string[];
+  /**
+   * The question this survey answers.
+   *
+   * Carried on the result rather than held by the caller, because the Map seeds
+   * its layout from it - the same question must always draw the same map, and a
+   * caller that forgot to pass it would silently get a reshuffling one.
+   */
+  query: string;
 }
 
 export interface RetrieveOptions extends ExpandOptions {
@@ -250,6 +258,7 @@ export function retrieveGraph(
     }),
     scope: { nodes: all, edges: expansion.edges, truncated: expansion.truncated },
     seeds,
+    query: question.trim(),
   };
 }
 
