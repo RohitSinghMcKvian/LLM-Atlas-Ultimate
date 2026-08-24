@@ -2736,3 +2736,108 @@ and grace period are honoured.
    populated from the live listing.
 4. Show the user that a soft-deleted file exists, and let them restore it — the
    last open item from P15.
+
+
+---
+
+# P18 self-audit — Graph-RAG, one tool plane, orchestration, voice, and Atlas over MCP
+
+## 1. Acceptance criteria
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Relational catalog questions answered with a node citation, ≥90% | **PASS** | `lib/graph/graphrag.e2e.test.ts` — 20 questions, 20/20. Baseline before the graph was ~0: the facts were not retrievable at all. |
+| 2 | No citation marker survives without a backing node | **PASS** | `reconcileCitations` reused verbatim; the e2e test asserts markers resolve and that `[99]` is stripped. |
+| 3 | Graph builds and retrieves in-browser at catalog scale | **PASS (unit)** | ~190 lexicon terms and the full shipped catalog build inside the test suite's own time budget. No browser profiling — see §5. |
+| 4 | Atlas's own modules reachable as tools | **PASS** | Four tools over `lib/catalog`, `lib/cost`, `lib/graph`, `lib/news`, each thin over the function the UI already calls. |
+| 5 | Writes and spends gated; reads free | **PASS** | `lib/tools/policy.ts` generalises `lib/mcp/approval.ts`. 30 tests. |
+| 6 | Sub-agent cap derived from budget, not a constant | **PASS** | `agentCapacity()` replaces `MAX_AGENTS = 3`. |
+| 7 | A run survives a reload and can be audited | **PARTIAL** | `lib/orchestra/trace.ts` + `store.ts` are built and tested; nothing drives them from the chat page yet — see §4. |
+| 8 | Domain-term accuracy ≥95% on a spoken fixture | **PASS** | 20/20 against the real shipped catalog, through the whole pipeline. |
+| 9 | Zero false corrections on clean text | **PASS** | Measured in both directions, against 6 terms and again against ~190. |
+| 10 | Speech starts before the answer ends | **PASS (unit)** | `lib/voice/segment.ts`, chunk-size independent. Not heard aloud — see §5. |
+| 11 | Barge-in stops playback | **PASS (unit)** | `lib/voice/session.ts`. Not exercised against a real microphone — see §5. |
+| 12 | Zero net new lines in `chat-client.tsx` | **PASS** | `git diff --stat` shows the file untouched. |
+| 13 | Atlas serves MCP | **PASS (live)** | Driven against a running dev server: `initialize`, `tools/list`, two real `tools/call`s returning live catalog data, four error paths, and the rate limiter. |
+
+## 2. The decisions that shaped this phase
+
+**Ranking is where graph-RAG is actually hard.** The retrieval fixture caught two
+failures that no amount of reading the code would have: uniform seed mass made
+the walk blind to which seed the question was about (`modality:vision` matched at
+0.51 and was outranked by brand nodes matching at 0.15, because brands sit in a
+denser neighbourhood), and six weak similarity seeds beside one strong mention
+diluted it enough that the provider serving a named model was ranked out of its
+own answer. Both are now regressions with the measured numbers in the comment.
+
+**A wrong voice correction is worse than a mangled word.** Every guard in
+`lib/voice/lexicon.ts` is biased towards leaving text alone, and three of them
+exist because the fixture caught the failure first — most sharply "no I meant the
+other one" becoming "no I meant the o3 one", because *other* and *o3* share a
+phonetic skeleton.
+
+**A table with a test beats a field with churn.** `lib/tools/spec.ts` classifies
+every tool in a table rather than adding a `sideEffect` field to thirteen working
+tool definitions. The drift guard earned itself immediately: it caught both
+fixtures that needed the new toggle.
+
+## 3. Constraint compliance
+
+- **Zero-config holds.** Every read tool is a pure function over data the browser
+  already has. The graph is derived from the shipped snapshot with no network and
+  no key; voice defaults to the keyless browser path.
+- **Nothing landed lit.** Nine new flags in `lib/flags.ts`, all `defaultOn:
+  false`; the MCP route additionally needs `ATLAS_MCP_SERVER_ENABLED`.
+- **Keys stay client-side.** `x-voice-key` follows the `x-search-key` contract:
+  forwarded once, never stored, never logged.
+- **Incognito respected** at the same seam the chat repo uses — `saveRun` writes
+  nothing in a temporary chat.
+
+## 4. Deviations from the plan
+
+- **`streamInto` was not migrated onto `lib/orchestra/session.ts`.** The plan said
+  so up front and it held: that refactor belongs in its own change with the
+  existing chat tests as its safety net, not inside one that also adds a graph, a
+  tool plane, a voice stack and a server.
+- **Consequently the orchestration trace has no driver on the chat page.** The
+  loop, the roles, the budget split and the persisted trace are all built and
+  tested; what runs them today is the Ask Atlas panel, not `/chat`.
+- **No Map tab in the chat rail.** The console lives in the panel, where the
+  whole surface is owned. A rail tab needs retrieval wired into `streamInto` to
+  be anything but empty, and an empty tab teaches people not to open it.
+- **Cloud TTS was not built.** `speechSynthesis` is a genuinely good keyless
+  default; a streaming-audio route that could not be verified from here would
+  have been a claim, not a feature.
+- **The panel does not carry its transcript into `/chat`.** Writing a handoff
+  payload nothing reads is dead code pretending to be a feature.
+
+## 5. What P18 did not verify
+
+- **No live model turn.** The Ask Atlas panel is typechecked and builds; no
+  provider key was available here, so no real model has driven `runSessionTurn`.
+- **Nothing was heard aloud.** There is no audio device in this environment. The
+  VAD is tested against synthesised PCM, the endpointing against timing traces,
+  and the segmenter against streamed strings — all of which is real coverage of
+  the logic and none of which is a microphone. Barge-in latency, echo
+  cancellation and the endpoint timings are unmeasured in a room.
+- **The keyed STT endpoints are unexercised.** They are the OpenAI-compatible
+  `/audio/transcriptions` shape, which the providers Atlas already configures
+  speak, but no live call has been made. `lib/voice/providers.ts` says so in its
+  header; the flag stays off until one has.
+- **No browser profiling.** The graph's build and retrieval timings are inferred
+  from the test suite, not measured against a frame budget.
+- **The MCP server was driven live but never by a real MCP client.** curl
+  exercised the protocol; Claude Desktop has not.
+
+## 6. Next steps
+
+1. Wire `retrieveGraph` into `streamInto` and add the Map tab to the chat rail —
+   one call site, and it turns the console from a panel feature into the chat
+   page's own.
+2. Drive the Ask Atlas panel with a real provider key, and voice mode with a real
+   microphone, in a room with noise in it.
+3. Probe each keyed STT backend live before turning `voiceProviders` on.
+4. Point Claude Desktop at `/api/v1/mcp/server` and confirm the handshake from a
+   real client.
+5. Migrate `streamInto` onto `lib/orchestra/session.ts`, with `tools.test.ts` and
+   the chat e2e tests as the safety net.

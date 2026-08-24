@@ -1355,6 +1355,74 @@ feed and is opt-in via `ATLAS_LIVE_TESTS=1` — CI must not depend on thirty thi
 parties being up, but feed rot is the most likely way this degrades, so the check
 exists.
 
+## 18b. Atlas Agent — the graph, the tool plane, the console and voice
+
+Added in P18. Five areas, all of them `lib/`-first because `vitest.config.ts`
+reaches only `lib/**`.
+
+### `lib/graph/` — the Atlas Knowledge Graph
+
+A property graph derived from data Atlas already ships. `build-catalog.ts` is
+pure and **isomorphic** — no browser globals — because the same builder runs in
+the browser and on the MCP route. `build-news.ts` does no entity extraction: it
+turns the `models[]`, `orgs[]` and `clusterId` links `lib/news/sync/entities.ts`
+already resolves into edges.
+
+**The catalog graph is derived, not stored.** It is a pure function of a version
+hash the app already tracks, so persisting it would buy milliseconds and cost a
+class of staleness bugs. Only the user's own workspace overlay is persisted
+(IndexedDB v11: `graph_nodes`, `graph_edges`).
+
+`query.ts` gives budgeted traversal and personalised PageRank. Two rules carry
+most of the behaviour: **a hub is admitted but never traversed through** (one hop
+through `benchmark:mmlu` drags in the whole catalog), and **retrieval wants
+locality, not global importance** — at PageRank's conventional 0.15 restart with
+no degree penalty, the shared benchmark outranked the model the question named.
+
+`retrieve.ts` seeds from verbatim mentions *and* similarity, expands, ranks and
+renders a numbered block that `reconcileCitations` strips unbacked markers from —
+the same code that already did it for web search.
+
+`layout.ts` places the Map: deterministic and seeded, after `lib/canvas/field.ts`,
+with coordinates rounded exactly as `components/brand/glyph.tsx` rounds its own.
+
+### `lib/tools/` — one tool plane
+
+`spec.ts` classifies every tool by side effect (`read` / `network` / `write` /
+`spend`) in a table, with a test asserting it covers `TOOL_NAMES` exactly.
+`policy.ts` generalises `lib/mcp/approval.ts` to every write or spend, delegating
+connector names to the gate that already owns them. `atlas/` holds the four
+Atlas-module tools, each thin over a function the UI already calls so the agent
+and the page cannot disagree about a price.
+
+### `lib/orchestra/` — sub-agents that are visible and durable
+
+Five roles (cartographer, scout, analyst, builder, critic), each a *narrowing* of
+what the turn already offers — `toolsFor` intersects, so a role can never switch
+on a capability the user turned off. `agentCapacity()` replaces `MAX_AGENTS = 3`.
+`trace.ts` is append-only with a monotonic `seq` and immutable timestamps;
+`spansOf` projects it into swimlanes and never closes a lane green over a
+failure.
+
+### `lib/voice/` — voice as an interaction mode
+
+`vad.ts` (pure DSP over PCM frames), `endpoint.ts` (turn-taking, with a longer
+pause after a word that promises more), `lexicon.ts` (catalog-vocabulary
+correction, biased hard towards leaving text alone), `normalize.ts` (spoken
+quantities to written ones), `segment.ts` (streaming sentence chunking, chunk-size
+independent), `speech-plan.ts` (what to say versus what to leave on screen),
+`session.ts` (the five-phase machine, with barge-in).
+
+### Surfaces
+
+`components/chat/console/` renders Map, Agents and Log with an always-visible
+ledger; `components/agent/agent-dock.tsx` is Ask Atlas, mounted once in the
+workspace layout, driven by `lib/orchestra/session.ts` so it never imports
+`chat-client.tsx`. `app/api/v1/mcp/server/` exposes the four read-only Atlas tools
+to external MCP clients, behind both a flag and `ATLAS_MCP_SERVER_ENABLED`.
+
+---
+
 ## 19. Glossary
 
 | Term | Meaning |
