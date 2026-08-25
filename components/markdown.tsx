@@ -120,7 +120,14 @@ export const Markdown = React.memo(function Markdown({
       )}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        // `singleDollarTextMath: false` - remark-math's default treats a pair
+        // of single `$` as inline math, which collides with the one thing
+        // this whole product talks about constantly: prices. Found live, in
+        // an answer quoting two catalog prices ("$0.16/M ... $0.35/M"): the
+        // text between them was parsed as one LaTeX span and rendered as
+        // squashed, italicised nonsense. `$$…$$` still works for real math;
+        // a lone `$` now stays literal, which is what a price is.
+        remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
         rehypePlugins={streaming ? [rehypeKatex] : [rehypeHighlight, rehypeKatex]}
         components={{
           pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,

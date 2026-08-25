@@ -2841,3 +2841,95 @@ fixtures that needed the new toggle.
    real client.
 5. Migrate `streamInto` onto `lib/orchestra/session.ts`, with `tools.test.ts` and
    the chat e2e tests as the safety net.
+
+## 7. Live verification pass, and four bugs it found
+
+§5 above says plainly what P18 never drove live: no real model turn, nothing
+heard aloud, the MCP server exercised only by curl. This pass closes the first
+and third of those for real - not with mocks inside vitest, but a running dev
+server, a scripted OpenAI-compatible stub standing in for the model at
+`LOCAL_BASE_URL` (a real, already-supported router provider, not a bypass), and
+an actual Chromium driven by Playwright. `ATLAS_MCP_SERVER_ENABLED=1` plus curl
+covered `initialize` / `tools/list` / `tools/call`, a 404 when disabled, and a
+429 once the limiter was exhausted - still not a real MCP client, but real
+JSON-RPC over the wire this time, not vitest's fakes.
+
+Four bugs surfaced, all four fixed and re-verified live:
+
+1. **The orchestration engine had no caller anywhere in the running app.**
+   §4 said this plainly for `/chat`; what it did not say is that the Ask Atlas
+   panel didn't drive it either, despite `runSessionTurn` already wiring
+   `spawn_subagents` for the panel's tool set. `lib/orchestra/run.ts`,
+   `roles.ts` and `trace.ts` were fully built and unit-tested with zero
+   non-test call sites - `useGraphStore.setRun` was never invoked, so the
+   Agents and Log rail tabs could not have shown anything but their empty
+   state to anyone, ever. Fixed in `lib/orchestra/session.ts`: `spawn_subagents`
+   is now offered whenever a read-only role has a tool to reach, executes
+   through `runAgents` with roles assigned round-robin, and publishes progress
+   through a new `onRun` callback that `agent-dock.tsx` mirrors into
+   `useGraphStore`. Verified live: two real agent lanes on one shared time
+   axis, a real trace in the Log tab, real spend accounting.
+2. **That fan-out could spend without ever asking.** `spawn_subagents` is
+   classed `spend` in `lib/tools/spec.ts`, but approval is enforced entirely
+   inside `chat-client.tsx`'s own UI - `runToolLoop`/`executeTool` enforce
+   nothing structurally, and `lib/orchestra/session.ts` called `executeTool`
+   directly. Wiring the fan-out into the dock in the fix above would have been
+   the first thing to make that gap spend real money with no gate. Fixed with
+   an `onApproval` hook, checked against `lib/tools/spec.ts`'s own
+   classification, that fails closed - refused, not silently allowed - when
+   no hook is wired. The dock wires it to `window.confirm`. Verified live in
+   both directions: approved runs and populates the Agents tab; declined
+   refuses with a stated reason and spawns nothing.
+3. **Every dock answer rendered as duplicated, garbled text.**
+   `agent-dock.tsx`'s `send()` did `buffer += text` on every `onDelta` call,
+   but `onDelta` (like `ToolLoopCallbacks.onText`) hands back the *whole*
+   answer accumulated so far, not an incremental chunk - documented as such at
+   its declaration. The result was quadratic duplication from the second
+   streamed chunk of literally every reply the panel ever produced. One-line
+   fix: `buffer = text`.
+4. **Two prices in one answer rendered as LaTeX.** `components/markdown.tsx`
+   wires `remark-math` with its default `singleDollarTextMath: true`, so a
+   matched pair of single `$` is parsed as inline math. An answer quoting two
+   catalog prices - `$0.16/M ... $0.35/M`, an entirely ordinary shape for this
+   product - had everything between the two dollar signs rendered as one
+   squashed, italicised LaTeX span. Fixed by disabling single-dollar math;
+   `$$…$$` still works, a lone `$` now stays literal. Pre-existing, not part of
+   P18, and shared by every surface that renders a message.
+5. **Dictation and read-aloud support triggered a full hydration mismatch on
+   every `/chat` load**, unrelated to P18 but found in the same pass and
+   sharing its file with the composer this work runs through. Both computed
+   `supported` at render time from `typeof window`/`webkitSpeechRecognition`,
+   which is `false` during SSR and `true` on the client in any Chromium
+   browser - a guaranteed mismatch, not a flake, discarding and re-rendering
+   part of the composer on every page load. Fixed in `lib/hooks/use-speech.ts`
+   by settling `supported` in an effect instead, the same pattern
+   `useMediaQuery` already uses in this repo.
+
+**Also found, not fixed - reported instead:**
+
+- **The whole voice stack has no UI entry point.** No component anywhere
+  references `lib/voice/session.ts` or mounts a voice-mode surface; toggling
+  `voiceCapture` / `voiceLexicon` / `voiceMode` in Labs has no observable
+  effect anywhere. This is a materially stronger statement than §5's "nothing
+  heard aloud" - there is no button to press, not only no microphone to test
+  it with. Building that UI is its own change, not a fix.
+- **`atlasGraph`, `graphRag`, `atlasTools`, `agentConsole` and `mcpServer`
+  (the client-side flag, not the server env var) have no reader anywhere**
+  (`useFlag`/`isEnabled` for each returns zero matches outside `lib/flags.ts`
+  itself). The dock's own graph retrieval and Atlas tool access are
+  unconditional, not gated by these flags, so toggling them in Labs is
+  currently a no-op. Left as-is: these flags exist for the `/chat` migration
+  in step 5 above, and a Labs toggle with no effect yet is a smaller problem
+  than second-guessing that migration's scope under a testing pass.
+- **A real, timing-dependent 400 on the very first message of a brand-new
+  `/chat` conversation** (`modelId and messages are required`), reproducible
+  when Send is pressed within roughly two seconds of the page loading and
+  gone with a more generous settle time. Pre-existing, inside `chat-client.tsx`
+  and its conversation-initialisation flow - outside this pass's fixes for the
+  same reason nothing else touches that file: it needs its own investigation
+  with the existing chat tests as a safety net, not a change bundled into a
+  testing pass.
+- **Model answer quality is unverified.** The stub is scripted, not
+  intelligent; it proves the wiring, not whether a real model gives good
+  answers through it. §5's "no live model turn" is closed for wiring, not for
+  quality - that still needs a real provider key.

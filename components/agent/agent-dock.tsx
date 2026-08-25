@@ -50,6 +50,7 @@ export function AgentDock() {
   const router = useRouter();
   const surface = useSurfaceStore((s) => s.context);
   const publishGraph = useGraphStore((s) => s.publish);
+  const setRun = useGraphStore((s) => s.setRun);
   const modelId = useUIStore((s) => s.activeModelId);
 
   // The one global gesture. Checked against the existing shortcuts so it does
@@ -81,6 +82,12 @@ export function AgentDock() {
     abortRef.current = ctrl;
     // Coalesced like the chat page's own stream: patching per token would
     // re-render the panel a few hundred times for one answer.
+    //
+    // `onDelta` hands back the *whole* answer accumulated so far on every
+    // call - `lib/chat/tool-loop.ts` documents `onText` as exactly that - so
+    // `buffer` is replaced, not appended to. Found live: appending turned
+    // every reply into a quadratically duplicated wall of repeated text from
+    // the second streamed chunk onward, in every dock answer.
     let buffer = "";
     let timer: ReturnType<typeof setTimeout> | null = null;
     const flush = () => {
@@ -106,10 +113,15 @@ export function AgentDock() {
         },
         {
           onDelta: (text) => {
-            buffer += text;
+            buffer = text;
             if (!timer) timer = setTimeout(flush, 48);
           },
           onGraph: (ctx) => publishGraph(question, ctx),
+          onRun: (run) => setRun(run),
+          onApproval: ({ name, title }) =>
+            window.confirm(
+              `Atlas wants to use "${title}" (${name}), which can write or spend. Allow it?`,
+            ),
           onError: (message) => setError(message),
         },
       );
@@ -121,7 +133,7 @@ export function AgentDock() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, modelId, turns, surface, pathname, publishGraph]);
+  }, [input, streaming, modelId, turns, surface, pathname, publishGraph, setRun]);
 
   /**
    * Hand off to the full chat page.
