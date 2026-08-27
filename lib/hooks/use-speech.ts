@@ -35,7 +35,17 @@ export function useDictation(onText: (finalText: string) => void) {
   const onTextRef = React.useRef(onText);
   onTextRef.current = onText;
 
-  const supported = React.useMemo(() => getRecognitionCtor() !== null, []);
+  // `useState(false)` + an effect, not a `useMemo` computed during render:
+  // `getRecognitionCtor` reads `window`, which is absent during SSR and present
+  // on the client, so a render-time computation renders "unsupported" on the
+  // server and "supported" on the client's first pass - a guaranteed hydration
+  // mismatch in every Chromium browser, since every one of them has
+  // `webkitSpeechRecognition`. Found live: React discarding and re-rendering
+  // the whole composer toggle row on every `/chat` load. Settling this in an
+  // effect matches the server's render exactly, then updates after hydration,
+  // which is the same pattern `useMediaQuery` already uses in this repo.
+  const [supported, setSupported] = React.useState(false);
+  React.useEffect(() => setSupported(getRecognitionCtor() !== null), []);
 
   const stop = React.useCallback(() => {
     recRef.current?.stop();
@@ -86,8 +96,10 @@ let speaking: SpeechSynthesisUtterance | null = null;
 
 export function useTTS() {
   const [speakingId, setSpeakingId] = React.useState<string | null>(null);
-  const supported =
-    typeof window !== "undefined" && "speechSynthesis" in window;
+  // Same reasoning as `useDictation` above: settled in an effect so the
+  // server's "unsupported" render and the client's first render agree.
+  const [supported, setSupported] = React.useState(false);
+  React.useEffect(() => setSupported("speechSynthesis" in window), []);
 
   const cancel = React.useCallback(() => {
     if (!supported) return;

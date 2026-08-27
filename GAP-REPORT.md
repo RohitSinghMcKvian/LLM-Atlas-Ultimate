@@ -422,6 +422,16 @@ But `chat-client.tsx` sends only `{ modelId, messages, reasoningEffort }` — **
 `tools` key**. The chat UI renders results it can never receive. Wiring this is
 cheap and unblocks P4–P7, all of which are tool-driven.
 
+### Tool calling in Chat — *(updated after P18)*
+
+The registry gained Atlas's own modules — `atlas_graph`, `atlas_catalog`,
+`atlas_cost`, `atlas_news` — behind an `atlasTools` toggle, and `lib/tools/spec.ts`
+now classifies every tool from all three surfaces by what running it actually
+does. `lib/tools/policy.ts` generalises the connector approval gate to every tool
+that writes or spends, keeping its three properties: default `ask`, memory per
+*tool* rather than per surface, and a self-declared `readOnlyHint` that never
+grants anything.
+
 ### Provider abstraction / capability registry — EXISTS
 
 `lib/catalog/availability.ts` is the arbiter §1.2 asks for: `routeCost()` and
@@ -542,6 +552,8 @@ This is the most actionable section.
 | ~~P16 Taking a build with you~~ *(added; not in the original §5)* | — | Every part of a build is keyed by conversation id and nothing copied it, so **fork silently lost the build** — and artifacts had no incognito gate at all, so a temporary chat's build was written to disk and orphaned there | **MOSTLY DONE** — `copyBuild` duplicates records, full version history, `window.storage` rows and the `/workspace` filesystem under fresh ids; fork now calls it, and a Remix action carries the build into a new chat without the transcript. Separately, artifact persistence gained the incognito gate `lib/chat/incognito.ts` already claimed it had: writes land in a session-only overlay, reads still fall through to disk, and the overlay is discarded when the mode ends. **Not driven live — the browser pane would not composite; publish (public slug) and the embed snippet remain behind the RLS gate; see SELF-AUDIT §P16.5** |
 
 | ~~P17 Deleting actually deletes~~ *(added; not in the original §5)* | — | `deleteConversationCascade` drops the conversation and its messages; artifacts, version history, `artifact_storage` and the whole `/workspace` survived every delete, and `WorkspaceRepo.clear()` — documented as *"Used when the conversation is deleted"* — had no caller outside its own test | **DONE** — `deleteBuild` removes a conversation's records, versions, saved storage and workspace, wired into `chat-store.remove`; `sweepOrphanedBuilds` collects the builds left by every earlier delete and by every pre-P16 temporary chat. The sweep deletes on the strength of an absence, so it refuses to run unless the caller can claim its conversation list is complete — never against the Supabase driver, whose `listConversations()` sets no limit while PostgREST caps rows server-side — refuses an empty list, and spares any build touched within 24h. **Not driven live — the browser pane would not composite; a workspace with no artifacts is not reachable by the sweep; see SELF-AUDIT §P17.5** |
+
+| **P18 Graph-RAG, one tool plane, orchestration, voice, MCP server** *(added; not in the original §5)* | — | Retrieval was flat prose chunks, so the ~400-model catalog and the news corpus with its already-resolved `models[]` links were unreachable; Atlas's other 15 modules were dark to the agent; sub-agents were capped at a hardcoded 3 and their outcomes discarded; the agent lived only at `/chat`; and voice was a 130-line dictation hook | **MOSTLY DONE** — a knowledge graph derived from the shipped snapshot (no network, no key), hybrid mention+similarity seeding with budgeted traversal and personalised-PageRank ranking, citations reconciled by the *existing* `reconcileCitations`; a tool-class table with a drift guard plus an approval gate generalised from `lib/mcp/approval.ts`; four Atlas-module tools each thin over the function the UI already calls; typed sub-agent roles with a budget-derived cap and an append-only persisted trace; a voice stack with VAD, endpointing, streaming segmentation, barge-in and catalog-vocabulary correction (20/20 on misheard terms, zero false corrections); a Map/Agents/Log console and an Ask Atlas panel on every workspace screen; and Atlas exposed over MCP, driven live. **`streamInto` was not migrated onto the session runner, so the orchestration trace has no driver on the chat page and there is no Map tab in the rail; no live model turn and nothing heard aloud — see SELF-AUDIT §P18.5** |
 
 Sequencing note: wiring chat tool-calling was a prerequisite for P4–P7, which are
 all tool-driven. It landed in P1, so those phases are now unblocked — a new tool is

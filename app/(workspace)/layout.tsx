@@ -5,6 +5,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { Shortcuts } from "@/components/shortcuts";
 import { PageTransition } from "@/components/shell/page-transition";
 import { CatalogHeal } from "@/components/catalog/catalog-heal-mount";
+import { AgentDockMount } from "@/components/agent/agent-dock-mount";
 
 export default function WorkspaceLayout({
   children,
@@ -25,6 +26,7 @@ export default function WorkspaceLayout({
       <CommandPalette />
       <Shortcuts />
       <CatalogHeal />
+      <AgentDockMount />
     </div>
   );
 }

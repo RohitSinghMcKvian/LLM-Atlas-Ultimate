@@ -115,6 +115,66 @@ export const FLAG_DEFS = {
     description: "Inline suggestions when a chat prompt is likely to underperform.",
     defaultOn: false,
   },
+  atlasGraph: {
+    label: "Atlas knowledge graph",
+    description:
+      "Build a graph over the catalog, benchmarks, providers and news so the agent can answer relational questions about Atlas's own data. Derived in the browser from the snapshot already loaded — no network, no key.",
+    defaultOn: false,
+  },
+  graphRag: {
+    label: "Graph retrieval",
+    description:
+      "Retrieve from the knowledge graph alongside project files, and cite the nodes an answer rests on. Falls back to text retrieval when a question names no entity.",
+    defaultOn: false,
+  },
+  atlasTools: {
+    label: "Atlas module tools",
+    description:
+      "Let the agent use Atlas itself — the catalog, the cost engine, the graph and the news corpus. Reading is free and works offline; anything that spends money or writes asks first.",
+    defaultOn: false,
+  },
+  agentConsole: {
+    label: "Agent console",
+    description:
+      "A Map tab beside Run and Files showing what the agent retrieved, which sub-agents are working, and what the run has spent.",
+    defaultOn: false,
+  },
+  atlasDock: {
+    label: "Ask Atlas anywhere",
+    description:
+      "A summonable agent panel on every screen that can see what is on the page. Opens from the marker at the right edge, or with ⌘J.",
+    // The one flag in this file that ships on, per Part E's own rule: a depth
+    // item flips default-on once its phase passes verification, and this one
+    // was driven live in a browser end to end - retrieval, tool calls, the
+    // sub-agent fan-out, and the approval gate in both directions. It is also
+    // the flag whose whole purpose is to be reachable from anywhere, which a
+    // control nobody can find is not.
+    defaultOn: true,
+  },
+  mcpServer: {
+    label: "Serve Atlas over MCP",
+    description:
+      "Expose the catalog, graph, cost and news tools to external MCP clients. Public, read-only data only, and also requires ATLAS_MCP_SERVER_ENABLED on the server.",
+    defaultOn: false,
+  },
+  voiceCapture: {
+    label: "Voice turn-taking",
+    description:
+      "Detect speech and silence so the microphone closes when you stop talking, instead of waiting for a click.",
+    defaultOn: false,
+  },
+  voiceLexicon: {
+    label: "Voice vocabulary",
+    description:
+      "Correct model names, benchmarks and prices in what the microphone heard, using the catalog as the vocabulary. Only corrects an unambiguous match.",
+    defaultOn: false,
+  },
+  voiceMode: {
+    label: "Voice conversation",
+    description:
+      "A spoken conversation: the answer is read aloud as it is written, and talking over it interrupts. Answers are shorter and skip anything that only makes sense on screen.",
+    defaultOn: false,
+  },
 } as const satisfies Record<string, FlagDef>;
 
 export type FlagId = keyof typeof FLAG_DEFS;

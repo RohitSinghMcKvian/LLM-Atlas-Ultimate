@@ -2736,3 +2736,248 @@ and grace period are honoured.
    populated from the live listing.
 4. Show the user that a soft-deleted file exists, and let them restore it — the
    last open item from P15.
+
+
+---
+
+# P18 self-audit — Graph-RAG, one tool plane, orchestration, voice, and Atlas over MCP
+
+## 1. Acceptance criteria
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Relational catalog questions answered with a node citation, ≥90% | **PASS** | `lib/graph/graphrag.e2e.test.ts` — 20 questions, 20/20. Baseline before the graph was ~0: the facts were not retrievable at all. |
+| 2 | No citation marker survives without a backing node | **PASS** | `reconcileCitations` reused verbatim; the e2e test asserts markers resolve and that `[99]` is stripped. |
+| 3 | Graph builds and retrieves in-browser at catalog scale | **PASS (unit)** | ~190 lexicon terms and the full shipped catalog build inside the test suite's own time budget. No browser profiling — see §5. |
+| 4 | Atlas's own modules reachable as tools | **PASS** | Four tools over `lib/catalog`, `lib/cost`, `lib/graph`, `lib/news`, each thin over the function the UI already calls. |
+| 5 | Writes and spends gated; reads free | **PASS** | `lib/tools/policy.ts` generalises `lib/mcp/approval.ts`. 30 tests. |
+| 6 | Sub-agent cap derived from budget, not a constant | **PASS** | `agentCapacity()` replaces `MAX_AGENTS = 3`. |
+| 7 | A run survives a reload and can be audited | **PARTIAL** | `lib/orchestra/trace.ts` + `store.ts` are built and tested; nothing drives them from the chat page yet — see §4. |
+| 8 | Domain-term accuracy ≥95% on a spoken fixture | **PASS** | 20/20 against the real shipped catalog, through the whole pipeline. |
+| 9 | Zero false corrections on clean text | **PASS** | Measured in both directions, against 6 terms and again against ~190. |
+| 10 | Speech starts before the answer ends | **PASS (unit)** | `lib/voice/segment.ts`, chunk-size independent. Not heard aloud — see §5. |
+| 11 | Barge-in stops playback | **PASS (unit)** | `lib/voice/session.ts`. Not exercised against a real microphone — see §5. |
+| 12 | Zero net new lines in `chat-client.tsx` | **PASS** | `git diff --stat` shows the file untouched. |
+| 13 | Atlas serves MCP | **PASS (live)** | Driven against a running dev server: `initialize`, `tools/list`, two real `tools/call`s returning live catalog data, four error paths, and the rate limiter. |
+
+## 2. The decisions that shaped this phase
+
+**Ranking is where graph-RAG is actually hard.** The retrieval fixture caught two
+failures that no amount of reading the code would have: uniform seed mass made
+the walk blind to which seed the question was about (`modality:vision` matched at
+0.51 and was outranked by brand nodes matching at 0.15, because brands sit in a
+denser neighbourhood), and six weak similarity seeds beside one strong mention
+diluted it enough that the provider serving a named model was ranked out of its
+own answer. Both are now regressions with the measured numbers in the comment.
+
+**A wrong voice correction is worse than a mangled word.** Every guard in
+`lib/voice/lexicon.ts` is biased towards leaving text alone, and three of them
+exist because the fixture caught the failure first — most sharply "no I meant the
+other one" becoming "no I meant the o3 one", because *other* and *o3* share a
+phonetic skeleton.
+
+**A table with a test beats a field with churn.** `lib/tools/spec.ts` classifies
+every tool in a table rather than adding a `sideEffect` field to thirteen working
+tool definitions. The drift guard earned itself immediately: it caught both
+fixtures that needed the new toggle.
+
+## 3. Constraint compliance
+
+- **Zero-config holds.** Every read tool is a pure function over data the browser
+  already has. The graph is derived from the shipped snapshot with no network and
+  no key; voice defaults to the keyless browser path.
+- **Nothing landed lit.** Nine new flags in `lib/flags.ts`, all `defaultOn:
+  false`; the MCP route additionally needs `ATLAS_MCP_SERVER_ENABLED`.
+- **Keys stay client-side.** `x-voice-key` follows the `x-search-key` contract:
+  forwarded once, never stored, never logged.
+- **Incognito respected** at the same seam the chat repo uses — `saveRun` writes
+  nothing in a temporary chat.
+
+## 4. Deviations from the plan
+
+- **`streamInto` was not migrated onto `lib/orchestra/session.ts`.** The plan said
+  so up front and it held: that refactor belongs in its own change with the
+  existing chat tests as its safety net, not inside one that also adds a graph, a
+  tool plane, a voice stack and a server.
+- **Consequently the orchestration trace has no driver on the chat page.** The
+  loop, the roles, the budget split and the persisted trace are all built and
+  tested; what runs them today is the Ask Atlas panel, not `/chat`.
+- **No Map tab in the chat rail.** The console lives in the panel, where the
+  whole surface is owned. A rail tab needs retrieval wired into `streamInto` to
+  be anything but empty, and an empty tab teaches people not to open it.
+- **Cloud TTS was not built.** `speechSynthesis` is a genuinely good keyless
+  default; a streaming-audio route that could not be verified from here would
+  have been a claim, not a feature.
+- **The panel does not carry its transcript into `/chat`.** Writing a handoff
+  payload nothing reads is dead code pretending to be a feature.
+
+## 5. What P18 did not verify
+
+- **No live model turn.** The Ask Atlas panel is typechecked and builds; no
+  provider key was available here, so no real model has driven `runSessionTurn`.
+- **Nothing was heard aloud.** There is no audio device in this environment. The
+  VAD is tested against synthesised PCM, the endpointing against timing traces,
+  and the segmenter against streamed strings — all of which is real coverage of
+  the logic and none of which is a microphone. Barge-in latency, echo
+  cancellation and the endpoint timings are unmeasured in a room.
+- **The keyed STT endpoints are unexercised.** They are the OpenAI-compatible
+  `/audio/transcriptions` shape, which the providers Atlas already configures
+  speak, but no live call has been made. `lib/voice/providers.ts` says so in its
+  header; the flag stays off until one has.
+- **No browser profiling.** The graph's build and retrieval timings are inferred
+  from the test suite, not measured against a frame budget.
+- **The MCP server was driven live but never by a real MCP client.** curl
+  exercised the protocol; Claude Desktop has not.
+
+## 6. Next steps
+
+1. Wire `retrieveGraph` into `streamInto` and add the Map tab to the chat rail —
+   one call site, and it turns the console from a panel feature into the chat
+   page's own.
+2. Drive the Ask Atlas panel with a real provider key, and voice mode with a real
+   microphone, in a room with noise in it.
+3. Probe each keyed STT backend live before turning `voiceProviders` on.
+4. Point Claude Desktop at `/api/v1/mcp/server` and confirm the handshake from a
+   real client.
+5. Migrate `streamInto` onto `lib/orchestra/session.ts`, with `tools.test.ts` and
+   the chat e2e tests as the safety net.
+
+## 7. Live verification pass, and four bugs it found
+
+§5 above says plainly what P18 never drove live: no real model turn, nothing
+heard aloud, the MCP server exercised only by curl. This pass closes the first
+and third of those for real - not with mocks inside vitest, but a running dev
+server, a scripted OpenAI-compatible stub standing in for the model at
+`LOCAL_BASE_URL` (a real, already-supported router provider, not a bypass), and
+an actual Chromium driven by Playwright. `ATLAS_MCP_SERVER_ENABLED=1` plus curl
+covered `initialize` / `tools/list` / `tools/call`, a 404 when disabled, and a
+429 once the limiter was exhausted - still not a real MCP client, but real
+JSON-RPC over the wire this time, not vitest's fakes.
+
+Four bugs surfaced, all four fixed and re-verified live:
+
+1. **The orchestration engine had no caller anywhere in the running app.**
+   §4 said this plainly for `/chat`; what it did not say is that the Ask Atlas
+   panel didn't drive it either, despite `runSessionTurn` already wiring
+   `spawn_subagents` for the panel's tool set. `lib/orchestra/run.ts`,
+   `roles.ts` and `trace.ts` were fully built and unit-tested with zero
+   non-test call sites - `useGraphStore.setRun` was never invoked, so the
+   Agents and Log rail tabs could not have shown anything but their empty
+   state to anyone, ever. Fixed in `lib/orchestra/session.ts`: `spawn_subagents`
+   is now offered whenever a read-only role has a tool to reach, executes
+   through `runAgents` with roles assigned round-robin, and publishes progress
+   through a new `onRun` callback that `agent-dock.tsx` mirrors into
+   `useGraphStore`. Verified live: two real agent lanes on one shared time
+   axis, a real trace in the Log tab, real spend accounting.
+2. **That fan-out could spend without ever asking.** `spawn_subagents` is
+   classed `spend` in `lib/tools/spec.ts`, but approval is enforced entirely
+   inside `chat-client.tsx`'s own UI - `runToolLoop`/`executeTool` enforce
+   nothing structurally, and `lib/orchestra/session.ts` called `executeTool`
+   directly. Wiring the fan-out into the dock in the fix above would have been
+   the first thing to make that gap spend real money with no gate. Fixed with
+   an `onApproval` hook, checked against `lib/tools/spec.ts`'s own
+   classification, that fails closed - refused, not silently allowed - when
+   no hook is wired. The dock wires it to `window.confirm`. Verified live in
+   both directions: approved runs and populates the Agents tab; declined
+   refuses with a stated reason and spawns nothing.
+3. **Every dock answer rendered as duplicated, garbled text.**
+   `agent-dock.tsx`'s `send()` did `buffer += text` on every `onDelta` call,
+   but `onDelta` (like `ToolLoopCallbacks.onText`) hands back the *whole*
+   answer accumulated so far, not an incremental chunk - documented as such at
+   its declaration. The result was quadratic duplication from the second
+   streamed chunk of literally every reply the panel ever produced. One-line
+   fix: `buffer = text`.
+4. **Two prices in one answer rendered as LaTeX.** `components/markdown.tsx`
+   wires `remark-math` with its default `singleDollarTextMath: true`, so a
+   matched pair of single `$` is parsed as inline math. An answer quoting two
+   catalog prices - `$0.16/M ... $0.35/M`, an entirely ordinary shape for this
+   product - had everything between the two dollar signs rendered as one
+   squashed, italicised LaTeX span. Fixed by disabling single-dollar math;
+   `$$…$$` still works, a lone `$` now stays literal. Pre-existing, not part of
+   P18, and shared by every surface that renders a message.
+5. **Dictation and read-aloud support triggered a full hydration mismatch on
+   every `/chat` load**, unrelated to P18 but found in the same pass and
+   sharing its file with the composer this work runs through. Both computed
+   `supported` at render time from `typeof window`/`webkitSpeechRecognition`,
+   which is `false` during SSR and `true` on the client in any Chromium
+   browser - a guaranteed mismatch, not a flake, discarding and re-rendering
+   part of the composer on every page load. Fixed in `lib/hooks/use-speech.ts`
+   by settling `supported` in an effect instead, the same pattern
+   `useMediaQuery` already uses in this repo.
+
+**Also found, not fixed - reported instead:**
+
+- **The whole voice stack has no UI entry point.** No component anywhere
+  references `lib/voice/session.ts` or mounts a voice-mode surface; toggling
+  `voiceCapture` / `voiceLexicon` / `voiceMode` in Labs has no observable
+  effect anywhere. This is a materially stronger statement than §5's "nothing
+  heard aloud" - there is no button to press, not only no microphone to test
+  it with. Building that UI is its own change, not a fix.
+- **`atlasGraph`, `graphRag`, `atlasTools`, `agentConsole` and `mcpServer`
+  (the client-side flag, not the server env var) have no reader anywhere**
+  (`useFlag`/`isEnabled` for each returns zero matches outside `lib/flags.ts`
+  itself). The dock's own graph retrieval and Atlas tool access are
+  unconditional, not gated by these flags, so toggling them in Labs is
+  currently a no-op. Left as-is: these flags exist for the `/chat` migration
+  in step 5 above, and a Labs toggle with no effect yet is a smaller problem
+  than second-guessing that migration's scope under a testing pass.
+- **A real, timing-dependent 400 on the very first message of a brand-new
+  `/chat` conversation** (`modelId and messages are required`), reproducible
+  when Send is pressed within roughly two seconds of the page loading and
+  gone with a more generous settle time. Pre-existing, inside `chat-client.tsx`
+  and its conversation-initialisation flow - outside this pass's fixes for the
+  same reason nothing else touches that file: it needs its own investigation
+  with the existing chat tests as a safety net, not a change bundled into a
+  testing pass.
+- **Model answer quality is unverified.** The stub is scripted, not
+  intelligent; it proves the wiring, not whether a real model gives good
+  answers through it. §5's "no live model turn" is closed for wiring, not for
+  quality - that still needs a real provider key.
+
+## 8. The agent rail — one reachable trigger, everywhere
+
+The agent was reachable from a pill at `bottom-24 right-4` that only existed on
+the sixteen workspace modules, and only for someone who had found the Labs
+toggle. Three things were wrong with that, and this change fixes all three.
+
+**The trigger lived inside the lazy chunk.** `AgentDockMount` dynamically
+imported `AgentDock`, and `DockTrigger` was defined in that same file — so the
+button could not paint until the knowledge graph, the markdown renderer and
+framer-motion had all downloaded. A permanently-visible affordance cannot be
+gated on a lazy import. The trigger is now `components/agent/agent-rail.tsx`,
+statically imported and rendered immediately; the panel stays behind
+`next/dynamic` and arrives on first open. Measured: `/` is **21.5 kB / 198 kB
+First Load JS, byte-identical to before**, with the rail now on that route too.
+
+**It was off by default.** `atlasDock` is the one flag in `lib/flags.ts` that
+now ships `defaultOn: true`, per Part E's own rule that a depth item flips on
+once its phase passes verification — §7 above drove this one end to end in a
+browser. A flag whose entire purpose is to be reachable from anywhere is not
+serving that purpose while nobody can find it.
+
+**It was not actually everywhere.** The mount is now in the marketing layout as
+well as the workspace one, so "anywhere" is literal.
+
+The rail itself is a survey marker staked in the right margin: `RAIL_PEEK_PX`
+(50px) on screen at rest, the whole station on hover or focus. Right-edge and
+vertically centred because left is the sidebar, bottom-right already holds the
+command-palette FAB on mobile — the collision that pushed the old pill off that
+corner — and mid-right is empty on every module and is the edge the panel itself
+arrives from. Hover and focus are pure CSS; the only JavaScript is a one-time
+first-visit nudge. No framer-motion, deliberately: a spring library driving one
+`translateX` on every route in the app is a render loop where a compositor-only
+transition does the same job for nothing.
+
+Verified live across 13 checks in a real Chromium — resting geometry, hover
+reveal, click-to-open, `⌘J` on a cold page with the bundle never yet fetched,
+keyboard `focus-visible` reveal, the rail yielding to the panel and returning,
+the marketing page, reduced motion, and a mobile viewport confirming no overlap
+with the FAB or the tab bar. Both themes were checked by eye at 3× zoom.
+
+Two accessibility decisions worth stating, because both are the kind that get
+skipped. The label is always in the DOM at zero opacity rather than rendered on
+hover — it is the button's accessible name, and a name that appears and
+disappears with a pointer is a name a screen reader never hears. And under
+reduced motion the rail is parked **open** rather than collapsed: the disclosure
+still has to happen, it just cannot be made out of movement, so it is made out
+of position instead.

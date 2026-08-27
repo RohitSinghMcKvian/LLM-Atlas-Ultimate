@@ -27,6 +27,8 @@ import { formatLedger, planTasks, setTaskStatus } from "./workspace/tasks";
 import { MAX_TASKS, WORKSPACE_ROOT, type WorkspaceTask } from "./workspace/types";
 import type { ExecFile, ExecRuntime } from "./exec/runtime";
 
+import { ATLAS_TOOLS, type AtlasToolPorts } from "@/lib/tools/atlas";
+
 /**
  * Tool registry for Atlas Chat.
  *
@@ -209,6 +211,15 @@ export interface ToolContext {
    * does, so the one tool that can both read and write needs a flag.
    */
   readOnly?: boolean;
+  /**
+   * Ports for the Atlas module tools (catalog, graph, cost, news).
+   *
+   * One field rather than four, because they are one capability from the user's
+   * side - "the agent can use Atlas" - and because every one of them is a pure
+   * read over data the browser already holds, so they share a lifetime and a
+   * failure mode. Absent means the Atlas tools are unavailable this turn.
+   */
+  atlas?: AtlasToolPorts;
 }
 
 /**
@@ -992,6 +1003,25 @@ const REGISTRY: ChatTool<any>[] = [
   skill,
   github,
   runPython,
+  // Atlas's own modules. Defined in `lib/tools/atlas/` rather than inline: they
+  // are pure functions over the catalog and the graph with no chat state at
+  // all, and this file is already the largest in `lib/`.
+  ...ATLAS_TOOLS.map((t) =>
+    defineTool({
+      name: t.name,
+      description: t.description,
+      schema: t.schema,
+      async execute(input, ctx) {
+        if (!ctx.atlas) {
+          return {
+            content: `${t.name} is unavailable this turn. Answer without it, and say so if it mattered.`,
+            isError: true,
+          };
+        }
+        return t.run(input, ctx.atlas);
+      },
+    }),
+  ),
 ];
 
 export const TOOL_NAMES = REGISTRY.map((t) => t.name);
@@ -1051,6 +1081,22 @@ export interface ToolAvailability {
    * dollar ceiling and shows a meter.
    */
   subagents: boolean;
+  /**
+   * The Atlas toggle. Gates `atlas_graph`, `atlas_catalog`, `atlas_cost` and
+   * `atlas_news`.
+   *
+   * On its own switch rather than always-on, even though every one of them is
+   * free, local and offline: they add four tool definitions to every request,
+   * and a model handed a catalog tool will use it - which is right when the
+   * question is about models and noise when it is not.
+   *
+   * Optional, unlike every other field here, and deliberately so: it lands
+   * default-off like every other depth item, and requiring it would mean
+   * editing three call sites inside a 3,948-line component and two test files
+   * to write `false` in each - churn in exchange for nothing. An absent field
+   * and an explicit `false` mean the same thing.
+   */
+  atlasTools?: boolean;
 }
 
 /**
@@ -1091,6 +1137,7 @@ export function toolDefsFor(opts: ToolAvailability): ToolDef[] {
     // which is the half of the pair that survives compaction.
     if (t.name === "workspace" || t.name === "tasks") return opts.buildMode;
     if (t.name === "run_python") return opts.codeExecution;
+    if (t.name.startsWith("atlas_")) return opts.atlasTools === true;
     return true;
   });
   return allowed.map((t) => ({

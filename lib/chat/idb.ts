@@ -12,7 +12,7 @@
 // Object stores give per-record writes and orders of magnitude more room.
 
 export const DB_NAME = "atlas-chat";
-export const DB_VERSION = 10;
+export const DB_VERSION = 11;
 export const CONVERSATIONS = "conversations";
 export const MESSAGES = "messages";
 /** Artifacts and their immutable version history (§4 Artifacts). */
@@ -69,6 +69,26 @@ export const FOLD_SUMMARIES = "fold_summaries";
  * anyway (the fold set changed, versus the thread gained a turn).
  */
 export const FOLD_CHUNKS = "fold_chunks";
+/**
+ * The user's own half of the Atlas knowledge graph (§Graph-RAG).
+ *
+ * Only the *workspace overlay* lives here — conversations, artifacts, memories
+ * and the like. The catalog and news halves are derived from the shipped
+ * snapshot on load and deliberately never stored: they are a pure function of a
+ * version hash the app already tracks, so persisting them would buy a few
+ * milliseconds and cost a whole class of staleness bugs.
+ */
+export const GRAPH_NODES = "graph_nodes";
+export const GRAPH_EDGES = "graph_edges";
+/**
+ * Orchestrated agent runs: the append-only trace of a plan and everything it
+ * did. Its own store because a run outlives the turn that started it — that is
+ * the point of persisting it — and because a partial write must not be able to
+ * touch a message.
+ */
+export const ORCHESTRA_RUNS = "orchestra_runs";
+/** Index on graph_nodes.kind. */
+export const BY_KIND = "by_kind";
 /** Index on messages.conversationId, for loading one thread. */
 export const BY_CONVERSATION = "by_conversation";
 /** Index on artifact_versions.artifactId / artifact_storage.artifactId. */
@@ -148,6 +168,19 @@ export function openChatDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(FOLD_CHUNKS)) {
         const s = db.createObjectStore(FOLD_CHUNKS, { keyPath: "id" });
+        s.createIndex(BY_CONVERSATION, "conversationId", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(GRAPH_NODES)) {
+        const s = db.createObjectStore(GRAPH_NODES, { keyPath: "id" });
+        s.createIndex(BY_KIND, "kind", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(GRAPH_EDGES)) {
+        // Keyed by the triple, so re-running a builder is idempotent rather
+        // than appending a second copy of every edge it already wrote.
+        db.createObjectStore(GRAPH_EDGES, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(ORCHESTRA_RUNS)) {
+        const s = db.createObjectStore(ORCHESTRA_RUNS, { keyPath: "id" });
         s.createIndex(BY_CONVERSATION, "conversationId", { unique: false });
       }
       if (!db.objectStoreNames.contains(BLOB_FILES)) {
