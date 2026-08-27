@@ -142,8 +142,14 @@ export const FLAG_DEFS = {
   atlasDock: {
     label: "Ask Atlas anywhere",
     description:
-      "A summonable agent panel on every workspace screen that can see what is on the page. Opens with the topbar button or ⌘J.",
-    defaultOn: false,
+      "A summonable agent panel on every screen that can see what is on the page. Opens from the marker at the right edge, or with ⌘J.",
+    // The one flag in this file that ships on, per Part E's own rule: a depth
+    // item flips default-on once its phase passes verification, and this one
+    // was driven live in a browser end to end - retrieval, tool calls, the
+    // sub-agent fan-out, and the approval gate in both directions. It is also
+    // the flag whose whole purpose is to be reachable from anywhere, which a
+    // control nobody can find is not.
+    defaultOn: true,
   },
   mcpServer: {
     label: "Serve Atlas over MCP",

@@ -3,7 +3,8 @@
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, MessagesSquare, Sparkles, Square, X } from "lucide-react";
+import { ArrowUp, MessagesSquare, Square, X } from "lucide-react";
+import { AtlasMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/markdown";
 import { ConsolePanel } from "@/components/chat/console/console-panel";
@@ -20,9 +21,8 @@ import { cn } from "@/lib/utils";
 /**
  * Ask Atlas, from anywhere.
  *
- * Mounted once in the workspace layout, so it is on all sixteen modules. The
- * questions this answers - "is this one worth it", "what does that cost", "what
- * changed" - arise while looking at the leaderboard or the cost page, and
+ * The questions this answers - "is this one worth it", "what does that cost",
+ * "what changed" - arise while looking at the leaderboard or the cost page, and
  * routing to `/chat` to ask them loses the thing that prompted the question.
  *
  * It does not mount `ChatClient`. The turn is `lib/orchestra/session.ts`, built
@@ -30,15 +30,29 @@ import { cn } from "@/lib/utils";
  * mounted a 3,948-line component with a conversation tree and an artifact
  * workspace inside it would be a second chat page, not a panel.
  *
- * Deliberately not on the marketing pages. That route is a server component
- * tuned for First Load JS - the model switcher is already code-split for exactly
- * this reason - so it gets a link to `/chat` rather than the agent bundle.
+ * ### The panel does not own its trigger
+ *
+ * The trigger is `components/agent/agent-rail.tsx`, mounted separately by
+ * `agent-dock-mount.tsx`, and the split is the whole point: this file pulls in
+ * the knowledge graph, the markdown renderer and framer-motion, so if the
+ * button lived here every route would either pay for that bundle up front or
+ * show no button until it finished downloading. The rail is a few hundred bytes
+ * of CSS-animated markup and renders instantly; this arrives on first open and
+ * then stays mounted, which is also what keeps the transcript alive across a
+ * close.
  */
 
 const PANEL_WIDTH = 400;
 
-export function AgentDock() {
-  const [open, setOpen] = React.useState(false);
+export function AgentDock({
+  open,
+  onClose,
+  panelId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  panelId: string;
+}) {
   const [input, setInput] = React.useState("");
   const [turns, setTurns] = React.useState<SessionTurn[]>([]);
   const [streaming, setStreaming] = React.useState(false);
@@ -53,20 +67,9 @@ export function AgentDock() {
   const setRun = useGraphStore((s) => s.setRun);
   const modelId = useUIStore((s) => s.activeModelId);
 
-  // The one global gesture. Checked against the existing shortcuts so it does
-  // not collide: `components/shortcuts.tsx` owns Cmd+Shift+O and Cmd+/, and the
-  // palette owns Cmd+K.
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
-      if (e.key === "Escape" && open) setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
+  // ⌘J and Escape live in `agent-dock-mount.tsx`, not here: this component does
+  // not exist until the panel has been opened once, and a shortcut that only
+  // works after you have already used the thing it opens is not a shortcut.
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -145,18 +148,17 @@ export function AgentDock() {
    * still open when they come back.
    */
   const openChat = React.useCallback(() => {
-    setOpen(false);
+    onClose();
     router.push("/chat");
-  }, [router]);
+  }, [router, onClose]);
 
   return (
     <>
-      <DockTrigger open={open} onToggle={() => setOpen((v) => !v)} />
-
       <AnimatePresence>
         {open && (
           <motion.aside
             key="agent-dock"
+            id={panelId}
             initial={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
             animate={{ opacity: 1, x: 0 }}
             exit={reduced ? { opacity: 0 } : { opacity: 0, x: 24 }}
@@ -169,8 +171,10 @@ export function AgentDock() {
             aria-label="Ask Atlas"
           >
             <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="size-4 text-action" aria-hidden />
+              <span className="flex items-center gap-2">
+                {/* The same mark the rail carries, so opening the panel reads as
+                    the marker unfolding rather than as a different product. */}
+                <AtlasMark size={20} bare />
                 <span className="font-display text-sm font-semibold">Ask Atlas</span>
               </span>
               <span className="flex items-center gap-1">
@@ -178,7 +182,7 @@ export function AgentDock() {
                   <MessagesSquare className="size-4" />
                   <span className="sr-only">Open Chat</span>
                 </Button>
-                <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} title="Close">
+                <Button variant="ghost" size="icon-sm" onClick={onClose} title="Close">
                   <X className="size-4" />
                   <span className="sr-only">Close</span>
                 </Button>
@@ -261,35 +265,6 @@ export function AgentDock() {
         )}
       </AnimatePresence>
     </>
-  );
-}
-
-/**
- * The trigger.
- *
- * A button in the flow rather than a second floating action button: the mobile
- * layout already has one at `bottom-20 right-4` for the command palette, and two
- * competing circles in the same corner is clutter, not affordance.
- */
-function DockTrigger({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      className={cn(
-        "fixed bottom-24 right-4 z-30 flex h-9 items-center gap-1.5 rounded-xl border border-border",
-        "bg-surface/90 px-3 text-2xs font-medium shadow-lift backdrop-blur-lg",
-        "transition-colors duration-200 hover:border-border-strong lg:bottom-6",
-        open && "border-action/40 text-action",
-      )}
-    >
-      <Sparkles className="size-3.5" aria-hidden />
-      Ask Atlas
-      <kbd className="ml-1 rounded border border-border bg-surface-2 px-1 font-mono text-2xs">
-        ⌘J
-      </kbd>
-    </button>
   );
 }
 

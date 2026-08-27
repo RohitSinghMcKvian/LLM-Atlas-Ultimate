@@ -329,6 +329,37 @@
   }
 }
 
+/* The agent rail — a survey marker staked at the edge of the sheet.
+
+   At rest only its summit shows; pointing at it draws the whole station in.
+   The drift is a five-pixel rise and fall on the mark alone, never on the tab,
+   which is what makes the marker read as planted-but-alive rather than as a
+   whole panel bobbing at the edge of the screen.
+
+   One composited transform on one element, cheap enough to leave running on
+   every route — and paused the instant a pointer or focus arrives, so the
+   slide-in lands on a target that is holding still rather than one the user is
+   chasing. Scoped to `.atlas-rail` rather than to Tailwind's `.group`, which is
+   a convention used in a hundred other places here. Neutralised entirely by the
+   blanket prefers-reduced-motion block above. */
+.atlas-rail-drift {
+  animation: atlas-rail-drift 7s ease-in-out infinite;
+  will-change: transform;
+}
+.atlas-rail:hover .atlas-rail-drift,
+.atlas-rail:focus-within .atlas-rail-drift {
+  animation-play-state: paused;
+}
+@keyframes atlas-rail-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -5px, 0);
+  }
+}
+
 /* Atlas Flow — animated active edges */
 .flow-edge-active {
   animation: flow-dash 0.6s linear infinite;

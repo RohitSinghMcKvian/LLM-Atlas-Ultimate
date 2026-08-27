@@ -2933,3 +2933,51 @@ Four bugs surfaced, all four fixed and re-verified live:
   intelligent; it proves the wiring, not whether a real model gives good
   answers through it. §5's "no live model turn" is closed for wiring, not for
   quality - that still needs a real provider key.
+
+## 8. The agent rail — one reachable trigger, everywhere
+
+The agent was reachable from a pill at `bottom-24 right-4` that only existed on
+the sixteen workspace modules, and only for someone who had found the Labs
+toggle. Three things were wrong with that, and this change fixes all three.
+
+**The trigger lived inside the lazy chunk.** `AgentDockMount` dynamically
+imported `AgentDock`, and `DockTrigger` was defined in that same file — so the
+button could not paint until the knowledge graph, the markdown renderer and
+framer-motion had all downloaded. A permanently-visible affordance cannot be
+gated on a lazy import. The trigger is now `components/agent/agent-rail.tsx`,
+statically imported and rendered immediately; the panel stays behind
+`next/dynamic` and arrives on first open. Measured: `/` is **21.5 kB / 198 kB
+First Load JS, byte-identical to before**, with the rail now on that route too.
+
+**It was off by default.** `atlasDock` is the one flag in `lib/flags.ts` that
+now ships `defaultOn: true`, per Part E's own rule that a depth item flips on
+once its phase passes verification — §7 above drove this one end to end in a
+browser. A flag whose entire purpose is to be reachable from anywhere is not
+serving that purpose while nobody can find it.
+
+**It was not actually everywhere.** The mount is now in the marketing layout as
+well as the workspace one, so "anywhere" is literal.
+
+The rail itself is a survey marker staked in the right margin: `RAIL_PEEK_PX`
+(50px) on screen at rest, the whole station on hover or focus. Right-edge and
+vertically centred because left is the sidebar, bottom-right already holds the
+command-palette FAB on mobile — the collision that pushed the old pill off that
+corner — and mid-right is empty on every module and is the edge the panel itself
+arrives from. Hover and focus are pure CSS; the only JavaScript is a one-time
+first-visit nudge. No framer-motion, deliberately: a spring library driving one
+`translateX` on every route in the app is a render loop where a compositor-only
+transition does the same job for nothing.
+
+Verified live across 13 checks in a real Chromium — resting geometry, hover
+reveal, click-to-open, `⌘J` on a cold page with the bundle never yet fetched,
+keyboard `focus-visible` reveal, the rail yielding to the panel and returning,
+the marketing page, reduced motion, and a mobile viewport confirming no overlap
+with the FAB or the tab bar. Both themes were checked by eye at 3× zoom.
+
+Two accessibility decisions worth stating, because both are the kind that get
+skipped. The label is always in the DOM at zero opacity rather than rendered on
+hover — it is the button's accessible name, and a name that appears and
+disappears with a pointer is a name a screen reader never hears. And under
+reduced motion the rail is parked **open** rather than collapsed: the disclosure
+still has to happen, it just cannot be made out of movement, so it is made out
+of position instead.
