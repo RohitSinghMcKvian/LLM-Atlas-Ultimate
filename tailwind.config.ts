@@ -161,6 +161,13 @@ const config: Config = {
           to: { transform: "rotate(360deg)" },
         },
       },
+      // Mirrors --ease-atlas in globals.css and EASE in lib/motion.ts, so the
+      // house curve is a named utility (`ease-atlas`) instead of an arbitrary
+      // value. Tailwind cannot disambiguate `ease-[cubic-bezier(...)]` and warns
+      // on every compile; a registered token has no such problem.
+      transitionTimingFunction: {
+        atlas: "var(--ease-atlas)",
+      },
       animation: {
         shimmer: "shimmer 2s infinite",
         "gradient-x": "gradient-x 6s ease infinite",

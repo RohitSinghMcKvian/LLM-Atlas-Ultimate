@@ -216,7 +216,7 @@ export function NewsCard({
           priority={priority}
           className="h-full w-full"
           imgClassName={cn(
-            "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            "transition-transform duration-500 ease-atlas",
             !reducedMotion && "group-hover:scale-[1.04]",
           )}
         />
