@@ -7,7 +7,9 @@ import { ArrowUp, MessagesSquare, Square, X } from "lucide-react";
 import { AtlasMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/markdown";
+import { ProviderBanner } from "@/components/provider-banner";
 import { ConsolePanel } from "@/components/chat/console/console-panel";
+import { needsProviderBanner } from "@/lib/agent/dock-errors";
 import { atlasGraph } from "@/lib/graph/atlas-graph";
 import { runSessionTurn, type SessionTurn } from "@/lib/orchestra/session";
 import { describeSurface, useSurfaceStore } from "@/lib/agent/surface-context";
@@ -56,7 +58,7 @@ export function AgentDock({
   const [input, setInput] = React.useState("");
   const [turns, setTurns] = React.useState<SessionTurn[]>([]);
   const [streaming, setStreaming] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<{ message: string; code?: string } | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const reduced = usePrefersReducedMotion();
 
@@ -125,11 +127,12 @@ export function AgentDock({
             window.confirm(
               `Atlas wants to use "${title}" (${name}), which can write or spend. Allow it?`,
             ),
-          onError: (message) => setError(message),
+          onError: (message, code) => setError({ message, code }),
         },
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That did not go through.");
+      const code = e && typeof e === "object" && "code" in e ? String(e.code) : undefined;
+      setError({ message: e instanceof Error ? e.message : "That did not go through.", code });
     } finally {
       if (timer) clearTimeout(timer);
       flush();
@@ -211,9 +214,10 @@ export function AgentDock({
                 ),
               )}
 
-              {error && (
+              {error && needsProviderBanner(error.code) && <ProviderBanner />}
+              {error && !needsProviderBanner(error.code) && (
                 <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 p-2 text-2xs text-danger">
-                  {error}
+                  {error.message}
                 </p>
               )}
 
