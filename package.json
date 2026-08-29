@@ -2,13 +2,16 @@
   "name": "llm-atlas",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20 <23"
+  },
   "description": "LLM Atlas — the open ecosystem for everything LLM. Learn, research, compare, cost, and build in one workspace.",
   "scripts": {
     "postinstall": "node scripts/vendor-artifact-runtime.mjs",
     "prebuild": "node scripts/vendor-artifact-runtime.mjs",
     "dev": "next dev",
-    "dev:preview": "set NEXT_DIST_DIR=.next-preview&& next dev -p 3105",
-    "dev:verify": "set NEXT_DIST_DIR=.next-verify&& next dev",
+    "dev:preview": "cross-env NEXT_DIST_DIR=.next-preview next dev -p 3105",
+    "dev:verify": "cross-env NEXT_DIST_DIR=.next-verify next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -71,6 +74,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^10.1.0",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.1.6",
     "fake-indexeddb": "^6.2.5",
