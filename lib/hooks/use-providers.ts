@@ -37,8 +37,8 @@ let cached: ProvidersInfo | null = null;
 let inflight: Promise<void> | null = null;
 const subscribers = new Set<(info: ProvidersInfo) => void>();
 
-function load(): void {
-  if (cached || inflight) return;
+function fetchProviders(): void {
+  if (inflight) return;
   inflight = fetch("/api/v1/providers")
     .then((r) => r.json())
     .then((d) => {
@@ -47,13 +47,38 @@ function load(): void {
     .catch(() => {
       // Same degradation as before: stop loading, report nothing configured.
       // Deliberately not cached, so a later mount can retry after a transient
-      // network failure.
+      // network failure. On a *revalidate* this also means the previous good
+      // snapshot survives — a failed refresh must never flash "no provider
+      // connected" over a working setup.
     })
     .finally(() => {
       inflight = null;
       const next = cached ?? { ...IDLE, loading: false };
       for (const notify of subscribers) notify(next);
     });
+}
+
+function load(): void {
+  if (cached || inflight) return;
+  fetchProviders();
+}
+
+/**
+ * Ask again, keeping the current answer until a better one arrives.
+ *
+ * The snapshot above is immortal: it is written once and never invalidated, on
+ * the reasoning that the server's environment cannot change while the document
+ * is alive. That is true of the *server* and false of the *user*, whose whole
+ * reason for being here is often that they just added a key and restarted the
+ * dev server. The tab kept serving the old `configured: []` until a hard
+ * reload, so the app still said "connect a key" after they had — which reads as
+ * the key not working.
+ *
+ * Refetching on focus covers exactly that: they leave the tab to edit
+ * `.env.local`, come back, and the answer is current.
+ */
+function revalidate(): void {
+  fetchProviders();
 }
 
 /** Fetches which inference providers are configured (keys live server-side). */
@@ -69,18 +94,21 @@ export function useProviders(): ProvidersInfo {
       if (active) setInfo(next);
     };
 
-    if (cached) {
-      apply(cached);
-      return () => {
-        active = false;
-      };
-    }
-
+    // Subscribe unconditionally, warm cache or not. Previously a mount that
+    // found a cached snapshot returned early without subscribing, so it could
+    // never be told about a later refresh — which would have made `revalidate`
+    // update every tab except the ones that already had data.
     subscribers.add(apply);
-    load();
+    if (cached) apply(cached);
+    else load();
+
+    const onFocus = () => revalidate();
+    window.addEventListener("focus", onFocus);
+
     return () => {
       active = false;
       subscribers.delete(apply);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
