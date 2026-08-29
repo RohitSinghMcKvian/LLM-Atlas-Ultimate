@@ -11,7 +11,8 @@
     "dev:verify": "set NEXT_DIST_DIR=.next-verify&& next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -64,6 +65,8 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/browser": "^4.3.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.10.5",
@@ -71,7 +74,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "^10.4.20",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^15.1.6",
     "fake-indexeddb": "^6.2.5",
     "mathjs": "^15.2.0",
@@ -80,6 +83,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.128.0",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.9"
   }
 }
