@@ -5,6 +5,7 @@
   "description": "LLM Atlas — the open ecosystem for everything LLM. Learn, research, compare, cost, and build in one workspace.",
   "scripts": {
     "postinstall": "node scripts/vendor-artifact-runtime.mjs",
+    "prepare": "husky || true",
     "prebuild": "node scripts/vendor-artifact-runtime.mjs",
     "dev": "next dev",
     "dev:preview": "set NEXT_DIST_DIR=.next-preview&& next dev -p 3105",
@@ -64,6 +65,8 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
     "@tailwindcss/browser": "^4.3.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.10.5",
@@ -74,6 +77,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.1.6",
     "fake-indexeddb": "^6.2.5",
+    "husky": "^9.1.7",
     "mathjs": "^15.2.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",

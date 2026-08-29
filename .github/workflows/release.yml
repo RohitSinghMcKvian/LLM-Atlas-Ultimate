@@ -1,0 +1,46 @@
+# Versioning, tagging and the changelog — automated.
+#
+# The repo had 17 commits, zero tags and zero releases, and `package.json` had
+# sat at 0.1.0 since the initial commit. There was no versioned artifact at all:
+# "what is deployed" meant "whatever is on main right now".
+#
+# release-please reads the Conventional Commit subjects on main, works out the
+# next semver, and keeps a standing "Release PR" holding the version bump and a
+# generated CHANGELOG. That PR is the human gate — it accumulates changes for as
+# long as you like, and merging it is what actually cuts the release.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two releases racing would fight over the same tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  # Create the release commit, the tag and the GitHub Release.
+  contents: write
+  # Open and update the Release PR.
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # The default GITHUB_TOKEN is enough — nothing here needs to reach
+          # another repository.
+          #
+          # Consequence worth knowing rather than rediscovering: GitHub does not
+          # trigger workflows for a PR opened by GITHUB_TOKEN, so the Release PR
+          # shows no CI run. That is expected and safe. It only ever touches
+          # CHANGELOG.md and the version in package.json, and the commits it
+          # describes were each gated by `verify` on the way in. Swapping in a
+          # PAT would start those runs, at the cost of a long-lived credential.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

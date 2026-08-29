@@ -1,0 +1,35 @@
+# The PR title becomes the commit subject on `main`, because this repo
+# squash-merges — and that subject is what release-please parses to choose the
+# next version and write the changelog. So the title is release metadata, not
+# decoration, and it is checked like it.
+#
+# `edited` is in the trigger list deliberately: fixing the title has to re-run
+# the check, or the only way to clear a red mark would be an empty commit.
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional:
+    name: conventional commit title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The title is passed through the environment, never interpolated into
+      # the shell. `${{ github.event.pull_request.title }}` inside a `run:`
+      # block is a script-injection hole on a public repo: anyone who can open
+      # a pull request chooses that string, and `$(...)` in it would execute.
+      - name: Check title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node .github/scripts/check-pr-title.mjs
