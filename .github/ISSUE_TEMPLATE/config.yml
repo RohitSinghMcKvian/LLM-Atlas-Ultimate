@@ -1,0 +1,10 @@
+# Keep the two structured templates as the only ways to open an issue, so every
+# report arrives with the fields triage needs.
+blank_issues_enabled: false
+contact_links:
+  - name: Models will not run / no provider connected
+    url: https://github.com/RohitSinghMcKvian/LLM-Atlas-Ultimate/blob/main/CONTRIBUTING.md#models-will-not-run
+    about: Run `npm run doctor` first — it usually answers this in one line.
+  - name: Report a security vulnerability
+    url: https://github.com/RohitSinghMcKvian/LLM-Atlas-Ultimate/security/advisories/new
+    about: Please report privately, never as a public issue.

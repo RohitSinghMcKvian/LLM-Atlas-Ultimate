@@ -1,0 +1,19 @@
+# Every path, one owner. GitHub auto-requests review from the owner of any file
+# a pull request touches.
+#
+# This is deliberately not paired with a "required approvals" rule: with a
+# single maintainer that would deadlock the repo, because GitHub does not let
+# anyone approve their own pull request. It exists so that review routing is
+# already correct the day a second maintainer arrives — at which point turning
+# on "Require review from Code Owners" is a one-line change in the ruleset.
+* @RohitSinghMcKvian
+
+# Anything below changes how the project is built, released or trusted. Listed
+# separately so a future team can assign them independently.
+/.github/            @RohitSinghMcKvian
+/scripts/            @RohitSinghMcKvian
+/supabase/           @RohitSinghMcKvian
+package.json         @RohitSinghMcKvian
+package-lock.json    @RohitSinghMcKvian
+next.config.mjs      @RohitSinghMcKvian
+vercel.json          @RohitSinghMcKvian

@@ -2,6 +2,7 @@
   "name": "llm-atlas",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "LLM Atlas — the open ecosystem for everything LLM. Learn, research, compare, cost, and build in one workspace.",
   "scripts": {
     "postinstall": "node scripts/vendor-artifact-runtime.mjs",

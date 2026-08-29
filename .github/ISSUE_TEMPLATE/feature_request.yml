@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose something Atlas should be able to do.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What are you trying to do that Atlas makes hard or impossible today?
+        Describe the situation rather than the feature — it often has a cheaper
+        solution than the one that comes to mind first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Atlas
+      options:
+        - Chat / the agent
+        - Catalog, Leaderboard or Compare
+        - Cost engine
+        - Router / providers
+        - Atlas Code
+        - News
+        - Learn / Prompt
+        - Auth, persistence or the Vault
+        - Build, CI or deployment
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you have already tried or considered
+      description: Including "nothing" — but existing workarounds are useful context.
