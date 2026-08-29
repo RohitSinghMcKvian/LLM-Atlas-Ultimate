@@ -148,6 +148,10 @@ tests" and "opened it in a browser and watched it work" are different claims.
   already routes review correctly, so enabling the rule later is a one-line
   change.
 
+The GitHub-side settings behind all of this — merge strategy, the branch
+ruleset, Actions permissions, secrets and the security toggles — are recorded in
+[`docs/repo-setup.md`](docs/repo-setup.md).
+
 ---
 
 ## Releases
