@@ -1,5 +1,7 @@
 "use client";
 
+import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { newsSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, X } from "lucide-react";
@@ -204,6 +206,21 @@ export function NewsClient({
   const openArticle = React.useMemo(
     () => live.articles.find((a) => a.id === filters.articleId) ?? null,
     [live.articles, filters.articleId],
+  );
+
+  // An open story wins over the filters behind it: someone reading one article
+  // is asking about that article.
+  useSurfaceContext(
+    newsSurface({
+      matched: selection.articles.length,
+      total: selection.total,
+      topics: filters.topics,
+      query: filters.query,
+      verifiedOnly: filters.verifiedOnly,
+      savedOnly: filters.savedOnly,
+      openTitle: openArticle?.title,
+      openId: openArticle?.id,
+    }),
   );
 
   const siblings = React.useMemo(

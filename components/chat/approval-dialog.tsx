@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Plug, ShieldAlert } from "lucide-react";
+import { AtlasMark } from "@/components/brand/logo";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,11 @@ export function ApprovalDialog({
   /** `remember` records the choice for this tool; otherwise it applies once. */
   onDecide: (approved: boolean, remember: ApprovalRule | null) => void;
 }) {
+  // One prompt for both origins rather than two that look different and mean
+  // the same thing. Only the wording changes: "this affects your real account"
+  // is true of a connector and false of Atlas moving you to the Cost page, and
+  // a prompt that overstates what it is asking for is one people stop reading.
+  const atlas = pending?.surface === "atlas";
   return (
     <Dialog
       open={!!pending}
@@ -45,17 +51,22 @@ export function ApprovalDialog({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <ShieldAlert className="size-4 text-amber" />
-                Allow this connector action?
+                {atlas ? "Let Atlas do this?" : "Allow this connector action?"}
               </DialogTitle>
               <DialogDescription>
-                Atlas wants to run a tool on your {pending.connectorName} account. This
-                affects the real service, not a copy.
+                {atlas
+                  ? "Atlas wants to act on this workspace rather than answer a question. Nothing runs until you say so."
+                  : `Atlas wants to run a tool on your ${pending.connectorName} account. This affects the real service, not a copy.`}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-2 rounded-lg border border-border bg-surface-2/40 p-3">
               <div className="flex items-center gap-2 text-sm">
-                <Plug className="size-3.5 shrink-0 text-action" />
+                {atlas ? (
+                  <AtlasMark size={14} className="shrink-0" />
+                ) : (
+                  <Plug className="size-3.5 shrink-0 text-action" />
+                )}
                 <span className="font-medium">{pending.connectorName}</span>
                 <span className="text-muted-foreground">·</span>
                 <code className="text-xs">{pending.tool}</code>
@@ -93,7 +104,7 @@ export function ApprovalDialog({
 
             <p className="text-2xs text-muted-foreground/70">
               &ldquo;Always&rdquo; and &ldquo;never&rdquo; apply to this one tool only. Change
-              them any time in Connectors.
+              them any time in {atlas ? "Settings" : "Connectors"}.
             </p>
           </>
         )}

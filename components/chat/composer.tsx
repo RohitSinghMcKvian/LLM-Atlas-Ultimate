@@ -21,6 +21,7 @@ import {
   Hammer,
   ListChecks,
   Loader2,
+  Compass,
   Mic,
   Paperclip,
   Plug,
@@ -90,6 +91,8 @@ export function Composer({
   onDeclineAutoBuild,
   codeExecution,
   onToggleCodeExecution,
+  atlasTools,
+  onToggleAtlasTools,
   onOpenGithub,
   onToggleGithub,
   onTogglePlanMode,
@@ -143,6 +146,9 @@ export function Composer({
   /** Offer the sandboxed Python interpreter. */
   codeExecution: boolean;
   onToggleCodeExecution: () => void;
+  /** Offer the catalog, graph, cost and news tools. On by default. */
+  atlasTools: boolean;
+  onToggleAtlasTools: () => void;
   onOpenGithub: () => void;
   onToggleGithub: () => void;
   onTogglePlanMode: () => void;
@@ -264,6 +270,20 @@ export function Composer({
         clearLabel="Turn memory back on"
         tone="muted"
         onClear={onToggleMemory}
+      />,
+    );
+  // Only when off. It ships on, and a pill for a capability that is on by
+  // default would be permanent furniture saying nothing - the same reasoning
+  // that makes Memory's pill an "off" pill.
+  if (!atlasTools)
+    pills.push(
+      <ModePill
+        key="atlas"
+        icon={<Compass className="size-3.5" />}
+        label="Atlas data off"
+        clearLabel="Let Atlas read its own catalog again"
+        tone="muted"
+        onClear={onToggleAtlasTools}
       />,
     );
   if (!skills && skillCount > 0)
@@ -424,6 +444,8 @@ export function Composer({
               onOpenGithub={onOpenGithub}
               codeExecution={codeExecution}
               onToggleCodeExecution={onToggleCodeExecution}
+              atlasTools={atlasTools}
+              onToggleAtlasTools={onToggleAtlasTools}
               connectorCount={connectorCount}
               onOpenConnectors={onOpenConnectors}
               planMode={planMode}
@@ -619,6 +641,8 @@ function ComposerMenu({
   onOpenGithub,
   codeExecution,
   onToggleCodeExecution,
+  atlasTools,
+  onToggleAtlasTools,
   connectorCount,
   onOpenConnectors,
   planMode,
@@ -651,6 +675,9 @@ function ComposerMenu({
   onOpenGithub: () => void;
   codeExecution: boolean;
   onToggleCodeExecution: () => void;
+  /** Offer the catalog, graph, cost and news tools. On by default. */
+  atlasTools: boolean;
+  onToggleAtlasTools: () => void;
   connectorCount: number;
   onOpenConnectors: () => void;
   planMode: boolean;
@@ -699,6 +726,19 @@ function ComposerMenu({
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Search &amp; sources</DropdownMenuLabel>
 
+        {/* First in the group, and the only one here that reaches nothing: the
+            catalog, the graph, the cost engine and the news corpus are already
+            in the browser. Turning it off is a real choice - it removes four
+            tool definitions from every request - but it is the answer to "is
+            the model talking about the catalog or about its training data",
+            which is why it leads rather than trails. */}
+        <DropdownMenuSwitchItem
+          icon={<Compass />}
+          label="Atlas data"
+          hint="catalog · cost · news"
+          checked={atlasTools}
+          onCheckedChange={onToggleAtlasTools}
+        />
         <DropdownMenuSwitchItem
           icon={<Globe />}
           label="Web search"

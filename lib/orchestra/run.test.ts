@@ -33,6 +33,17 @@ describe("roles", () => {
     }
   });
 
+  it("keeps the acting tools out of every read-only role", () => {
+    // The specific regression: `READ_ATLAS` was `ATLAS_TOOL_NAMES`, which was
+    // all reads until it was not. A cartographer holding `atlas_open` can move
+    // the person to another page in the middle of a fan-out they cannot see.
+    for (const id of ROLE_IDS) {
+      if (ROLES[id].writes) continue;
+      expect(ROLES[id].tools, id).not.toContain("atlas_open");
+      expect(ROLES[id].tools, id).not.toContain("atlas_prompt");
+    }
+  });
+
   it("exactly one role may change anything", () => {
     expect(ROLE_IDS.filter((id) => ROLES[id].writes)).toEqual(["builder"]);
   });

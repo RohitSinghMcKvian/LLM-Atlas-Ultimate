@@ -116,6 +116,21 @@ export const ATLAS_CLASSES: Record<string, ToolClass> = {
   },
   atlas_cost: { name: "atlas_cost", surface: "atlas", sideEffect: "read", title: "Cost engine" },
   atlas_news: { name: "atlas_news", surface: "atlas", sideEffect: "read", title: "Atlas News" },
+  // The first two Atlas tools that are not reads.
+  //
+  // `atlas_open` is a `write` even though nothing is persisted and the back
+  // button undoes it, because "changes state the user owns" includes the page
+  // they are looking at. An agent that can move someone mid-sentence, without
+  // being asked, is the behaviour that makes in-app assistants feel like
+  // something happening *to* you - and the gate remembers "always allow" per
+  // tool, so a person who wants it instant says so once.
+  atlas_open: { name: "atlas_open", surface: "atlas", sideEffect: "write", title: "Open a page" },
+  atlas_prompt: {
+    name: "atlas_prompt",
+    surface: "atlas",
+    sideEffect: "write",
+    title: "Prompt library",
+  },
 };
 
 export const ALL_CLASSES: Record<string, ToolClass> = { ...BUILTIN_CLASSES, ...ATLAS_CLASSES };

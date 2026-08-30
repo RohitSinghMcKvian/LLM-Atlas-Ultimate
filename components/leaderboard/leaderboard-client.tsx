@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { useInfiniteReveal } from "@/lib/hooks/use-infinite-reveal";
+import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { leaderboardSurface } from "@/lib/agent/surface-summaries";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -198,6 +200,24 @@ export function LeaderboardClient({
     resetKey: `${JSON.stringify(deferredFilters)}|${sort}`,
   });
   const visible = React.useMemo(() => results.slice(0, limit), [results, limit]);
+
+  // What the agent is told when someone asks "is this one worth it" from here.
+  // Without it the answer is built against "they are on the Leaderboard" and a
+  // request for clarification, which is what makes most in-app assistants
+  // annoying to talk to.
+  const compareIds = React.useMemo(() => [...compare], [compare]);
+  useSurfaceContext(
+    leaderboardSurface({
+      matched: results.length,
+      total: allModels().length,
+      sort,
+      access: filters.access,
+      license: filters.license,
+      search: filters.search,
+      expandedId: expanded,
+      compareIds,
+    }),
+  );
 
   // Stable identities so the memoized rows aren't invalidated on every
   // keystroke in the search box.

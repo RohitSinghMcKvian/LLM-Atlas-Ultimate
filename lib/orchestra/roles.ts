@@ -41,7 +41,17 @@ export interface AgentRole {
   maxRounds: number;
 }
 
-const READ_ATLAS = ATLAS_TOOL_NAMES;
+/**
+ * The Atlas tools a read-only role may hold.
+ *
+ * Derived, not listed. `ATLAS_TOOL_NAMES` used to be entirely reads, so taking
+ * all of it was the same thing; the moment `atlas_open` and `atlas_prompt`
+ * joined the registry it stopped being, and a "read-only" cartographer would
+ * have been handed a tool that can move the person to another page in the
+ * middle of a fan-out they cannot see. `roleWritesMatchTools` catches that in a
+ * test, and this makes the catch unnecessary for whatever is added next.
+ */
+const READ_ATLAS = ATLAS_TOOL_NAMES.filter((n) => classify(n).sideEffect === "read");
 
 export const ROLES: Record<RoleId, AgentRole> = {
   cartographer: {

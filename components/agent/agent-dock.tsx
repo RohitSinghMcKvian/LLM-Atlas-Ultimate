@@ -3,7 +3,7 @@
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, MessagesSquare, Square, X } from "lucide-react";
+import { ArrowUp, AudioLines, MessagesSquare, Square, X } from "lucide-react";
 import { AtlasMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/markdown";
@@ -11,6 +11,8 @@ import { ProviderBanner } from "@/components/provider-banner";
 import { ConsolePanel } from "@/components/chat/console/console-panel";
 import { needsProviderBanner } from "@/lib/agent/dock-errors";
 import { atlasGraph } from "@/lib/graph/atlas-graph";
+import { cachedNewsCorpus, primeNewsCorpus } from "@/lib/news/client-corpus";
+import { useRouteEnv } from "@/lib/hooks/use-route-env";
 import { runSessionTurn, type SessionTurn } from "@/lib/orchestra/session";
 import { describeSurface, useSurfaceStore } from "@/lib/agent/surface-context";
 import { useGraphStore } from "@/lib/store/graph-store";
@@ -50,10 +52,13 @@ export function AgentDock({
   open,
   onClose,
   panelId,
+  onStartVoice,
 }: {
   open: boolean;
   onClose: () => void;
   panelId: string;
+  /** Absent when the voice flag is off, and the control is then absent too. */
+  onStartVoice?: () => void;
 }) {
   const [input, setInput] = React.useState("");
   const [turns, setTurns] = React.useState<SessionTurn[]>([]);
@@ -68,12 +73,26 @@ export function AgentDock({
   const publishGraph = useGraphStore((s) => s.publish);
   const setRun = useGraphStore((s) => s.setRun);
   const modelId = useUIStore((s) => s.activeModelId);
+  // Without this the panel offered `atlas_news` with no corpus behind it and
+  // `atlas_catalog availability` with no idea which providers the person can
+  // reach - two tools that could only ever answer "I do not have that", on the
+  // surface whose whole point is answering from Atlas's own data.
+  const routeEnv = useRouteEnv();
 
   // ⌘J and Escape live in `agent-dock-mount.tsx`, not here: this component does
   // not exist until the panel has been opened once, and a shortcut that only
   // works after you have already used the thing it opens is not a shortcut.
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Only once the panel has been opened, which is the point of the split with
+  // `agent-rail.tsx`: a workspace page that never summons the dock pays nothing.
+  React.useEffect(() => {
+    if (!open) return;
+    const ctrl = new AbortController();
+    void primeNewsCorpus(ctrl.signal);
+    return () => ctrl.abort();
+  }, [open]);
 
   const send = React.useCallback(async () => {
     const question = input.trim();
@@ -113,7 +132,7 @@ export function AgentDock({
           history: turns,
           surface: describeSurface(surface, pathname ?? undefined),
           openRouterKey: getOpenrouterKey() || undefined,
-          atlas: { graph: () => atlasGraph() },
+          atlas: { graph: () => atlasGraph(), news: () => cachedNewsCorpus(), routeEnv: routeEnv ?? undefined },
           signal: ctrl.signal,
         },
         {
@@ -139,7 +158,7 @@ export function AgentDock({
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, modelId, turns, surface, pathname, publishGraph, setRun]);
+  }, [input, streaming, modelId, turns, surface, pathname, publishGraph, setRun, routeEnv]);
 
   /**
    * Hand off to the full chat page.
@@ -181,6 +200,17 @@ export function AgentDock({
                 <span className="font-display text-sm font-semibold">Ask Atlas</span>
               </span>
               <span className="flex items-center gap-1">
+                {onStartVoice && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={onStartVoice}
+                    title="Talk to Atlas"
+                  >
+                    <AudioLines className="size-4" />
+                    <span className="sr-only">Talk to Atlas</span>
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon-sm" onClick={openChat} title="Open Chat">
                   <MessagesSquare className="size-4" />
                   <span className="sr-only">Open Chat</span>

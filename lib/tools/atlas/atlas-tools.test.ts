@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { installSnapshot, resetSnapshot } from "@/lib/catalog/snapshot";
 import { makeSnapshot } from "@/lib/catalog/__fixtures__/snapshots";
 import { MINI_MODELS, miniGraph } from "@/lib/graph/__fixtures__/mini-catalog";
@@ -13,12 +13,14 @@ import { runNewsTool, type NewsCorpus } from "./news-tool";
 const g = miniGraph();
 
 describe("registry", () => {
-  it("exposes the four Atlas tools with unique names and real schemas", () => {
+  it("exposes every Atlas tool with unique names and real schemas", () => {
     expect(ATLAS_TOOL_NAMES.sort()).toEqual([
       "atlas_catalog",
       "atlas_cost",
       "atlas_graph",
       "atlas_news",
+      "atlas_open",
+      "atlas_prompt",
     ]);
     for (const t of ATLAS_TOOLS) {
       expect(t.description.length).toBeGreaterThan(40);
@@ -385,3 +387,36 @@ describe("atlas_news", () => {
     expect(r.content).toContain("`search` first");
   });
 });
+
+/**
+ * Near-misses.
+ *
+ * Both of these came out of a live run. A model asked which of two models was
+ * cheaper called `search` with `model_ids` and no `search_query`, got an error,
+ * and answered that one of them was not in the catalog - from a tool that was
+ * holding its price. The command names are ours; the question was unambiguous.
+ */
+describe("catalog tool tolerates an obvious mis-call", () => {
+  const snapshot = makeSnapshot(MINI_MODELS, { version: "mini-catalog-nearmiss" });
+  beforeAll(() => installSnapshot(snapshot));
+  afterAll(() => resetSnapshot());
+
+  it("treats `search` with ids and no query as a lookup", () => {
+    const r = runCatalogTool({ command: "search", model_ids: ["summit-pro"], max_results: 8 });
+    expect(r.isError).toBeUndefined();
+    expect(r.content).toContain("summit-pro");
+  });
+
+  it("treats `get` with a query and no ids as a search", () => {
+    const r = runCatalogTool({ command: "get", search_query: "summit", max_results: 8 });
+    expect(r.isError).toBeUndefined();
+    expect(r.content.toLowerCase()).toContain("summit");
+  });
+
+  it("still refuses when there is nothing at all to go on", () => {
+    // Guessing here would mean inventing the question, not reading it.
+    expect(runCatalogTool({ command: "search", max_results: 8 }).isError).toBe(true);
+    expect(runCatalogTool({ command: "get", max_results: 8 }).isError).toBe(true);
+  });
+});
+

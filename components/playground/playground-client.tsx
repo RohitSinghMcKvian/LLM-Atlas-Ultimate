@@ -1,5 +1,7 @@
 "use client";
 
+import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { playgroundSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
 import { defaultPlaygroundModels } from "@/lib/catalog/defaults";
 import { resolveModelIds } from "@/lib/catalog/resolve";
@@ -127,6 +129,14 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
   const [exportOpen, setExportOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
+
+  useSurfaceContext(
+    playgroundSurface({
+      modelIds: config.models,
+      promptChars: config.turns.reduce((n, t) => n + t.content.length, 0),
+      running,
+    }),
+  );
 
   React.useEffect(() => {
     init();

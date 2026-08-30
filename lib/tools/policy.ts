@@ -82,6 +82,47 @@ export function offerable(policy: ApprovalPolicy, names: readonly string[]): str
   return names.filter((n) => decideToolApproval(policy, n) !== "deny");
 }
 
+/**
+ * Built-in tools that already have a switch of their own.
+ *
+ * `needsApproval` answers "would running this change something the user owns",
+ * and for all of these the answer is yes. It is not, on its own, the right
+ * question for the chat page, because every one of them is already behind a
+ * composer toggle the person set for this conversation: `artifact` and
+ * `workspace` under Build, `run_python` under Code execution, `memory` under
+ * Memory, `spawn_subagents` under Build plus a dollar ceiling and a live meter.
+ *
+ * Prompting per call on top of that would mean twenty dialogs in a twenty-round
+ * build, for capabilities the person switched on thirty seconds earlier - and a
+ * gate people learn to click through is worse than no gate, because it still
+ * looks like one.
+ */
+const TOGGLE_BACKED = new Set([
+  "artifact",
+  "workspace",
+  "tasks",
+  "memory",
+  "run_python",
+  "spawn_subagents",
+]);
+
+/**
+ * Whether the chat page shows this call to the person before running it.
+ *
+ * The complement of the set above: a write or spend with no switch behind it.
+ * `atlas_open` and `atlas_prompt` are the first two - they ride the Atlas
+ * toggle, which is on by default and which nobody opted into per capability, so
+ * the per-call prompt is the only place consent happens for them.
+ *
+ * Connector tools are excluded because `runMcpTool` owns their gate already and
+ * asking twice would be the same dialog back to back.
+ */
+export function gatedInChat(name: string): boolean {
+  if (isMcpToolName(name)) return false;
+  if (TOGGLE_BACKED.has(name)) return false;
+  return needsApproval(name);
+}
+
 export interface PendingToolApproval {
   name: string;
   title: string;

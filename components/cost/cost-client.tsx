@@ -1,5 +1,7 @@
 "use client";
 
+import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { costSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
 import { defaultCostModels } from "@/lib/catalog/defaults";
 import { resolveModelId } from "@/lib/catalog/resolve";
@@ -71,6 +73,17 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
     return base;
   });
   const [axis, setAxis] = React.useState<string>("mmlu");
+
+  // The workload is the whole context here: "is this expensive" has no answer
+  // without the volume the person has already typed into the page.
+  useSurfaceContext(
+    costSurface({
+      selectedIds: selected,
+      inputPerMonth: workload.requestsPerDay * workload.avgInputTokens * 30,
+      outputPerMonth: workload.requestsPerDay * workload.avgOutputTokens * 30,
+      axis,
+    }),
+  );
 
   const w = (patch: Partial<Workload>) => setWorkload((s) => ({ ...s, ...patch }));
   const sh = (patch: Partial<SelfHostAssumptions>) =>

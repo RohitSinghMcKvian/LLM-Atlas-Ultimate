@@ -3,6 +3,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { AgenticMode } from "@/lib/chat/agentic";
+import { setToolRule } from "@/lib/tools/policy";
+import type { ApprovalPolicy, ApprovalRule } from "@/lib/tools/policy";
 
 export type StyleId =
   | "default"
@@ -167,6 +169,33 @@ interface SettingsState {
   autoRepairAttempts: 0 | 1 | 2;
   /** Spend ceiling for the whole repair phase of one turn, in USD. */
   artifactRepairMaxUsd: number;
+  /**
+   * Offer Atlas's own modules as tools: the catalog, the knowledge graph, the
+   * cost engine and the news corpus.
+   *
+   * On by default, which is a departure from every other capability here, and
+   * deliberate. The others are off because they spend something - an outbound
+   * request, a 10MB download, a second model run. These four are pure functions
+   * over data the browser already holds: free, instant, offline, no key. The
+   * cost of leaving them off is not neutral either, it is the app's central
+   * failure - an assistant inside a model catalog that answers "what does this
+   * cost" from recollection, about a catalog that changes weekly.
+   *
+   * `lib/orchestra/session.ts` already defaults them on for the Ask Atlas dock,
+   * so off here would have meant the same question getting a worse answer on
+   * the page built for asking it.
+   */
+  atlasTools: boolean;
+  /**
+   * Remembered answers to the "let Atlas do this?" prompt, per tool.
+   *
+   * Per tool and never per surface: saying yes once to opening a page must not
+   * also authorise writing to the prompt library, and it must not pre-authorise
+   * whatever Atlas adds to that surface next. Empty means every gated tool
+   * asks, which is the default and the safe one.
+   */
+  toolPolicy: ApprovalPolicy;
+  setToolRule: (name: string, rule: ApprovalRule) => void;
   /** Which search backend to use. Keyless DuckDuckGo by default. */
   searchProvider: string;
   /** Read assistant replies aloud automatically. */
@@ -174,7 +203,7 @@ interface SettingsState {
   /** Reasoning effort level for models that support extended thinking. */
   reasoningEffort: ReasoningEffort;
 
-  set: (patch: Partial<Omit<SettingsState, "set" | "toggle">>) => void;
+  set: (patch: Partial<Omit<SettingsState, "set" | "toggle" | "setToolRule">>) => void;
   toggle: (
     key:
       | "webSearch"
@@ -184,6 +213,7 @@ interface SettingsState {
       | "github"
       | "planMode"
       | "codeExecution"
+      | "atlasTools"
       | "detailedActivity"
       | "voiceAutoRead"
       | "autoVerifyArtifacts",
@@ -213,6 +243,10 @@ export const useSettingsStore = create<SettingsState>()(
       autoVerifyArtifacts: true,
       autoRepairAttempts: 1,
       artifactRepairMaxUsd: 0.5,
+      atlasTools: true,
+      toolPolicy: {},
+      setToolRule: (name, rule) =>
+        set((state) => ({ toolPolicy: setToolRule(state.toolPolicy, name, rule) })),
       searchProvider: "duckduckgo",
       voiceAutoRead: false,
       reasoningEffort: "off",

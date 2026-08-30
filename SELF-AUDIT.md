@@ -3399,6 +3399,19 @@ from a tool that was holding its price. The command names are ours; the question
 unambiguous. `search` with ids and no query now does the lookup, `get` with a query and no
 ids now searches, and neither is still an error when there is genuinely nothing to go on.
 
+## A second bug the live drive found
+
+Opening the composer's depth menu, the new switch rendered as **"At..."** — a control
+nobody can identify. `DropdownMenuSwitchItem` gave its label `flex-1`, which is
+`flex: 1 1 0%`: the label's basis is zero, so it takes only what the hint leaves, and the
+hint was `shrink-0`. "Code execution" had been rendering as "Code..." for the same reason
+since long before this phase.
+
+Fixed in the shared component rather than by shortening one hint: the label is now `grow`
+(basis `auto`) and the hint may shrink, so an overflow shrinks the longer of the two and
+the row keeps its own name. The Atlas hint was shortened to `catalog · cost · news` as
+well, so it fits outright.
+
 ## Acceptance evidence
 
 `npm run verify` — **4109 passed | 40 skipped | 1 failed** across 180 files. The single
@@ -3417,6 +3430,7 @@ Driven live on port 3110, dev server, both themes.
 | Voice degrades honestly | Microphone blocked: "Voice off" plus "Atlas could not open the microphone. Check the site's permissions." Skip disabled, End shows `MicOff` |
 | Touch targets at 375 px | Skip 44, End 44, close 44 — was 40, since `size="icon"` is 40; fixed with the repo's `size-11 sm:size-10` pattern |
 | No horizontal scroll | `documentElement.scrollWidth <= clientWidth` at 375 px and desktop |
+| Composer switch | "Atlas data — catalog · cost · news", on by default, label no longer truncated; "Code execution" improved from "Code..." to "Code exe..." |
 
 ## What was NOT verified
 

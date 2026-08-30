@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { create } from "zustand";
 import { MODULES } from "@/lib/modules";
 
@@ -71,3 +72,47 @@ export function moduleForPath(pathname: string) {
   }
   return best;
 }
+
+/**
+ * Publish what this module is showing, for as long as it is mounted.
+ *
+ * The hook the docstring at the top of this file has always described and that
+ * nothing provided, which is why every question asked from the dock was
+ * answered against "they are on the Leaderboard" and nothing more. A module
+ * calls it once with a summary it builds from its own state.
+ *
+ * Two things it does that a bare `publish` in an effect would get wrong:
+ *
+ *  - **It clears on unmount.** A stale summary is worse than none, because the
+ *    agent will answer confidently about a screen the person has left.
+ *  - **It only publishes when the text changes.** `summary` and `focus` are
+ *    usually rebuilt on every render from live state, so a raw dependency on
+ *    the object would write to the store on every keystroke and re-render every
+ *    subscriber with an identical value.
+ */
+export function useSurfaceContext(context: SurfaceContext | null): void {
+  const publish = useSurfaceStore((s) => s.publish);
+  // Serialised rather than compared field by field, so `focus` is covered too
+  // without the caller having to memoise an array it rebuilds every render.
+  const key = context
+    ? `${context.moduleId}|${context.summary}|${(context.focus ?? []).join(",")}`
+    : "";
+  const ref = React.useRef(context);
+  ref.current = context;
+
+  React.useEffect(() => {
+    // Captured, not read back through the ref: the ref has already advanced to
+    // the next value by the time this effect's cleanup runs, so comparing
+    // against it would never match and the guard below would never fire.
+    const mine = ref.current;
+    publish(mine);
+    // Cleared on the way out, not overwritten by the next module: unmount order
+    // is not guaranteed, and a module that cleared unconditionally could wipe
+    // the summary its successor had already published.
+    return () => {
+      if (useSurfaceStore.getState().context === mine) publish(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on content
+  }, [key, publish]);
+}
+

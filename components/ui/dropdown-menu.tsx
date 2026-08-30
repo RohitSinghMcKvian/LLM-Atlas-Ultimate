@@ -191,9 +191,19 @@ const DropdownMenuSwitchItem = React.forwardRef<
           {icon}
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {/* `grow`, not `flex-1`. `flex-1` is `flex: 1 1 0%`, so the label's basis
+          is zero and it simply takes whatever the hint leaves - which is how
+          "Code execution" rendered as "Code..." and "Atlas data" as "At...". A
+          basis of `auto` puts both on their content width, so an overflow
+          shrinks the longer one first and the row keeps its own name. */}
+      <span className="min-w-0 grow truncate">{label}</span>
+      {/* Shrinks before the label does. As `shrink-0` a long hint ate the row's
+          own name - "Code execution" rendered as "Code..." and "Atlas data" as
+          "At...", which is a switch nobody can identify. Both are truncatable
+          now, and flexbox shrinks the longer one first, so the hint degrades
+          and the label survives. */}
       {hint && (
-        <span className="shrink-0 text-2xs text-muted-foreground">{hint}</span>
+        <span className="min-w-0 shrink truncate text-2xs text-muted-foreground">{hint}</span>
       )}
       {trailing}
       <span

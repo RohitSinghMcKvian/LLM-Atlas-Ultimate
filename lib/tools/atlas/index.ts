@@ -4,6 +4,8 @@ import { catalogToolSchema, runCatalogTool } from "./catalog-tool";
 import { costToolSchema, runCostTool } from "./cost-tool";
 import { graphToolSchema, runGraphTool } from "./graph-tool";
 import { newsToolSchema, runNewsTool, type NewsCorpus } from "./news-tool";
+import { openToolSchema, runOpenTool, type NavigatePort } from "./open-tool";
+import { promptToolSchema, runPromptTool, type PromptPort } from "./prompt-tool";
 
 /**
  * Atlas's own modules, as tools.
@@ -29,6 +31,14 @@ export interface AtlasToolPorts {
   /** Which providers the current user can reach, for `atlas_catalog availability`. */
   routeEnv?: RouteEnv;
   now?: () => number;
+  /**
+   * Take the person to a route. Absent means this surface cannot navigate -
+   * `atlas_open` then answers with the destination instead of moving anyone,
+   * which is the honest degradation for the MCP server and for tests.
+   */
+  navigate?: NavigatePort;
+  /** The prompt library. Absent means this surface has none. */
+  prompts?: PromptPort;
 }
 
 export interface AtlasToolResult {
@@ -86,6 +96,27 @@ export const ATLAS_TOOLS: AtlasTool[] = [
     schema: newsToolSchema,
     run: (input, ports) => runNewsTool(input, ports.news?.() ?? null, ports.now?.()),
   },
+  // The two that act. Both are classed `write` in `lib/tools/spec.ts`, so both
+  // reach the person before they run - the read tools above never do.
+  {
+    name: "atlas_open",
+    description:
+      "Take the person to a part of Atlas, with the right state already set: Compare with " +
+      "models selected, Cost on a model, the Leaderboard filtered to what they can run, the " +
+      "Playground with a prompt in it, a news story open. Use it when the answer is a page " +
+      "rather than a paragraph. Asks the person first.",
+    schema: openToolSchema,
+    run: (input, ports) => runOpenTool(input, ports.navigate),
+  },
+  {
+    name: "atlas_prompt",
+    description:
+      "Read and write the Atlas prompt library: list what is saved, read one, or save a " +
+      "prompt you worked out together so it survives the conversation. Saving an id that " +
+      "already exists adds a version rather than overwriting. Asks the person first.",
+    schema: promptToolSchema,
+    run: (input, ports) => runPromptTool(input, ports.prompts),
+  },
 ];
 
 export const ATLAS_TOOL_NAMES = ATLAS_TOOLS.map((t) => t.name);
@@ -94,4 +125,4 @@ export function findAtlasTool(name: string): AtlasTool | undefined {
   return ATLAS_TOOLS.find((t) => t.name === name);
 }
 
-export type { NewsCorpus };
+export type { NewsCorpus, NavigatePort, PromptPort };

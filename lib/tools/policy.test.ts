@@ -9,6 +9,7 @@ import {
   refusedTools,
   setToolRule,
   type ApprovalPolicy,
+  gatedInChat,
 } from "./policy";
 
 const mcpTool = namespacedToolName("calendar", "create_event");
@@ -100,5 +101,38 @@ describe("describePending / deniedToolResult", () => {
     const r = deniedToolResult("run_python");
     expect(r.isError).toBe(true);
     expect(r.content).toContain("Do not call it again this turn");
+  });
+});
+
+describe("gatedInChat", () => {
+  it("prompts for a write with no switch of its own", () => {
+    // The two Atlas tools that act. They ride the Atlas toggle, which is on by
+    // default and which nobody opted into per capability, so the per-call
+    // prompt is the only place consent happens for them.
+    expect(gatedInChat("atlas_open")).toBe(true);
+    expect(gatedInChat("atlas_prompt")).toBe(true);
+  });
+
+  it("does not prompt for a write the composer already gates", () => {
+    // Twenty dialogs in a twenty-round build, for capabilities the person
+    // switched on thirty seconds earlier. A gate people learn to click through
+    // is worse than no gate, because it still looks like one.
+    for (const n of ["artifact", "workspace", "tasks", "memory", "run_python", "spawn_subagents"]) {
+      expect(gatedInChat(n), n).toBe(false);
+    }
+  });
+
+  it("leaves connector tools to their own gate, so nobody is asked twice", () => {
+    expect(gatedInChat("mcp__linear__create_issue")).toBe(false);
+  });
+
+  it("never prompts for a read or a network call", () => {
+    for (const n of ["atlas_catalog", "atlas_graph", "atlas_cost", "atlas_news", "web_search"]) {
+      expect(gatedInChat(n), n).toBe(false);
+    }
+  });
+
+  it("prompts for a name it has never seen, since classify calls that a write", () => {
+    expect(gatedInChat("something_new")).toBe(true);
   });
 });

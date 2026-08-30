@@ -27,11 +27,26 @@ const AgentDock = dynamic(() => import("./agent-dock").then((m) => m.AgentDock),
   ssr: false,
 });
 
+/**
+ * A third chunk, for the same reason there is a second one.
+ *
+ * Voice pulls in the detector, the endpointer, the lexicon and the synthesiser
+ * driver, and most sessions never speak. It is fetched the first time someone
+ * asks for it and, unlike the dock, unmounted when it closes - the dock holds a
+ * transcript worth keeping and this holds a live microphone, which is the one
+ * thing that must not survive being dismissed.
+ */
+const VoiceMode = dynamic(() => import("@/components/voice/voice-mode").then((m) => m.VoiceMode), {
+  ssr: false,
+});
+
 export function AgentDockMount() {
   // Dark until the flag is turned on, like every other depth item in
   // `lib/flags.ts`.
   const enabled = useFlag("atlasDock");
+  const voiceEnabled = useFlag("voiceMode");
   const [open, setOpen] = React.useState(false);
+  const [voiceOpen, setVoiceOpen] = React.useState(false);
   /**
    * Mounted from the first open onward and never unmounted again.
    *
@@ -59,11 +74,14 @@ export function AgentDockMount() {
         setEverOpened(true);
         setOpen((v) => !v);
       }
-      if (e.key === "Escape") setOpen(false);
+      // Escape closes the panel, but never out from under the voice surface -
+      // that owns its own Escape, and closing both at once would end a spoken
+      // conversation someone was only trying to step back from.
+      if (e.key === "Escape" && !voiceOpen) setOpen(false);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [enabled]);
+  }, [enabled, voiceOpen]);
 
   if (!enabled) return null;
 
@@ -71,8 +89,24 @@ export function AgentDockMount() {
     <>
       <AgentRail open={open} onOpen={openPanel} panelId={AGENT_PANEL_ID} />
       {everOpened && (
-        <AgentDock open={open} onClose={() => setOpen(false)} panelId={AGENT_PANEL_ID} />
+        <AgentDock
+          open={open}
+          onClose={() => setOpen(false)}
+          panelId={AGENT_PANEL_ID}
+          onStartVoice={
+            voiceEnabled
+              ? () => {
+                  // The panel goes away rather than sitting behind the overlay:
+                  // two Atlas conversations on screen at once, one of them
+                  // listening, is ambiguous about which one is being talked to.
+                  setOpen(false);
+                  setVoiceOpen(true);
+                }
+              : undefined
+          }
+        />
       )}
+      {voiceOpen && <VoiceMode open onClose={() => setVoiceOpen(false)} />}
     </>
   );
 }

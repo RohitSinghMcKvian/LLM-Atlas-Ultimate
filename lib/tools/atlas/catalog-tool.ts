@@ -64,7 +64,21 @@ export function runCatalogTool(
 
 function searchCommand(input: CatalogToolInput): CatalogToolResult {
   const q = input.search_query?.trim();
-  if (!q) return { content: "`search` needs a search_query.", isError: true };
+  // `search` with ids and no query is `get`, and the model that sends it is
+  // asking a perfectly clear question. Refusing it cost a real answer: asked
+  // which of two ticked models was cheaper, a model called `search` with
+  // `model_ids`, got "needs a search_query", and concluded that one of them was
+  // not in the catalog at all - from a tool holding its price.
+  //
+  // Only when the intent is unambiguous. Ids and no query mean one thing;
+  // neither is still an error, because there is nothing to guess at.
+  if (!q) {
+    if (input.model_ids?.length) return getCommand(input);
+    return {
+      content: "`search` needs a search_query, or model_ids to look up directly.",
+      isError: true,
+    };
+  }
   const found = searchModels(q, { limit: input.max_results });
   if (found.length === 0) {
     return {
@@ -76,7 +90,11 @@ function searchCommand(input: CatalogToolInput): CatalogToolResult {
 
 function getCommand(input: CatalogToolInput): CatalogToolResult {
   const ids = input.model_ids ?? [];
-  if (ids.length === 0) return { content: "`get` needs at least one model id.", isError: true };
+  // The mirror of the case above: `get` with a name and no id is a search.
+  if (ids.length === 0) {
+    if (input.search_query?.trim()) return searchCommand(input);
+    return { content: "`get` needs at least one model id.", isError: true };
+  }
   const parts: string[] = [];
   for (const id of ids.slice(0, input.max_results)) {
     const m = getModelById(id);

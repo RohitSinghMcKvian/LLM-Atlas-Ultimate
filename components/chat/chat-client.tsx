@@ -23,6 +23,7 @@ import {
   Table2,
   Telescope,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { AtlasMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { ResizeHandle } from "@/components/ui/resizable";
@@ -216,6 +217,20 @@ import {
   type WebSource,
 } from "@/lib/chat/types";
 import { useTTS } from "@/lib/hooks/use-speech";
+import { useRouteEnv } from "@/lib/hooks/use-route-env";
+import { atlasGraph } from "@/lib/graph/atlas-graph";
+import { cachedNewsCorpus, primeNewsCorpus } from "@/lib/news/client-corpus";
+import type { AtlasToolPorts } from "@/lib/tools/atlas";
+import { latest as latestPromptVersion, usePromptStore } from "@/lib/store/prompt-store";
+import {
+  decideToolApproval,
+  deniedToolResult,
+  describePending,
+  gatedInChat,
+} from "@/lib/tools/policy";
+import { formatArgsForReview } from "@/lib/mcp/approval";
+import { toolIndexBlock } from "@/lib/tools/spec";
+import { isMcpToolName } from "@/lib/mcp/protocol";
 import { useMediaQueryLayout } from "@/lib/hooks/use-media-query";
 import { useResizableSurface, type PanelSpec } from "@/lib/hooks/use-panel-resize";
 import { useLayoutStore } from "@/lib/store/layout-store";
@@ -254,7 +269,6 @@ import {
   type SubagentTask,
   type SubagentTurnState,
 } from "@/lib/chat/subagent";
-import { atlasGraph } from "@/lib/graph/atlas-graph";
 import { isEnabled } from "@/lib/store/flags-store";
 import type { ReasoningEffort } from "@/lib/store/settings-store";
 
@@ -358,6 +372,69 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
   const toggleIncognito = useIncognitoStore((s) => s.toggle);
 
   const tts = useTTS();
+
+  /**
+   * The ports the Atlas tools read through.
+   *
+   * A ref, not a value in the send closure's dependency array. `send` is a
+   * ~700-line callback whose deps already run to two dozen entries; adding one
+   * that changes when the provider list resolves would rebuild it mid-stream on
+   * the first load. The tools read it at call time, which is also the only time
+   * the answer matters.
+   *
+   * `graph()` is called per tool call rather than hoisted: `atlasGraph` is
+   * memoized on a version key, so the call is a map lookup when nothing has
+   * changed and a rebuild exactly when the catalog has.
+   */
+  const routeEnv = useRouteEnv();
+  const router = useRouter();
+  const atlasPortsRef = React.useRef<AtlasToolPorts>({});
+  atlasPortsRef.current = React.useMemo(
+    () => ({
+      graph: () => atlasGraph(),
+      news: () => cachedNewsCorpus(),
+      routeEnv: routeEnv ?? undefined,
+      // Both of these only ever run after the approval prompt in `runTool`
+      // below has been answered - `gatedInChat` covers every write with no
+      // switch of its own, which is exactly these two.
+      navigate: (href) => router.push(href as Parameters<typeof router.push>[0]),
+      prompts: {
+        // Read through `getState()` rather than a subscription: this is called
+        // inside a tool call, not during a render, and subscribing would
+        // re-render a 3,900-line component whenever any prompt changed.
+        list: () =>
+          usePromptStore.getState().prompts.map((p) => {
+            const v = latestPromptVersion(p);
+            return { id: p.id, title: p.title, tags: p.tags, body: v.body, version: v.v };
+          }),
+        save: ({ id, title, body, note, tags }) => {
+          const store = usePromptStore.getState();
+          const existing = store.prompts.find((p) => p.id === id);
+          if (!existing) {
+            store.add({ id, title, tags: [...tags], body });
+            return { created: true, version: 1 };
+          }
+          // Append, never overwrite. The Prompt page diffs versions, and a body
+          // swapped in place would leave it diffing against something that no
+          // longer exists.
+          store.saveVersion(id, body, note);
+          return { created: false, version: latestPromptVersion(existing).v + 1 };
+        },
+      },
+    }),
+    [routeEnv, router],
+  );
+
+  // Primed once, and only when the tools that read it are on the table. The
+  // failure mode is deliberately silent: this is a chat page, and a news feed
+  // that is down must cost the user nothing more than `atlas_news` saying it
+  // has no corpus.
+  React.useEffect(() => {
+    if (!settings.atlasTools) return;
+    const ctrl = new AbortController();
+    void primeNewsCorpus(ctrl.signal);
+    return () => ctrl.abort();
+  }, [settings.atlasTools]);
 
   const [input, setInput] = React.useState("");
   const [pending, setPending] = React.useState<Attachment[]>([]);
@@ -592,11 +669,19 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
       setPendingApproval((current) => {
         if (!current) return null;
         if (remember) {
-          const connector = connectors.find((c) => c.id === current.pending.connectorId);
-          if (connector) {
-            void updateConnector(connector.id, {
-              approvals: setRule(connector.approvals, current.pending.toolName, remember),
-            }).then(refreshConnectors);
+          if (current.pending.surface === "atlas") {
+            // Atlas's own write tools remember in settings; a connector's
+            // choice belongs on the connector record, which is where it is
+            // shown and revoked. Same rule either way - per tool, never per
+            // surface, so one yes is never a blank cheque.
+            useSettingsStore.getState().setToolRule(current.pending.toolName, remember);
+          } else {
+            const connector = connectors.find((c) => c.id === current.pending.connectorId);
+            if (connector) {
+              void updateConnector(connector.id, {
+                approvals: setRule(connector.approvals, current.pending.toolName, remember),
+              }).then(refreshConnectors);
+            }
           }
         }
         current.resolve(approved);
@@ -1717,15 +1802,6 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
     // the transcript would be both noise and something the user could edit into
     // an inconsistent state.
     const rider = stepInstruction ?? opts?.resume?.instruction;
-    const system = rider ? `${base}\n\n${rider}` : base;
-    // Fed back into the health meter. The prompt is only assembled here — it
-    // needs memories, the skills index and the workspace, all of which are
-    // async — so the badge reads the previous turn's size rather than rebuilding
-    // it on every render. It is stable between turns, so that is the same number
-    // in practice, and a first turn that reads 0 is only ever an underestimate
-    // of an almost-empty conversation.
-    setSystemChars(system.length);
-    const routerMessages = buildRequest(history, modelId, system, sources);
     const effort = settings.reasoningEffort;
     const reasoningParam = effort !== "off" ? effort : undefined;
 
@@ -1762,14 +1838,20 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
       // has already opted into a mode that carries a dollar ceiling and shows a
       // meter counting against it.
       subagents: buildMode && isEnabled("chatSubagents"),
-      // The Settings toggle (`/code`'s config dialog renders one for every flag
-      // in `FLAG_IDS`, this one included) was wired to `toolDefsFor` but never
-      // to this object — so turning "Atlas module tools" on did nothing here.
-      // Found live: enabled the flag, asked a catalog question, and the model
-      // still answered from memory because `atlas_catalog` was never in the
-      // request. `lib/orchestra/session.ts` hardcodes this true for the Ask
-      // Atlas dock, which is why the same question worked there.
-      atlasTools: isEnabled("atlasTools"),
+      // On by default, unlike every other item here. These four read the
+      // catalog, the graph, the cost engine and the news corpus - all local,
+      // free and offline - and the alternative to offering them is a model
+      // answering catalog questions from a memory of a catalog that changed
+      // last week. `lib/orchestra/session.ts` already defaults them on for the
+      // Ask Atlas dock; off here would have meant the same question answered
+      // worse on the page built for asking it.
+      //
+      // Backed by the settings-store field and its own composer switch rather
+      // than the `atlasTools` entry in `lib/flags.ts` — that flag predates
+      // this wiring, was never read anywhere but this one call site, and is
+      // retired in the following commit so it doesn't sit in the flags panel
+      // as a second control that does nothing.
+      atlasTools: settings.atlasTools,
     };
 
     // The interpreter is created only when the tool is on the table, and its
@@ -1799,6 +1881,30 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
     const toolsEnabled =
       shouldOfferTools(toolSupportFor(getModelById(modelId), toolNegatives)) &&
       offeredDefs.length > 0;
+
+    // Assembled here rather than with the rest of the prompt above, because
+    // it is the one part that depends on which tools this turn offers.
+    //
+    // Connector names are excluded: `connectorsIndex` already names the
+    // services and warns that their tools touch real accounts, and saying the
+    // same thing twice in one prompt is how a model learns to skim it. What
+    // this adds that nothing else did is the `(asks first)` marker - a model
+    // that knows `atlas_open` interrupts the person reaches for it when the
+    // answer really is a page, and answers in a sentence when it is not.
+    const toolIndex = toolsEnabled
+      ? toolIndexBlock(
+          offeredDefs.map((d) => d.function.name).filter((n) => !isMcpToolName(n)),
+        )
+      : "";
+    const system = [base, toolIndex, rider].filter(Boolean).join("\n\n");
+    // Fed back into the health meter. The prompt is only assembled here — it
+    // needs memories, the skills index and the workspace, all of which are
+    // async — so the badge reads the previous turn's size rather than rebuilding
+    // it on every render. It is stable between turns, so that is the same number
+    // in practice, and a first turn that reads 0 is only ever an underestimate
+    // of an almost-empty conversation.
+    setSystemChars(system.length);
+    const routerMessages = buildRequest(history, modelId, system, sources);
 
     // A skill's `allowed-tools` applies from the moment it is loaded until the
     // end of the turn. Held in a plain local rather than React state because the
@@ -1993,21 +2099,47 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
               ctrl.signal,
               keyHeaders,
             ),
-          runTool: (name, args, callId) =>
-            executeTool(name, args, {
+          runTool: async (name, args, callId) => {
+            // The gate for Atlas's own write tools.
+            //
+            // Connector tools are excluded (`runMcpTool` owns theirs) and so is
+            // everything already behind a composer switch - see `gatedInChat`
+            // for why prompting on top of a toggle the person just set is a
+            // gate people learn to click through rather than a gate.
+            if (gatedInChat(name)) {
+              const decision = decideToolApproval(
+                useSettingsStore.getState().toolPolicy,
+                name,
+              );
+              if (decision === "deny") return deniedToolResult(name);
+              if (decision === "ask") {
+                const info = describePending(name, args);
+                const approved = await requestApproval({
+                  surface: "atlas",
+                  toolName: name,
+                  // The connector fields are what the shared prompt renders;
+                  // for an Atlas tool they name Atlas, and `surface` is what
+                  // actually decides the wording.
+                  connectorId: "atlas",
+                  connectorName: "Atlas",
+                  tool: name,
+                  description: `${info.title} — this ${info.sideEffect}s something you own.`,
+                  args: formatArgsForReview(args),
+                });
+                if (!approved) return deniedToolResult(name);
+              }
+            }
+            return executeTool(name, args, {
               signal: ctrl.signal,
+              // Atlas's own modules. Read at call time through the ref, so a
+              // turn that starts before `/api/v1/providers` resolves still gets
+              // a real answer out of `atlas_catalog availability` once it does.
+              atlas: atlasPortsRef.current,
               // The same keyed, provider-aware caller the pre-search path uses.
               // Passing the function rather than the key keeps the secret out of
               // the tool module and keeps the two callers from drifting apart.
               search: runSearch,
               exec,
-              // Was missing entirely, which is why every `atlas_*` call landed on
-              // the "unavailable this turn" fallback in `lib/chat/tools.ts`
-              // regardless of which one the model asked for — `ctx.atlas` itself
-              // was never truthy, not any one port. Same shape `agent-dock.tsx`
-              // passes for the dock, so this offers the same answer through both
-              // surfaces once the Atlas Tools flag turns the offer on.
-              atlas: { graph: () => atlasGraph() },
               // Read at call time, not captured: a build that wrote three files
               // in the previous round should find them in the interpreter's
               // working directory.
@@ -2158,7 +2290,8 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
                     return callConnectorTool(full, toolName, toolArgs, { signal: ctrl.signal });
                   },
                 }),
-            }),
+            });
+          },
           toolDefs: toolsEnabled ? offeredDefs : [],
           maxRounds: budget.limits.maxRounds,
           maxContinuations: budget.limits.maxContinuations,
@@ -3704,6 +3837,8 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
           onOpenGithub={() => setGithubOpen(true)}
           codeExecution={settings.codeExecution}
           onToggleCodeExecution={() => settings.toggle("codeExecution")}
+          atlasTools={settings.atlasTools}
+          onToggleAtlasTools={() => settings.toggle("atlasTools")}
           planMode={settings.planMode}
           onTogglePlanMode={() => settings.toggle("planMode")}
           agenticMode={settings.agenticMode}

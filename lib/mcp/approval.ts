@@ -87,6 +87,15 @@ export function clearConnectorRules(
 }
 
 export interface PendingApproval {
+  /**
+   * Where the call came from.
+   *
+   * Absent means a connector, which is all this gate covered when it was
+   * written. Atlas's own write tools now go through the same prompt rather than
+   * a second one beside it: two approval dialogs that look different and mean
+   * the same thing is how a person learns to click past both.
+   */
+  surface?: "connector" | "atlas";
   /** Namespaced tool name. */
   toolName: string;
   connectorId: string;
