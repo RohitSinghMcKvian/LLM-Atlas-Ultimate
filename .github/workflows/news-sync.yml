@@ -5,7 +5,9 @@
 #   1. On-read  — lib/news/store.ts refreshes in the background when the served
 #                 corpus is older than ATLAS_NEWS_SYNC_INTERVAL_MINUTES. Needs
 #                 no setup at all, and is why the feature works out of the box.
-#   2. Vercel   — vercel.json `crons`, at 7 past the hour.
+#   2. Vercel   — vercel.json `crons`, DAILY at 04:07 UTC. Not hourly: the
+#                 Hobby plan caps cron frequency at once a day, which is why
+#                 this workflow exists alongside it.
 #   3. This.
 #   4. The Refresh button in the UI, via the public, rate-limited
 #      /api/v1/news/refresh. Not this endpoint — a browser holds no secret.
@@ -18,8 +20,8 @@ name: news-sync
 
 on:
   schedule:
-    # 17 past the hour: clear of the top-of-hour publisher CDN rush, and clear of
-    # the Vercel cron at :07 so the two never collide on the same corpus.
+    # 17 past the hour: clear of the top-of-hour publisher CDN rush, and clear
+    # of the Vercel cron at 04:07 so the two never collide on the same corpus.
     - cron: "17 * * * *"
   workflow_dispatch:
 

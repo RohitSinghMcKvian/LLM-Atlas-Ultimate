@@ -1,0 +1,78 @@
+name: Bug report
+description: Something behaves differently from how it is documented or intended.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste an API key, token, or the contents of `.env.local` here.**
+        This repository is public and issues are permanent and indexed. Refer to
+        a variable by name (`GROQ_API_KEY`), never by value.
+
+        If the problem is that models will not run, please run `npm run doctor`
+        first and paste its output — it reports which providers are configured
+        and whether each one is actually reachable, which is the single most
+        common cause.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you see? Include the exact error text if there was one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. npm run dev
+        2. Go to /chat
+        3. Ask "..."
+        4. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `npm run doctor`
+      description: >
+        Only relevant for model/provider problems — skip it otherwise. This
+        prints no secrets; it reports whether a key is present, not what it is.
+      render: text
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did this happen
+      options:
+        - Local development (npm run dev)
+        - Local production build (npm run build && npm run start)
+        - Deployed (Vercel)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Node version
+      description: "`node --version`, and your OS."
+      placeholder: "Node 20.11.0, Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Console errors, screenshots, a branch or commit SHA.

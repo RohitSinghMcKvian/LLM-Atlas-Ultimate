@@ -71,12 +71,31 @@ npm run dev                    # http://localhost:3000
 To enable live Chat / Compare, set **one** of these in `.env.local` and restart:
 
 ```bash
-NVIDIA_API_KEY=...        # from https://build.nvidia.com
+GROQ_API_KEY=...          # from https://console.groq.com/keys   (free tier)
 # or
-OPENROUTER_API_KEY=...    # from https://openrouter.ai/keys
-# or point at a local OpenAI-compatible server
+NVIDIA_API_KEY=...        # from https://build.nvidia.com        (free tier)
+# or
+GOOGLE_API_KEY=...        # from https://aistudio.google.com/apikey (free tier)
+# or
+OPENROUTER_API_KEY=...    # from https://openrouter.ai/keys      (metered)
+# or point at a local OpenAI-compatible server that is ACTUALLY RUNNING
 LOCAL_BASE_URL=http://localhost:11434/v1
 ```
+
+> `LOCAL_BASE_URL` is the one provider marked configured by a **URL rather than a
+> key**, so setting it counts as "connected" whether or not anything is
+> listening on that port. Only set it if Ollama (or vLLM / llama.cpp) is
+> actually running.
+
+Not sure whether it worked?
+
+```bash
+npm run doctor            # which providers are configured, and are they reachable
+```
+
+It prints no secrets — only whether a key is present and whether the endpoint
+answers. Reachable and configured are different questions, and the gap between
+them is the most common reason models appear not to work.
 
 Production build:
 
@@ -127,6 +146,43 @@ supabase/migrations/  # optional Postgres + pgvector schema
 - Accessibility: semantic HTML, keyboard-navigable widgets, visible focus rings, and a calm `prefers-reduced-motion` fallback across all animations.
 - "Atlas Certified" is a **self-branded** credential and is not affiliated with MIT the institution; the *code* is MIT-licensed.
 
+---
+
+## 🤝 Contributing
+
+Branch from `main`, keep it short-lived, open a pull request with a
+[Conventional Commit](https://www.conventionalcommits.org/) title, and merge once
+CI is green.
+
+```bash
+npm run verify      # typecheck + tests — exactly what CI runs
+npm run build       # CI runs this too, as its own job
+```
+
+`main` is protected and always deployable. Full details — branching, commit
+format, the release process, required secrets — are in
+**[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+Found a security problem? Please report it privately: see
+**[SECURITY.md](SECURITY.md)**. Never open a public issue for one, and never put
+a real key in an issue or pull request — this repository is public.
+
+---
+
+## 🚢 Deployment and releases
+
+`main` auto-deploys to production on Vercel; every pull request gets its own
+Preview deployment.
+
+Versioning is automated with
+[release-please](https://github.com/googleapis/release-please). Merging a `feat:`
+or `fix:` PR updates a standing **Release PR**; merging *that* cuts the tag,
+the GitHub Release and the `CHANGELOG.md` entry. Nobody edits a version by hand.
+
+Environment variables live in Vercel (per environment), never in the repo.
+
+---
+
 ## 📄 License
 
-MIT.
+[MIT](LICENSE) — see the licence file for the full text.

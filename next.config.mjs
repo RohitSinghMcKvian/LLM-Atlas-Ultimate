@@ -5,7 +5,15 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   eslint: {
-    // Lint is run separately in CI; don't fail production builds on lint.
+    // Don't fail a production build on lint.
+    //
+    // This said "Lint is run separately in CI", which was not true: no workflow
+    // ran lint, and `npm run lint` could not have linted anything anyway —
+    // `eslint` is installed but the repo has no ESLint config, so the
+    // deprecated `next lint` drops into its interactive setup prompt instead.
+    // Corrected rather than deleted, because the setting itself is still the
+    // one we want: type errors fail the build (see `typescript` below), style
+    // findings should not.
     ignoreDuringBuilds: true,
   },
   typescript: {
