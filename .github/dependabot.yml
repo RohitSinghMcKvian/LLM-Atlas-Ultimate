@@ -1,0 +1,45 @@
+version: 2
+updates:
+  # The app's own dependencies. Grouped hard on purpose: this project has ~60
+  # direct dependencies, and one pull request per patch bump is a stream nobody
+  # reads, which is how a genuinely important security bump gets scrolled past.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Everything low-risk in one PR that CI either passes or fails as a unit.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # Next major versions change build and routing behaviour together; they
+      # are a deliberate migration, not a dependency bump. React is pinned to
+      # whatever Next supports, for the same reason.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      # Conventional Commits, so release-please classifies these correctly and
+      # they do not silently trigger a release. See CONTRIBUTING.md.
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+
+  # The actions used by the workflows themselves. Cheap to keep current, and
+  # this is the supply chain that has write access to the repository.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+      include: "scope"
