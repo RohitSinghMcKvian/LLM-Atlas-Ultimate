@@ -16,7 +16,8 @@
     "dev:verify": "cross-env NEXT_DIST_DIR=.next-verify next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "doctor": "node scripts/doctor.mjs",
     "test": "vitest run",
@@ -72,6 +73,8 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
+    "@eslint/eslintrc": "^3.3.6",
+    "@eslint/js": "^9.39.5",
     "@tailwindcss/browser": "^4.3.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.10.5",
@@ -80,7 +83,7 @@
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "^10.4.20",
     "cross-env": "^10.1.0",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^15.1.6",
     "fake-indexeddb": "^6.2.5",
     "husky": "^9.1.7",
@@ -90,6 +93,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.128.0",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.9"
   }
 }

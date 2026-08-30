@@ -1,0 +1,44 @@
+# ESLint — reporting only, on purpose.
+#
+# This repo went without an ESLint config entirely: `eslint` was installed and
+# `npm run lint` existed, but with nothing to load the deprecated `next lint`
+# dropped into its interactive setup prompt instead of linting. So this is the
+# first time the source has been linted, and it starts with a backlog.
+#
+# `continue-on-error` keeps that backlog from blocking merges while it is burnt
+# down. The findings are visible in the job output and the annotations either
+# way. Once the count reaches zero, delete the two `continue-on-error` lines and
+# add this to the required checks — that is the whole migration.
+name: lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  eslint:
+    name: eslint (reporting only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        continue-on-error: true
+        run: npm run lint
