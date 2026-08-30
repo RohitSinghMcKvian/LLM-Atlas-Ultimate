@@ -75,7 +75,14 @@ function slowBody(ms: number, text = "late"): ReadableStream<Uint8Array> {
 }
 
 /** Headers withheld for `ms`, then a normal stream — what NVIDIA NIM does. */
-type Step = Response | "hang-headers" | "hang-body" | { slowHeaders: number } | { slowBody: number };
+type Step =
+  | Response
+  | "hang-headers"
+  | "hang-body"
+  /** Connection refused — what a `LOCAL_BASE_URL` with nothing behind it does. */
+  | "network"
+  | { slowHeaders: number }
+  | { slowBody: number };
 
 /** Queue of scripted responses; each call shifts one. Records the URLs hit. */
 function scriptFetch(steps: Step[]) {
@@ -91,6 +98,7 @@ function scriptFetch(steps: Step[]) {
         );
       });
     }
+    if (step === "network") throw new TypeError("fetch failed");
     if (step === "hang-body") return new Response(hangingBody(), { status: 200 });
     if (typeof step === "object" && "slowHeaders" in step) {
       return new Promise<Response>((resolve, reject) => {
@@ -119,6 +127,19 @@ const twoRoute = makeModel({
   routes: [
     { provider: "nvidia", model: "google/gemma-3-12b-it" },
     { provider: "openrouter", model: "google/gemma-3-12b-it:free" },
+  ],
+});
+
+/**
+ * nvidia first, local second — the shape a fresh clone had while `.env.example`
+ * shipped `LOCAL_BASE_URL` live and nothing was serving that port.
+ */
+const nvidiaPlusLocal = makeModel({
+  id: "nvidia-plus-local",
+  name: "Nvidia Plus Local",
+  routes: [
+    { provider: "nvidia", model: "meta/llama-3.1-8b-instruct" },
+    { provider: "local", model: "llama3.1:8b" },
   ],
 });
 
@@ -718,5 +739,78 @@ describe("idleTimeoutFor", () => {
   // open costs the user the turn either way.
   it("is bounded", () => {
     expect(idleTimeoutFor({ throughputTps: 0.001 })).toBe(MAX_IDLE_TIMEOUT_MS);
+  });
+});
+
+describe("a route that never answered cannot veto the diagnosis", () => {
+  // The state a fresh clone was in for as long as `.env.example` shipped
+  // `LOCAL_BASE_URL` live: `local` is configured on the URL alone, nothing is
+  // serving that port, and it is appended to every candidate list as an attempt
+  // with `error: "network"` and no `status`.
+  //
+  // `aggregateFailure` decided the error code with `attempts.every(...)` over
+  // ALL attempts, so that one statusless entry made every status predicate
+  // false and silently downgraded each actionable message to the generic
+  // `all_routes_failed`. The existing suite could not catch it: the top-level
+  // `beforeEach` deletes `LOCAL_BASE_URL`.
+  beforeEach(() => {
+    resetSnapshot();
+    installSnapshot(makeSnapshot([nvidiaPlusLocal]));
+    process.env.LOCAL_BASE_URL = "http://127.0.0.1:1/v1";
+  });
+
+  it("still reports provider_key_invalid when the answering route rejects the key", async () => {
+    scriptFetch([fail(401), "network"]);
+    await expect(drain(stream("nvidia-plus-local"))).rejects.toMatchObject({
+      code: "provider_key_invalid",
+    });
+  });
+
+  it("still reports no_credit when the answering route has no credit", async () => {
+    scriptFetch([fail(402), "network"]);
+    await expect(drain(stream("nvidia-plus-local"))).rejects.toMatchObject({
+      code: "no_credit",
+    });
+  });
+
+  it("still reports rate_limited when the answering route is throttled", async () => {
+    scriptFetch([fail(429), "network"]);
+    await expect(drain(stream("nvidia-plus-local"))).rejects.toMatchObject({
+      code: "rate_limited",
+    });
+  });
+
+  it("blames only the provider that actually answered", async () => {
+    scriptFetch([fail(401), "network"]);
+    try {
+      await drain(stream("nvidia-plus-local"));
+      throw new Error("should have thrown");
+    } catch (e) {
+      const err = e as RouterError;
+      expect(err.message).toContain("nvidia");
+      // Naming `local` here would send the user hunting for a key that route
+      // never needed — it failed because nothing was listening.
+      expect(err.message).not.toContain("local");
+      expect(err.attempts).toHaveLength(2);
+    }
+  });
+
+  it("still reports all_routes_failed when nothing answered at all", async () => {
+    scriptFetch(["network", "network"]);
+    await expect(drain(stream("nvidia-plus-local"))).rejects.toMatchObject({
+      code: "all_routes_failed",
+    });
+  });
+
+  it("surfaces the transport detail so an unreachable address is visible", async () => {
+    scriptFetch(["network", "network"]);
+    try {
+      await drain(stream("nvidia-plus-local"));
+      throw new Error("should have thrown");
+    } catch (e) {
+      // Without this the message read "network after 2ms" and named neither the
+      // address nor the reason.
+      expect((e as RouterError).message).toContain("fetch failed");
+    }
   });
 });

@@ -253,6 +253,7 @@ import {
   type SubagentTask,
   type SubagentTurnState,
 } from "@/lib/chat/subagent";
+import { atlasGraph } from "@/lib/graph/atlas-graph";
 import { isEnabled } from "@/lib/store/flags-store";
 import type { ReasoningEffort } from "@/lib/store/settings-store";
 
@@ -1760,6 +1761,14 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
       // has already opted into a mode that carries a dollar ceiling and shows a
       // meter counting against it.
       subagents: buildMode && isEnabled("chatSubagents"),
+      // The Settings toggle (`/code`'s config dialog renders one for every flag
+      // in `FLAG_IDS`, this one included) was wired to `toolDefsFor` but never
+      // to this object — so turning "Atlas module tools" on did nothing here.
+      // Found live: enabled the flag, asked a catalog question, and the model
+      // still answered from memory because `atlas_catalog` was never in the
+      // request. `lib/orchestra/session.ts` hardcodes this true for the Ask
+      // Atlas dock, which is why the same question worked there.
+      atlasTools: isEnabled("atlasTools"),
     };
 
     // The interpreter is created only when the tool is on the table, and its
@@ -1987,6 +1996,13 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
               // the tool module and keeps the two callers from drifting apart.
               search: runSearch,
               exec,
+              // Was missing entirely, which is why every `atlas_*` call landed on
+              // the "unavailable this turn" fallback in `lib/chat/tools.ts`
+              // regardless of which one the model asked for — `ctx.atlas` itself
+              // was never truthy, not any one port. Same shape `agent-dock.tsx`
+              // passes for the dock, so this offers the same answer through both
+              // surfaces once the Atlas Tools flag turns the offer on.
+              atlas: { graph: () => atlasGraph() },
               // Read at call time, not captured: a build that wrote three files
               // in the previous round should find them in the interpreter's
               // working directory.

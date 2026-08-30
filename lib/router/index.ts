@@ -600,11 +600,44 @@ function aggregateFailure(model: CatalogModel, attempts: RouteAttempt[]): Router
   const list = attempts
     .map((a) => {
       const what = a.error ? `${a.error} after ${Math.round(a.ms)}ms` : `HTTP ${a.status}`;
-      return `${a.provider}/${a.routeModel} ${what}`;
+      // `detail` is the first ~200 chars of the upstream body, already
+      // credential-scrubbed where it is recorded. It was being collected and
+      // then dropped here, which is how "fetch failed" — the one string that
+      // says the address was unreachable — never reached anyone.
+      return `${a.provider}/${a.routeModel} ${what}${a.detail ? ` (${a.detail})` : ""}`;
     })
     .join("; ");
 
-  const every = (p: (a: RouteAttempt) => boolean) => attempts.length > 0 && attempts.every(p);
+  /**
+   * Only routes that actually got an HTTP response can testify about a status.
+   *
+   * These predicates used to run over *every* attempt, which let one
+   * unreachable route veto the diagnosis for all the others: a dead
+   * `LOCAL_BASE_URL` records `status: undefined`, so `every(a => a.status ===
+   * 401)` went false and a genuinely rejected NVIDIA key was reported as the
+   * generic `all_routes_failed` instead of "the operator key was rejected".
+   * Since `.env.example` shipped `LOCAL_BASE_URL` live, that was the default
+   * state of a fresh clone, and it silently disabled every actionable message
+   * below.
+   *
+   * A route that never connected is evidence about reachability, not about
+   * whether a key is valid — so it belongs to `all_routes_failed` (which still
+   * reads `attempts` in full, via `list`) and to nothing else.
+   */
+  const answered = attempts.filter((a) => a.status !== undefined);
+  /** Status-based verdicts: only routes that got a response may testify. */
+  const every = (p: (a: RouteAttempt) => boolean) => answered.length > 0 && answered.every(p);
+  /**
+   * Transport-based verdicts: judged over *every* attempt, since a route that
+   * never answered is exactly the evidence these are about. Keeping this
+   * separate is load-bearing — a timeout also carries no `status`, so routing it
+   * through `answered` would leave that list empty and downgrade a genuine
+   * all-hung request to `all_routes_failed`.
+   */
+  const everyAttempt = (p: (a: RouteAttempt) => boolean) =>
+    attempts.length > 0 && attempts.every(p);
+  /** Providers named in a status-based message — never the ones that never answered. */
+  const answeredProviders = () => [...new Set(answered.map((a) => a.provider))].join(" / ");
 
   if (every((a) => a.status === 402)) {
     return new RouterError(
@@ -617,7 +650,7 @@ function aggregateFailure(model: CatalogModel, attempts: RouteAttempt[]): Router
   if (every((a) => a.status === 404 || a.status === 422)) {
     return new RouterError(
       "route_dead",
-      `${model.name} is no longer served by ${attempts.map((a) => a.provider).join(" or ")}. The next catalog sync will drop it — please pick another model.`,
+      `${model.name} is no longer served by ${answeredProviders()}. The next catalog sync will drop it — please pick another model.`,
       502,
       attempts,
     );
@@ -633,12 +666,12 @@ function aggregateFailure(model: CatalogModel, attempts: RouteAttempt[]): Router
   if (every((a) => a.status === 401 || a.status === 403)) {
     return new RouterError(
       "provider_key_invalid",
-      `The operator key for ${attempts.map((a) => a.provider).join(" / ")} was rejected. Check the provider API key.`,
+      `The operator key for ${answeredProviders()} was rejected. Check the provider API key.`,
       502,
       attempts,
     );
   }
-  if (every((a) => a.error === "timeout")) {
+  if (everyAttempt((a) => a.error === "timeout")) {
     return new RouterError(
       "all_routes_timed_out",
       `${model.name} did not respond on any route (${list}). The provider is likely overloaded — try another model.`,
