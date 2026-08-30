@@ -49,7 +49,16 @@ export async function syncCatalogAction(): Promise<SyncResult> {
     };
   }
 
-  const profile = await getProfile();
+  // Inside its own try: `getProfile()` reaches the auth server over the network,
+  // and an unreachable or misconfigured Supabase must fail closed with a message
+  // the card can render — not throw out of the action, which surfaces to the user
+  // as an unhandled server error with no explanation.
+  let profile: Awaited<ReturnType<typeof getProfile>>;
+  try {
+    profile = await getProfile();
+  } catch {
+    return { ok: false, error: "Could not verify your role. Check the Supabase connection." };
+  }
   if (!profile || !isAdminRole(profile.role)) {
     return { ok: false, error: "Admin role required." };
   }
