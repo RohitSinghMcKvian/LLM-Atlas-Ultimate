@@ -23,9 +23,17 @@ function Bar({ w, className }: { w: string; className?: string }) {
 }
 
 /* ----------------------------- Compare fan-out ---------------------------- */
-export function PreviewCompare() {
+// `labels` come from the live catalog snapshot, read server-side on the landing
+// page and threaded down as props — the same route the hero's constellation
+// uses. These previews are decorative, but naming models the catalog no longer
+// carries makes the page quietly lie about what Atlas serves. The literals stay
+// as the fallback for the pre-sync/offline case.
+const COMPARE_FALLBACK = ["Claude", "GPT-4o", "DeepSeek"];
+
+export function PreviewCompare({ labels }: { labels?: string[] }) {
   const reduce = useReducedMotion();
-  const cols = ["Claude", "GPT-4o", "DeepSeek"];
+  const cols =
+    labels && labels.length >= 3 ? labels.slice(0, 3) : COMPARE_FALLBACK;
   return (
     <div className="rounded-2xl border border-border bg-surface/60 p-4 shadow-glow">
       <div className="mb-3 flex items-center gap-2 rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-xs text-muted-foreground">
@@ -167,9 +175,18 @@ const LB = [
   { name: "Llama 3.3", color: "from-amber/70 to-action/70" },
 ];
 
-export function PreviewLeaderboard() {
+export function PreviewLeaderboard({ labels }: { labels?: string[] }) {
   const reduce = useReducedMotion();
   const [scores, setScores] = React.useState([88, 84, 80, 76]);
+  // Names come from the catalog; the gradients (and the animated scores below)
+  // stay synthetic — this panel illustrates re-ranking, it does not report it.
+  const rows = React.useMemo(
+    () =>
+      labels && labels.length >= LB.length
+        ? LB.map((m, i) => ({ ...m, name: labels[i] }))
+        : LB,
+    [labels],
+  );
   React.useEffect(() => {
     if (reduce) return;
     const t = setInterval(() => {
@@ -178,7 +195,8 @@ export function PreviewLeaderboard() {
     return () => clearInterval(t);
   }, [reduce]);
 
-  const ranked = LB.map((m, i) => ({ ...m, score: scores[i], id: m.name }))
+  const ranked = rows
+    .map((m, i) => ({ ...m, score: scores[i], id: m.name }))
     .sort((a, b) => b.score - a.score);
 
   return (

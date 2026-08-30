@@ -7,7 +7,7 @@ import { Architecture } from "@/components/landing/architecture";
 import { SocialProof, type CoverageData } from "@/components/landing/social-proof";
 import { ClosingCTA } from "@/components/landing/closing-cta";
 import { modelAvailability } from "@/lib/catalog/availability";
-import { isSelectable } from "@/lib/catalog";
+import { isSelectable, trendingModels } from "@/lib/catalog";
 import { BENCHMARKS } from "@/lib/catalog/benchmarks";
 import { PROVIDER_LIST } from "@/lib/catalog/providers";
 import { getCatalogSnapshot } from "@/lib/catalog/store";
@@ -41,10 +41,26 @@ export default async function LandingPage() {
 
   // The constellation should name models that exist. Trending first, then the rest
   // in catalog order, so the list is stable between revalidations.
-  const labels = [...selectable]
-    .sort((a, b) => Number(Boolean(b.trending)) - Number(Boolean(a.trending)))
-    .slice(0, 10)
-    .map((m) => m.name);
+  //
+  // `trendingModels()` is the same helper the Hub's Trending rail uses, so the
+  // hero cannot drift from it. Safe to call here because `getCatalogSnapshot()`
+  // above installs the snapshot pointer these selectors read.
+  const trending = trendingModels();
+  const trendingIds = new Set(trending.map((m) => m.id));
+  const ranked = [...trending, ...selectable.filter((m) => !trendingIds.has(m.id))];
+
+  // One model per brand. Both surfaces fed by this list — the constellation and
+  // the "compare across models" card — are illustrating *breadth*, and a run of
+  // near-identical siblings (three Qwen variants) reads as a narrower catalog
+  // than Atlas actually has. Falls back to the plain ranking if that yields too
+  // few, so a thin catalog still fills the constellation.
+  const seenBrands = new Set<string>();
+  const distinct = ranked.filter((m) => {
+    if (seenBrands.has(m.provider)) return false;
+    seenBrands.add(m.provider);
+    return true;
+  });
+  const labels = (distinct.length >= 6 ? distinct : ranked).slice(0, 10).map((m) => m.name);
 
   // Coverage replaces the invented GitHub stats and testimonials that used to
   // sit here. Every figure is read off the same snapshot the rest of the page
@@ -64,7 +80,7 @@ export default async function LandingPage() {
       <Hero labels={labels.length >= 6 ? labels : undefined} />
       <ProofStrip stats={stats} />
       <EcosystemMap />
-      <FeatureSections />
+      <FeatureSections labels={labels.length >= 4 ? labels : undefined} />
       <OpenSource />
       <Architecture />
       <SocialProof coverage={coverage} />

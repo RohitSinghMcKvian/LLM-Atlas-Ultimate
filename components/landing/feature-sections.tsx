@@ -21,7 +21,13 @@ interface Feature {
   preview: React.ReactNode;
 }
 
-const FEATURES: Feature[] = [
+/**
+ * Built per-render rather than as a module constant so the two data-bearing
+ * previews can receive live model names from the landing page's snapshot read.
+ * Everything else here is static copy.
+ */
+function features(labels?: string[]): Feature[] {
+  return [
   {
     eyebrow: "Atlas Compare",
     title: "One question. Every model. In parallel.",
@@ -33,7 +39,7 @@ const FEATURES: Feature[] = [
     ],
     href: "/compare",
     cta: "Open Compare",
-    preview: <PreviewCompare />,
+    preview: <PreviewCompare labels={labels} />,
   },
   {
     eyebrow: "Atlas Code · Atlas Brain",
@@ -59,7 +65,7 @@ const FEATURES: Feature[] = [
     ],
     href: "/leaderboard",
     cta: "Open the Leaderboard",
-    preview: <PreviewLeaderboard />,
+    preview: <PreviewLeaderboard labels={labels} />,
   },
   {
     eyebrow: "Atlas Cost",
@@ -74,9 +80,11 @@ const FEATURES: Feature[] = [
     cta: "Open Cost",
     preview: <PreviewCost />,
   },
-];
+  ];
+}
 
-export function FeatureSections() {
+export function FeatureSections({ labels }: { labels?: string[] }) {
+  const FEATURES = features(labels);
   return (
     <section className="mx-auto max-w-6xl space-y-24 px-4 py-20 sm:px-6 sm:py-28 lg:space-y-36">
       {FEATURES.map((f, i) => {

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { Shield, Users, Database, Newspaper } from "lucide-react";
+import { Shield, Users, Newspaper } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getProfile } from "@/lib/auth/session";
+import { CatalogSyncCard } from "./catalog-sync-card";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
@@ -26,11 +27,6 @@ export default async function AdminPage() {
       icon: Users,
       title: "Accounts",
       body: "Search accounts, review sign-in methods, and grant or revoke the admin role.",
-    },
-    {
-      icon: Database,
-      title: "Catalog sync",
-      body: "Trigger a catalog refresh and read the last run's diff without a shell.",
     },
     {
       icon: Newspaper,
@@ -65,6 +61,7 @@ export default async function AdminPage() {
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <CatalogSyncCard />
         {planned.map(({ icon: Icon, title, body }) => (
           <Card key={title}>
             <CardHeader>

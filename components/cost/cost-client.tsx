@@ -3,6 +3,7 @@
 import * as React from "react";
 import { defaultCostModels } from "@/lib/catalog/defaults";
 import { resolveModelId } from "@/lib/catalog/resolve";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import dynamic from "next/dynamic";
 import {
   Coins,
@@ -72,6 +73,12 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
   });
   const [axis, setAxis] = React.useState<string>("mmlu");
 
+  // Subscribing keeps every derived list correct across a catalog sync: a daily
+  // sync that adds or reprices a model must reach the table, the frontier plot
+  // and the add-model picker without a reload. Every sibling page (Compare,
+  // Bench, Leaderboard, Playground) does the same.
+  const snapshot = useCatalogSnapshot();
+
   const w = (patch: Partial<Workload>) => setWorkload((s) => ({ ...s, ...patch }));
   const sh = (patch: Partial<SelfHostAssumptions>) =>
     setSelfhost((s) => ({ ...s, ...patch }));
@@ -82,7 +89,7 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
       .filter((m): m is NonNullable<typeof m> => !!m && m.status !== "upcoming")
       .map((m) => ({ model: m, cost: apiMonthlyCost(m, workload) }))
       .sort((a, b) => a.cost.total - b.cost.total);
-  }, [selected, workload]);
+  }, [selected, workload, snapshot]);
 
   const cheapest = rows[0];
   const selfHost = React.useMemo(
@@ -120,11 +127,11 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
         open: m.license === "open",
         selected: selected.includes(m.id),
       }));
-  }, [axis, deferredWorkload, selected]);
+  }, [axis, deferredWorkload, selected, snapshot]);
 
   const available = React.useMemo(
     () => allModels().filter((m) => m.status !== "upcoming" && !selected.includes(m.id)),
-    [selected],
+    [selected, snapshot],
   );
 
   function exportCSV() {

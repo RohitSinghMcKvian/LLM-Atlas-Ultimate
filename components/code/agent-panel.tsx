@@ -796,7 +796,12 @@ function ModelPicker({
   disabled?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
-  const models = React.useMemo(() => agentModels(), []);
+  // Subscribe here rather than memoizing once at mount: the parent already
+  // tracks the snapshot to re-validate the *selected* model, but the list of
+  // *choices* has to move too, or a model added by the daily sync stays absent
+  // from this dropdown until the panel is remounted.
+  const snapshot = useCatalogSnapshot();
+  const models = React.useMemo(() => agentModels(), [snapshot]);
   const active = getModelById(value);
 
   return (
