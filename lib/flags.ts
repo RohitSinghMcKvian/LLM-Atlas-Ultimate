@@ -127,12 +127,6 @@ export const FLAG_DEFS = {
       "Retrieve from the knowledge graph alongside project files, and cite the nodes an answer rests on. Falls back to text retrieval when a question names no entity.",
     defaultOn: false,
   },
-  atlasTools: {
-    label: "Atlas module tools",
-    description:
-      "Let the agent use Atlas itself — the catalog, the cost engine, the graph and the news corpus. Reading is free and works offline; anything that spends money or writes asks first.",
-    defaultOn: false,
-  },
   agentConsole: {
     label: "Agent console",
     description:
