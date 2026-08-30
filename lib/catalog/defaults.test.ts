@@ -9,8 +9,11 @@ import {
   defaultCostModels,
   defaultFlowModel,
   defaultPlaygroundModels,
+  servableChatModel,
+  servableModelId,
 } from "./defaults";
-import { getModelById, modelAccess } from "./index";
+import { modelAvailability, type RouteEnv } from "./availability";
+import { getModelById, modelAccess, routableModels } from "./index";
 import { installSnapshot, resetSnapshot } from "./snapshot";
 
 // Defaults are applied *without the user choosing them* — `activeModelId` on a
@@ -149,5 +152,101 @@ describe("when the catalog has no free models at all", () => {
     // An empty picker is a dead end; a model the user must connect a key for at
     // least has a path forward (the key modal).
     expect(defaultChatModel()).toBe("only-paid");
+  });
+});
+
+describe("servableModelId — what the connected providers can actually serve", () => {
+  beforeEach(() => {
+    resetSnapshot();
+    installSnapshot(BASELINE_SNAPSHOT);
+  });
+
+  it("keeps the preferred default when its provider is connected", () => {
+    expect(servableChatModel({ configured: ["nvidia"] })).toBe(defaultChatModel());
+  });
+
+  it("moves off a default no connected provider can reach", () => {
+    // The bug this exists for: `gpt-oss-120b` routes via groq/nvidia/openrouter/
+    // local, so a Google-only operator was parked on a model that 503s on every
+    // question while Google-served models sat unselected.
+    const google = servableChatModel({ configured: ["google"] });
+    expect(google).toBeDefined();
+    expect(google).not.toBe(defaultChatModel());
+    const routes = getModelById(google!)!.routes.map((r) => r.provider);
+    expect(routes).toContain("google");
+  });
+
+  it("returns something runnable for every single-provider configuration", () => {
+    for (const provider of ["nvidia", "google", "groq", "local"] as const) {
+      const id = servableChatModel({ configured: [provider] });
+      expect(id, provider).toBeDefined();
+      expect(
+        modelAvailability(getModelById(id!)!, { configured: [provider] }).kind,
+        `${provider} → ${id}`,
+      ).toBe("free");
+    }
+  });
+
+  it("returns undefined rather than a guess when nothing is configured", () => {
+    // The caller leaves the selection alone and lets the "connect a key" banner
+    // show; swapping in another unreachable model would only hide the error.
+    expect(servableChatModel({ configured: [] })).toBeUndefined();
+  });
+
+  it("never offers a metered model to a free-only request", () => {
+    // OpenRouter is metered as a provider, so an operator key alone unlocks only
+    // its `:free` variants — never a priced model.
+    const id = servableChatModel({ configured: ["openrouter"] });
+    if (id) {
+      expect(modelAvailability(getModelById(id)!, { configured: ["openrouter"] }).kind).toBe(
+        "free",
+      );
+    }
+  });
+
+  it("honours capability preferences, and degrades them before `free`", () => {
+    const env = { configured: ["nvidia"] as const };
+    const id = servableModelId(env, [], { free: true, tools: true });
+    expect(id).toBeDefined();
+    expect(getModelById(id!)!.capabilities.toolUse).toBe(true);
+    expect(modelAvailability(getModelById(id!)!, env).kind).toBe("free");
+  });
+});
+
+describe("the `freeReady` rule /api/v1/providers reports", () => {
+  // The route computes it as `servableModelId(env, [], { free: true }) !==
+  // undefined`. It used to be the hardcoded list `nvidia || openrouter ||
+  // local`, which was wrong in both directions — these pin both corrections.
+  const freeReady = (configured: RouteEnv["configured"]) =>
+    servableModelId({ configured }, [], { free: true }) !== undefined;
+
+  beforeEach(() => {
+    resetSnapshot();
+    installSnapshot(BASELINE_SNAPSHOT);
+  });
+
+  it("is true for the operator-funded providers the old list omitted", () => {
+    expect(freeReady(["google"])).toBe(true);
+    expect(freeReady(["groq"])).toBe(true);
+  });
+
+  it("stays true for the providers the old list did name", () => {
+    expect(freeReady(["nvidia"])).toBe(true);
+    expect(freeReady(["local"])).toBe(true);
+  });
+
+  it("is false with nothing configured", () => {
+    expect(freeReady([])).toBe(false);
+  });
+
+  it("tracks the catalog rather than the provider id for metered OpenRouter", () => {
+    // OpenRouter is metered, so its readiness depends on whether the catalog
+    // currently holds a `:free` variant or a $0 listing — not on the key alone.
+    // Either answer is correct; asserting the *source* of the answer is the
+    // point, since the old code answered `true` unconditionally.
+    const models = routableModels().filter(
+      (m) => modelAvailability(m, { configured: ["openrouter"] }).kind === "free",
+    );
+    expect(freeReady(["openrouter"])).toBe(models.length > 0);
   });
 });

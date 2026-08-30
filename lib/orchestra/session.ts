@@ -73,7 +73,14 @@ export interface SessionCallbacks {
   onGraph?: (context: GraphContext | null) => void;
   onToolCall?: (name: string) => void;
   onSources?: (sources: WebSource[]) => void;
-  onError?: (message: string) => void;
+  /**
+   * `code` is `RouterError["code"]` when the failure originated there (e.g.
+   * `"no_provider_configured"`, `"key_required"`) and absent otherwise — it
+   * already survives the SSE stream into `runToolLoop`'s own callback
+   * (`lib/chat/tool-loop.ts`); this just stops flattening it back to a string
+   * here, so a caller can offer a fix instead of only displaying prose.
+   */
+  onError?: (message: string, code?: string) => void;
   /** A fan-out started, progressed, or finished. Mirrors into `useGraphStore.setRun`. */
   onRun?: (run: OrchestraRun) => void;
   /**
@@ -318,7 +325,7 @@ export async function runSessionTurn(
         sources.push(...found);
         cb.onSources?.(found);
       },
-      onError: (e) => cb.onError?.(e.message),
+      onError: (e) => cb.onError?.(e.message, e.code),
     },
   );
 
