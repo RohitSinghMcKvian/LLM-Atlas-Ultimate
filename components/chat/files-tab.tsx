@@ -190,7 +190,7 @@ function WorkspaceRow({
           onClick={toXlsx}
           disabled={converting}
           title="Download as .xlsx"
-          className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+          className="shrink-0 rounded p-1 text-muted-foreground opacity-100 transition-opacity hover:text-foreground focus-visible:opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100"
         >
           {converting ? <Loader2 className="size-3 animate-spin" /> : <Sheet className="size-3" />}
         </button>
@@ -198,7 +198,7 @@ function WorkspaceRow({
       <button
         onClick={() => download(text, name, "text/plain")}
         title={`Download ${name}`}
-        className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+        className="shrink-0 rounded p-1 text-muted-foreground opacity-100 transition-opacity hover:text-foreground focus-visible:opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100"
       >
         <Download className="size-3" />
       </button>
@@ -252,7 +252,7 @@ function ProducedRow({
         onClick={save}
         disabled={busy}
         title={failed ? "That file is no longer stored" : `Download ${file.path}`}
-        className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+        className="shrink-0 rounded p-1 text-muted-foreground opacity-100 transition-opacity hover:text-foreground focus-visible:opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100"
       >
         {busy ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
       </button>

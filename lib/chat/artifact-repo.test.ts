@@ -18,6 +18,7 @@ import {
   storageList,
   storageSet,
 } from "./artifact-repo";
+import { artifactsToRecord } from "./artifact-extract";
 
 function fakeLocalStorage() {
   const map = new Map<string, string>();
@@ -412,5 +413,113 @@ describe("multi-artifact by path", () => {
       expect(await renameArtifact("c1", "index.html", "index.html")).toMatchObject({ ok: true });
       expect(await listArtifactsForConversation("c1")).toHaveLength(1);
     });
+  });
+});
+
+/**
+ * A page the provider cut off is still the page.
+ *
+ * `nemotron-3-ultra-550b` stalls mid-answer, which `shouldContinue` declines to
+ * resume by design — so every long artifact it writes arrives with its fence
+ * still open. The turn used to drop those on the floor, which meant no record,
+ * no `artifactCount` change, no auto-open, and several hundred lines of
+ * generated HTML surviving only as text in the transcript.
+ */
+describe("truncated versions", () => {
+  const cut = (code: string, messageId?: string) => ({
+    conversationId: "c1",
+    messageId,
+    kind: "html" as const,
+    lang: "html",
+    title: "Page",
+    code,
+    truncated: true,
+  });
+
+  it("records a truncated version rather than discarding it", async () => {
+    const version = await recordVersion(cut("<html><body><h1>NASA"));
+    expect(version).toMatchObject({ versionNumber: 1, truncated: true });
+    // The artifact itself exists, which is what makes the panel open.
+    expect(await listArtifactsForConversation("c1")).toHaveLength(1);
+  });
+
+  it("leaves a complete version unflagged", async () => {
+    const version = await recordVersion(v("<html><body><h1>NASA</h1></body></html>"));
+    expect(version?.truncated).toBeUndefined();
+  });
+
+  it("clears the flag when the same turn writes again complete", async () => {
+    await recordVersion(cut("<html><body><h1>NA", "m1"));
+    const finished = await recordVersion({
+      ...v("<html><body><h1>NASA</h1></body></html>", "m1"),
+    });
+    expect(finished).toMatchObject({ versionNumber: 1 });
+    expect(finished?.truncated).toBeUndefined();
+    // Still one version: a resumed answer completes the turn's version rather
+    // than stacking a second one beside it.
+    expect(await listVersions(finished!.artifactId)).toHaveLength(1);
+  });
+
+  it("keeps the flag when the same turn rewrites and is cut off again", async () => {
+    await recordVersion(cut("<html><body><h1>NA", "m1"));
+    const again = await recordVersion(cut("<html><body><h1>NASA — Explore", "m1"));
+    expect(again).toMatchObject({ truncated: true, versionNumber: 1 });
+  });
+
+  it("a later complete turn supersedes it as a new version", async () => {
+    await recordVersion(cut("<html><body><h1>NA", "m1"));
+    const next = await recordVersion(v("<html><body><h1>NASA</h1></body></html>", "m2"));
+    expect(next).toMatchObject({ versionNumber: 2 });
+    expect(next?.truncated).toBeUndefined();
+  });
+});
+
+/**
+ * The reported bug, reproduced through both modules.
+ *
+ * "The developed landing page didn't open in Artifact automatically." The panel
+ * opens on `artifactCount` increasing (`autoOpen` in lib/chat/rail-state.ts), so
+ * "did not open" and "was never recorded" are the same fact. This walks the real
+ * path a finished turn takes — reply text in, artifact rows out — and asserts the
+ * count moves, which is the thing the user actually saw fail.
+ */
+describe("a stalled build still reaches the panel", () => {
+  const REPLY = [
+    "I cannot render Artifacts — this environment has no preview pane.",
+    "",
+    "## Complete HTML — Copy & Save as `index.html`",
+    "",
+    "```html",
+    "<!DOCTYPE html>",
+    '<html lang="en">',
+    "<head><title>NASA - Explore the Universe</title></head>",
+    "<body>",
+    '  <header class="hero"><h1>Reach for the Stars</h1></header>',
+  ].join("\n");
+
+  it("records the page and moves the count that opens the rail", async () => {
+    const before = (await listArtifactsForConversation("c1")).length;
+
+    for (const art of artifactsToRecord(REPLY)) {
+      await recordVersion({
+        conversationId: "c1",
+        messageId: art.path ? undefined : "m1",
+        path: art.path,
+        kind: art.type,
+        lang: art.lang,
+        title: art.title,
+        code: art.code,
+        ...(art.truncated ? { truncated: true } : {}),
+      });
+    }
+
+    const after = await listArtifactsForConversation("c1");
+    expect(after.length).toBe(before + 1);
+    expect(after[0].kind).toBe("html");
+
+    const versions = await listVersions(after[0].id);
+    expect(versions).toHaveLength(1);
+    expect(versions[0].truncated).toBe(true);
+    expect(versions[0].code).toContain("Reach for the Stars");
   });
 });

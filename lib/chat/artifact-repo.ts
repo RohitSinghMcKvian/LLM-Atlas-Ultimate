@@ -99,6 +99,19 @@ export interface ArtifactVersionRecord {
   lang: string;
   title: string;
   code: string;
+  /**
+   * The provider stopped before the closing fence arrived, so `code` is a
+   * fragment rather than a finished document.
+   *
+   * Recorded rather than discarded. A truncated version used to be dropped on
+   * the floor at turn end — the reasoning being that a broken document should
+   * not enter the revert history — but dropping it meant the artifact was never
+   * written at all, so the panel never opened and several hundred lines of
+   * generated work existed only as text in the transcript. Keeping it, and
+   * saying it is incomplete, preserves the original concern without paying for
+   * it with the deliverable.
+   */
+  truncated?: boolean;
   createdAt: number;
 }
 
@@ -263,6 +276,8 @@ export async function recordVersion(input: {
   lang: string;
   title: string;
   code: string;
+  /** See {@link ArtifactVersionRecord.truncated}. */
+  truncated?: boolean;
 }): Promise<ArtifactVersionRecord | null> {
   const s = await artifactStore();
   if (!s) return null;
@@ -304,12 +319,17 @@ export async function recordVersion(input: {
     const sameTurn = existing.find((v) => v.messageId === input.messageId);
     if (sameTurn) {
       if (sameTurn.code === input.code) return sameTurn;
+      const { truncated: _wasTruncated, ...carried } = sameTurn;
       const updated: ArtifactVersionRecord = {
-        ...sameTurn,
+        ...carried,
         kind: input.kind,
         lang: input.lang,
         title: input.title,
         code: input.code,
+        // Set from the input rather than carried forward: the same turn writing
+        // again is how a resumed answer completes a fence it left open, and a
+        // version that is now whole must stop claiming to be a fragment.
+        ...(input.truncated ? { truncated: true } : {}),
       };
       await s.put(ARTIFACT_VERSIONS, updated);
       return updated;
@@ -328,6 +348,7 @@ export async function recordVersion(input: {
     lang: input.lang,
     title: input.title,
     code: input.code,
+    ...(input.truncated ? { truncated: true } : {}),
     createdAt: now,
   };
   await s.put(ARTIFACT_VERSIONS, version);

@@ -239,4 +239,29 @@ describe("verifyArtifact", () => {
     );
     expect(r?.fatal[0].kind).toBe("timeout");
   });
+
+  // A page missing its stylesheet renders, so it must reach the frame — and it
+  // is still unfinished, so it must still be worth a repair turn. Both halves,
+  // because the previous behaviour got the first half wrong by getting the
+  // second half right in the only way it knew.
+  it("runs a page whose asset is missing, and still asks for the file", async () => {
+    const html = `<html><head><link rel="stylesheet" href="./s.css"></head><body>hi</body></html>`;
+    const runner = vi.fn(async () => run());
+    const r = await verifyArtifact(
+      {
+        target: {
+          files: singleFileMap("index.html", html),
+          entry: "index.html",
+          artifact: { type: "html", code: html },
+        },
+        origin: ORIGIN,
+        head: "",
+      },
+      runner,
+    );
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(r?.ran).toBe(true);
+    expect(r?.fatal).toHaveLength(1);
+    expect(r?.fatal[0].message).toContain("s.css");
+  });
 });

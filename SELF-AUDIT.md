@@ -2981,3 +2981,465 @@ disappears with a pointer is a name a screen reader never hears. And under
 reduced motion the rail is parked **open** rather than collapsed: the disclosure
 still has to happen, it just cannot be made out of movement, so it is made out
 of position instead.
+---
+
+# P18 — The task-execution surface
+
+A user selected a streaming assistant bubble mid-build and reported three faults:
+the component was not responsive, its content overflowed horizontally, and its
+text rendered red where it should be `--foreground`. They also asked for every
+other chat surface that appears *during* task execution to be enhanced, with
+Claude's own task-execution UI as the reference.
+
+## 1. The red text was a state bug, not a style choice
+
+Four facts, each read from the code rather than inferred:
+
+1. `chat-client.tsx` sets `{ content: e.message, error: true }` when the router
+   errors.
+2. `patchMessage` is a shallow merge (`lib/store/chat-store.ts`), so the flag
+   survives every later content-only patch.
+3. `shouldFallBackToProse` returns true on `outcome.errored`
+   (`lib/chat/prose-fallback.ts`) — **the recovery path is gated on the flag**.
+   It then streams the whole build through the same content-only flusher and
+   cleared `error` only after the stream finished *and* files parsed out of it.
+4. `message-bubble.tsx`'s error branch rendered `message.content` — raw,
+   unstripped — inside `flex items-center gap-2 text-sm`, with `text-danger` on
+   the container. No `whitespace-pre-wrap`, no `break-words`, no `min-w-0`.
+
+So a build that was busy succeeding rendered in the failure style for its whole
+run. The code comment describing this path records it measured on **Nemotron 3
+Ultra at 48,992 characters** — the model in the user's screenshot. Collateral:
+the same branch suppressed the `ArtifactCard`, so the recovery showed a red wall
+*and* no deliverable, and the stripped `body` computed on every flush was thrown
+away unused.
+
+The horizontal scrollbar was independent: the transcript scroller declared only
+`overflow-y-auto`, and a non-`visible` value on one axis makes the other compute
+to `auto`.
+
+## 2. What changed
+
+**The state.** `lib/chat/message-state.ts` is a new pure module holding the rule
+the bug violated — a turn that produced text is not a failure — as
+`messageView()` and `recoveryOutcome()`. The suite is node-only
+(`vitest.config.ts` sets `environment: "node"`), so a rule living in JSX is a
+rule nothing can check; this is the same pure-module seam as `lib/chat/activity.ts`.
+
+The recovery now clears `error` when it **starts**, and reports itself through a
+new `recoveryNote` field surfaced as a `"recovery"` activity entry. Three
+endings, only one of which is still a failure: files parsed (the build worked),
+text but no files (the answer is real — say "no files in the answer" as a note),
+nothing at all (the original error stands, restored as its own one sentence
+rather than left as the "Retrying without tools…" placeholder).
+
+**The presentation.** `FailureNotice` renders the body in `--foreground`, with
+`--danger` on the icon and a short "Couldn't complete" label. That is Terrain's
+own rule from `app/globals.css` — a failed state always pairs the hue with an
+icon so it never rests on colour alone — and it frees the hue from carrying a
+paragraph. Three guards rather than one: `whitespace-pre-wrap`, `break-words`,
+and `max-h-64 overflow-y-auto`, so nothing put in it can become a wall again.
+
+**A second inverted condition, found while rewriting the branch.** `LiveStatus`
+hardcodes `streaming: true` when building its headline, but the container gated
+it on `!streaming`. The live step line therefore never appeared during a run —
+the exact case its own docstring says it exists for — and a finished turn that
+returned nothing pulsed forever.
+
+**The activity surface.** `ActivityTimeline` already folded a turn to one row,
+then rendered `ReasoningBlock` and `ToolCall` in their standalone carded form
+inside it, so a six-tool turn drew seven frames in the box built to stop the
+stacking — and `ToolCall` spent `--action`, reserved for the primary action and
+live state, on a finished log line. Both gained `variant="row"`; `"card"` stays
+the default so `playground-client.tsx` and `code/agent-panel.tsx` are untouched.
+Both also adopted `components/ui/collapsible.tsx` instead of hand-rolling the
+height animation a third time — `ToolCall` was the one disclosure that ignored
+`prefers-reduced-motion` entirely.
+
+**Everything else that renders during a run.** `PlanPanel` and
+`ResearchProgress` fold once finished (a draft plan never folds — it is the
+approval gate; a live plan never folds — the step list is the progress; a
+warning forces open). Overflow fixed on the run panel's task titles, step
+labels and diff paths; 44px touch targets on every disclosure, the rail tabs and
+the sibling stepper; `aria-expanded` added where it was missing; `files-tab`'s
+hover-only row actions made reachable on touch; `sources.tsx` switched from a
+Show/Hide word to the chevron every other disclosure uses.
+
+## 3. Acceptance evidence
+
+`npm run verify` — **3586 passed | 40 skipped | 0 failed** across 148 files,
+typecheck clean. `message-state.test.ts` is new (10 tests); `activity.test.ts`
+gained 5.
+
+Driven live against the dev server, which composited for the first time since
+P12. The reported case was reproduced deterministically by stubbing the router
+response with a 732-character HTML blob containing a 90-character unbroken
+token, then measured through `getComputedStyle`:
+
+| | dark | light |
+|---|---|---|
+| body colour | `rgb(233, 233, 234)` | `rgb(23, 24, 26)` |
+| `--foreground` | `rgb(233, 233, 234)` | `rgb(23, 24, 26)` |
+| label colour | `rgb(224, 69, 90)` | `rgb(184, 29, 51)` |
+| `--danger` | `rgb(224, 69, 90)` | `rgb(184, 29, 51)` |
+
+`white-space: pre-wrap`, `overflow-wrap: break-word`, `max-height: 256px`,
+`overflow-y: auto`; the notice's `scrollWidth === clientWidth`; the transcript
+scroller reports `overflow-x: hidden` with `scrollWidth === clientWidth`; the
+document does not scroll horizontally at 1400, 820 or 375 px. Every disclosure
+measures exactly **44px** at 375 px and collapses to the compact row above 640.
+A real build was also run end to end on a free route: the plan ledger, step
+stream and meters rendered, and the expanded activity row showed three flat rows
+in one container rather than three tinted cards.
+
+## 4. What was not verified
+
+- **The recovery path was never observed live.** It needs a router failure
+  followed by a model that answers in prose, and no run in this session produced
+  one. The failure *presentation* was driven directly; the transition out of it
+  is covered only by `message-state.test.ts`.
+- The run panel's meters at `< 640px` were seen at 820 px (three columns) but not
+  at 375 (two). The change is a single `grid-cols-2 sm:grid-cols-3`.
+- **Two console errors remain and are pre-existing**, reproducible on a fresh
+  `/chat` with no messages and outside this diff: `components/chat/composer.tsx`
+  renders the dictate button behind `dictation.supported`, which is false during
+  SSR and true in the browser, so every load throws a React hydration error; and
+  `CatalogHeal` calls setState while `CatalogScope` renders. Neither is caused by
+  P18 and neither is fixed by it.
+- The `variant="card"` default protects `playground-client.tsx` and
+  `code/agent-panel.tsx` by construction, but neither surface was opened.
+
+## 5. Next steps
+
+1. **The RLS gate.** Migrations `0005`–`0014` are still unrun and the two-account
+   isolation test has never been executed. Eighteen phases now defer work behind
+   it, including publish, the embed snippet, P13's `image_tokens` column and a
+   server-side orphan sweep.
+2. Drive the recovery path live once a route can be made to fail and then answer.
+3. Fix the composer hydration mismatch and the `CatalogHeal` setState-in-render.
+4. Run a catalog sync so P13's `outputModalities` and `imageOutputPerM` are
+   populated from the live listing.
+5. Show the user that a soft-deleted file exists, and let them restore it — the
+   last open item from P15.
+
+---
+
+# P19 — The unfinished build renders
+
+A user reported that every build ends with the same thing in the artifact pane:
+
+```
+2 errors
+index.html: stylesheet "styles.css" not found in the workspace.
+index.html: script "app.js" not found in the workspace.
+```
+
+…over a blank white preview, next to a turn that said it had produced nothing.
+
+## 1. Root cause
+
+Four steps, read rather than inferred:
+
+1. A model plans a multi-file page in one shape. The plan ledger from the
+   reported session is verbatim: *"Create index.html with structure and links to
+   CSS and JS"*, then *"Create app.js…"*, then *"Create styles.css…"*. **The entry
+   is written before the files it links to, always.**
+2. So between those rounds `index.html` references two files that do not exist
+   yet. That is not an edge case; it is the state every multi-file build passes
+   through, and the permanent state of one the provider cut short.
+3. `inlineHtmlAssets` pushed that into `errors`.
+4. `buildArtifactDoc`'s markup branch is `if (errors.length) return { doc: "" }`.
+   So the whole page — markup the model had already finished — was discarded
+   over a stylesheet, and the panel showed a blank frame under a red count.
+
+The module was also inconsistent with itself. Its own comment says an *absolute*
+URL is deliberately left alone because the CSP reports it "visibly, through the
+error channel" — meaning the page still renders. A `<link>` that cannot load
+therefore rendered the page or blanked it depending only on whether the URL had
+a scheme. A browser given a stylesheet that 404s renders the page unstyled; that
+is the behaviour to match.
+
+## 2. What changed
+
+**`inlineHtmlAssets` returns `{ html, errors, warnings }`.** A missing entry file
+is still an error — there is no degraded rendering of a page that does not exist.
+A missing *relative asset* is a warning: the page is built without it.
+
+**The dead tag is dropped, not left in place.** This is not tidiness. Left in, the
+relative URL resolves against the opaque origin, fails, and fires a `resource`
+error — which `FATAL_RESOURCE` in `artifact-verify.ts` classifies as **fatal**. One
+missing file would have been reported twice through two channels, one of them
+fatal, which is the same blank frame arriving by a different route. The reference
+is replaced with `<!-- atlas: stylesheet styles.css not written yet -->`.
+
+**The message names the fix, not just the symptom.** It is quoted into the repair
+prompt, and "not found in the workspace" does not say which of the two possible
+corrections is wanted:
+
+> `index.html links to stylesheet "styles.css", which is not in the workspace yet. Create that file, or remove the reference from index.html.`
+
+Same reasoning as `availableModules()` a few lines above it in the same file.
+
+**It is still worth a repair turn.** `verifyArtifact` used to short-circuit on any
+build error — `ran: false`, no frame. Now it runs the document *and* passes the
+warnings into the triage as bundle entries, which keeps them `fatal` in the
+triage's sense. That word means "worth spending a model turn on", and it is worth
+one: the file really is missing. It does not mean "the preview is blank", and
+conflating the two is what this phase separates.
+
+**Two strips, two hues.** `IssueStrip` replaces the single hand-rolled red band.
+`danger` is "this did not run"; `warning` is "this ran, and here is what it is
+still missing". Both keep an icon beside the hue per the token rules in
+`globals.css`. The warning text is a sentence, so it wraps rather than truncating
+into uselessness at the panel's 320px floor; the error text stays monospace and
+truncated, because a stack line is not prose. The strip's "Fix these" button was
+also the last sub-44px target left in the panel after P18's sweep, and now uses
+the same `min-h-11 … sm:min-h-0` pattern as the rest of it.
+
+## 3. Acceptance evidence
+
+`npm run verify` — **3590 passed | 40 skipped | 0 failed** across 148 files,
+typecheck clean, production build compiled. Four net new tests across
+`artifact-bundle.test.ts`, `artifact-doc.test.ts` and `artifact-verify.test.ts`,
+covering both halves of the claim: the page renders, and the model is still asked
+for the file.
+
+Driven live against the dev server by seeding the exact reported state — an
+`index.html` linking to `styles.css` and `app.js`, neither present:
+
+| | before | after |
+|---|---|---|
+| preview frame | absent (`doc` was `""`) | present, 17,977-byte document, page markup intact |
+| strip | `2 errors`, `--danger` | `Missing 2 files`, `--warning` |
+| dead tags in the document | — | `0`; two `<!-- atlas: … not written yet -->` markers |
+
+Label colour measured as `rgb(217, 183, 64)` in dark and `rgb(138, 106, 10)` in
+light — `--warning` exactly, and distinct from `--danger` (`rgb(224, 69, 90)` /
+`rgb(184, 29, 51)`) in both. Notice text `white-space: normal`,
+`overflow-wrap: break-word`, `scrollWidth === clientWidth`; no document
+horizontal scroll at desktop or 375 px; the strip's button measures **44px** at
+375 px.
+
+The danger path was re-driven after the refactor rather than assumed: a seeded
+`App.jsx` with `import gsap` still blanks the frame and still reports
+`1 error` in `rgb(184, 29, 51)`, with the full "the only bare imports available
+are…" sentence intact.
+
+## 4. What was not verified
+
+- The **automatic** repair loop was not observed closing this on its own. The
+  manual "Fix these" payload was confirmed to carry the new sentence; the
+  auto-verify path reaching it is covered only by `artifact-verify.test.ts`.
+- The two pre-existing console errors from P18 are unchanged and still present:
+  the `composer.tsx` dictation-button hydration mismatch and `CatalogHeal`'s
+  setState during `CatalogScope`'s render. Neither is touched by this phase.
+
+## 5. Next steps
+
+Unchanged from P18, with the RLS gate (migrations `0005`–`0014`, and the
+two-account isolation test) still first and still unrun.
+
+---
+
+# P20 — The agent reaches Atlas, and speaks
+
+## What was asked
+
+Test the AI chat agent end to end, say what works and what is missing, implement the
+missing pieces so it can operate inside LLM Atlas rather than only talk about it, improve
+the experience across the app, and add a voice assistance mode.
+
+## The blocker found first
+
+`lib/chat/idb.ts` carried three unresolved merge-conflict markers (`UU` in `git status`).
+`tsc --noEmit` failed on all eight of them, so the project did not typecheck and did not
+build. Nothing else could be verified until it was fixed.
+
+Both sides were needed and neither was a superset: the upstream half added `GRAPH_NODES`,
+`GRAPH_EDGES`, `ORCHESTRA_RUNS` and `BY_KIND` at `DB_VERSION = 11`; the stashed half added
+`COMPARE_RUNS`, `COMPARE_LANES` and `COMPARE_SESSIONS` at `12`. Resolved by keeping both
+sets of stores and both halves of the upgrade handler at `DB_VERSION = 12`. The conflict
+opened *inside* a doc comment, so the compare block's `/**` had to be restored by hand —
+the naive both-sides merge produced a dangling comment body that read as syntax errors
+ninety lines later.
+
+`SELF-AUDIT.md` itself had a conflict; both sections were kept.
+
+## What the audit found
+
+Three complete, unit-tested subsystems with **zero callers in the running app**.
+
+| Built and tested | Consumers before this phase |
+|---|---|
+| `atlas_graph`, `atlas_catalog`, `atlas_cost`, `atlas_news` on `/chat` | 0 |
+| `lib/tools/policy.ts` — `decideToolApproval`, `describePending`, `deniedToolResult`, `offerable`, `refusedTools` | 0 |
+| `toolIndexBlock` in `lib/tools/spec.ts` | 0 |
+| `useSurfaceContext` across sixteen modules | 0 — the hook did not exist |
+| `lib/voice/*` — VAD, endpointing, session machine, lexicon, segmenter, speech planner | 0 outside its own tests |
+
+The Atlas tools failed in two independent places at once, which is why neither was caught.
+`toolDefsFor` filters on `opts.atlasTools === true` and `chat-client.tsx` never set the
+field; and even had it been set, the `executeTool` context had no `atlas` port, so
+`ctx.atlas` would have been `undefined` and every call would have answered "unavailable
+this turn". `lib/orchestra/session.ts` already defaulted them **on** for the Ask Atlas
+dock, so the same question got a worse answer on the page built for asking it.
+
+`lib/tools/policy.ts`'s own docstring names `atlas_prompt` and `atlas_bench` as the tools
+it exists to gate. Neither existed. Every Atlas tool was classed `read`: the agent could
+describe the workspace and could not act in it.
+
+Baseline before any change: **4039 passed, 1 failed** (`lib/catalog/sync/live.test.ts`, a
+live-network test, pre-existing and unrelated), 40 skipped.
+
+## What changed
+
+### The tools reach the chat page
+
+`atlasTools` added to the settings store, default **on** — a departure from every other
+capability there, and argued in the code. The others are off because they spend something;
+these four are pure functions over data the browser already holds, and the cost of leaving
+them off is the app's central failure: an assistant inside a model catalog answering "what
+does this cost" from recollection of a catalog that changes weekly.
+
+Ports wired on both surfaces. The chat page holds them in a ref rather than in `send`'s
+dependency array — `send` is a ~700-line callback with two dozen deps already, and one that
+changes when the provider list resolves would rebuild it mid-stream on first load. The dock
+passed only `graph`; it now passes `news` and `routeEnv` too, so `atlas_news` and
+`atlas_catalog availability` stop being tools that can only answer "I do not have that".
+
+`lib/news/client-corpus.ts` is new. `AtlasToolPorts.news` is synchronous by design, and the
+corpus is the one piece not already in the browser; it is primed once on mount and answers
+`null` until it lands. A failed prime is indistinguishable from "not primed yet" — this
+runs on a page whose job is not news.
+
+### Two tools that act
+
+`atlas_open` resolves a destination and navigates through a port. `hrefForOpen` is pure, so
+the destination is checked before anything moves, and a surface with no router (the MCP
+server, a test) answers with the URL instead of navigating somewhere nobody can see. Every
+parameter it emits is a `searchParams` key some route in `app/(workspace)/` destructures
+today — `models` on Compare, `model` on Chat and Cost, `access` on the Leaderboard,
+`prompt` on the Playground, `q`/`t`/`a` on News. A richer invented vocabulary would have
+produced URLs that look like deep links, land on a default view, and let the agent report
+having done something it did not do.
+
+`atlas_prompt` lists, reads and saves into the prompt library, appending a version through
+`saveVersion` rather than writing a bare body the Prompt page could not diff.
+
+Both are classed `write`. `atlas_open` is a write even though the back button undoes it,
+because "state the user owns" includes the page they are looking at.
+
+### The approval gate gets its first caller
+
+`decideToolApproval` now runs in the chat loop, and `gatedInChat` decides what reaches it:
+not connector tools (`runMcpTool` owns theirs), and not the six writes already behind a
+composer switch. Prompting per call on top of a toggle set thirty seconds earlier would
+mean twenty dialogs in a twenty-round build, and a gate people learn to click through is
+worse than no gate because it still looks like one.
+
+`PendingApproval` gained an optional `surface`, so the existing dialog covers both origins
+rather than a second one appearing beside it — two approval prompts that look different and
+mean the same thing is how someone learns to dismiss both. Remembered answers go to
+`settings.toolPolicy` for Atlas tools and to the connector record for connectors; per tool
+either way, never per surface.
+
+`toolIndexBlock` now assembles into the system prompt, excluding connector names because
+`connectorsIndex` already covers those. What it adds is the `(asks first)` marker.
+
+### The agent can see the screen
+
+`useSurfaceContext` implemented, keyed on the summary's content rather than the object, and
+clearing on unmount only if the value it published is still the one in the store — unmount
+order is not guaranteed, and clearing unconditionally would wipe the successor's summary.
+Its first draft read the ref inside cleanup, which can never match because the ref has
+already advanced; captured in a local instead.
+
+`lib/agent/surface-summaries.ts` holds one pure builder per module. Leaderboard, Cost, News,
+Compare and Playground publish through them.
+
+### Voice conversation
+
+`lib/voice/narrate.ts` is the one genuinely new piece of logic: segment first, then plan.
+Planning first rewrites a half-arrived code fence into "Code is being written on screen" on
+every flush and says it again on the next — the announcement is stable only once the fence
+closes, which is what `firstFenceBlock` waits for.
+
+`lib/hooks/use-voice-session.ts` drives it. The microphone is read twice on purpose:
+`SpeechRecognition` supplies words, the VAD supplies timing. Using recognition for
+turn-taking is what makes browser voice assistants feel like a walkie-talkie. Frames come
+from an `AnalyserNode` polled at 20 ms — a worklet needs a separately served module the CSP
+does not admit, and `ScriptProcessorNode` is deprecated and drops frames under load. An
+epoch counter guards every async callback so a late delta cannot resurrect a barged-in
+turn, and `utterance.onerror` is wired to the same handler as `onend` so a synthesiser
+failure cannot strand the phase in `speaking` forever.
+
+`components/voice/voice-mode.tsx` is the surface. It has no `navigate` port, no `prompts`
+port and no `onApproval`: a spoken turn has no approval prompt anyone can read, so every
+write is refused rather than silently allowed.
+
+## Two bugs this change introduced, both caught
+
+**Read-only sub-agents were handed a write tool.** `lib/orchestra/roles.ts` had
+`const READ_ATLAS = ATLAS_TOOL_NAMES`, which was all reads until it was not. A
+"cartographer" would have held `atlas_open` and could have moved the person to another page
+in the middle of a fan-out they cannot see. `roleWritesMatchTools` failed on the next run.
+Fixed by deriving the set — `ATLAS_TOOL_NAMES.filter((n) => classify(n).sideEffect === "read")`
+— so whatever is added next is handled without a second catch, plus an explicit test.
+
+**The summary cap was off by one.** `clampSummary` sliced to `max` and then appended the
+ellipsis, so the result could be `max + 1`. Caught by the "stays inside the cap" test on its
+first run.
+
+## One bug the live drive found
+
+Asked from the Leaderboard which of two ticked models was cheaper, the agent called
+`atlas_catalog` with `command: "search"` and `model_ids` and no `search_query`, got
+"`search` needs a search_query", and answered that one of the two was not in the catalog —
+from a tool that was holding its price. The command names are ours; the question was
+unambiguous. `search` with ids and no query now does the lookup, `get` with a query and no
+ids now searches, and neither is still an error when there is genuinely nothing to go on.
+
+## Acceptance evidence
+
+`npm run verify` — **4109 passed | 40 skipped | 1 failed** across 180 files. The single
+failure is `lib/catalog/sync/live.test.ts > reaches a steady state where a resync changes
+nothing`, a live-network test failing identically before any change here. Baseline was
+4039, so **+70 tests**. Typecheck clean. `npm run build` compiled.
+
+Driven live on port 3110, dev server, both themes.
+
+| | Evidence |
+|---|---|
+| News corpus primes | `GET /api/v1/news?limit=200 200` in the server log, from the dock's mount |
+| The model calls an Atlas tool | `POST /api/v1/router/chat` returned `{"type":"tool_call","name":"atlas_catalog","arguments":"{\"command\": \"search\", \"model_ids\": [\"gpt-5-codex\"] …}"}` |
+| The agent knows what is on screen | Two models ticked on the Leaderboard; asked "which of the two models I have ticked is cheaper" with no ids in the question, the answer named **gpt-5-codex and qwen3-coder** — rows 1 and 2, which could only have come from `focus` |
+| Voice surface renders | Dark and light, 375 px and desktop: indicator ring in `--action`, phase label, footer controls |
+| Voice degrades honestly | Microphone blocked: "Voice off" plus "Atlas could not open the microphone. Check the site's permissions." Skip disabled, End shows `MicOff` |
+| Touch targets at 375 px | Skip 44, End 44, close 44 — was 40, since `size="icon"` is 40; fixed with the repo's `size-11 sm:size-10` pattern |
+| No horizontal scroll | `documentElement.scrollWidth <= clientWidth` at 375 px and desktop |
+
+## What was NOT verified
+
+- **Nothing was heard aloud.** Microphone capture is blocked in the browser pane, so the
+  spoken happy path — the VAD endpointing a real utterance, recognition committing it, an
+  answer narrated sentence by sentence, barge-in cancelling playback — was never driven
+  live. Only the permission-denied path was. The reducer, the VAD, the endpointer, the
+  segmenter and the narrator are each unit-tested; the wiring between them and a real
+  microphone is not.
+- **The approval dialog was never clicked.** `atlas_open` and `atlas_prompt` were exercised
+  through `executeTool` with fake ports. The `surface: "atlas"` branch of `ApprovalDialog`
+  has not been seen on screen.
+- **The `atlas_prompt` port against the real store.** The chat page's `save` reads
+  `usePromptStore.getState()`; only the fake was tested.
+- Eleven of the sixteen modules still publish no surface context, so the dock falls back to
+  the route name there.
+- Two pre-existing console errors are unchanged: the composer dictation hydration mismatch,
+  and `CatalogHeal` calling setState during `CatalogScope`'s render.
+
+## The standing ask, unchanged
+
+The RLS migration gate remains closed. Migrations `0005`–`0014` have never been run and the
+two-account isolation test has never been executed. Running them writes DDL to your live
+Supabase project, so it needs your explicit go-ahead; nothing in this phase touched it.
+
+Nothing has been committed.

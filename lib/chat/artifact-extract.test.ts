@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  artifactsToRecord,
   extractArtifact,
   extractArtifactMatch,
   extractArtifacts,
@@ -200,4 +201,60 @@ describe("validFencePath", () => {
       expect(validFencePath(bad)).toBeUndefined();
     },
   );
+});
+
+/**
+ * The defect this function exists for.
+ *
+ * Reproduced from a real session: `nemotron-3-ultra-550b` was asked for a NASA
+ * landing page, wrote ~550 lines of HTML into a ```html fence, and stalled
+ * before the closing fence. `shouldContinue` declines to resume a stall by
+ * design, so the fence stayed open — and the turn's `.filter(a => a.complete
+ * !== false)` then discarded the whole thing. No record was written, so
+ * `artifactCount` never moved, so `autoOpen` never fired, and the user was told
+ * by their own model that "this chat has no preview pane".
+ */
+describe("artifactsToRecord", () => {
+  const OPEN_FENCE = [
+    "Here is the page.",
+    "",
+    "```html",
+    "<!DOCTYPE html>",
+    '<html lang="en">',
+    "<head><title>NASA — Explore the Universe</title></head>",
+    "<body><h1>Reach for the Stars</h1>",
+  ].join("\n");
+
+  it("records a page whose fence never closed", () => {
+    const out = artifactsToRecord(OPEN_FENCE);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ type: "html", truncated: true });
+    expect(out[0].code).toContain("Reach for the Stars");
+  });
+
+  it("does not flag a fence that closed", () => {
+    const out = artifactsToRecord("```html\n<h1>done</h1>\n```");
+    expect(out).toHaveLength(1);
+    expect(out[0].truncated).toBe(false);
+  });
+
+  it("returns nothing for a reply with no artifact in it", () => {
+    expect(artifactsToRecord("Just prose, and a shell snippet:\n```bash\nls\n```")).toEqual([]);
+    expect(artifactsToRecord("")).toEqual([]);
+  });
+
+  it("keeps every file of a multi-file build, truncation and all", () => {
+    const text = [
+      '```css path="styles.css"',
+      "body { background: #000; }",
+      "```",
+      "",
+      '```html path="index.html"',
+      "<!DOCTYPE html>",
+      "<body><h1>NASA",
+    ].join("\n");
+    const out = artifactsToRecord(text);
+    expect(out.map((a) => a.path)).toEqual(["styles.css", "index.html"]);
+    expect(out.map((a) => a.truncated)).toEqual([false, true]);
+  });
 });

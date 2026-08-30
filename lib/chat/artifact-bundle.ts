@@ -351,18 +351,46 @@ ReactDOM.createRoot(__root).render(React.createElement(__C));
  * Only *relative* references are touched. An absolute or protocol URL is left
  * alone, where the CSP will block it — visibly, through the error channel — the
  * same as it does today.
+ *
+ * A relative reference that resolves to nothing is a **warning, not an error**,
+ * and the difference is the whole point of the split return. A build writes its
+ * page before the files that page links to — every plan a model produces is
+ * shaped that way, "create index.html with links to CSS and JS" first — so for
+ * most of a multi-file build, and permanently for one the provider cut short,
+ * `styles.css` is referenced and not yet written. Treating that as a build
+ * failure blanked the preview and threw away the markup that did exist, which
+ * is both the least useful outcome and the opposite of what a browser does with
+ * a stylesheet that 404s. It was also inconsistent with the line above: an
+ * *absolute* URL that cannot load renders the page anyway.
+ *
+ * The dead tag is dropped rather than left in place. Left in, the relative URL
+ * resolves against the opaque origin and fires a `resource` error too, which
+ * `FATAL_RESOURCE` in artifact-verify.ts classifies as fatal — so one missing
+ * file would be reported twice, through two channels, one of them fatal.
  */
 export function inlineHtmlAssets(
   entryPath: string,
   files: FileMap,
-): { html: string; errors: string[] } {
+): { html: string; errors: string[]; warnings: string[] } {
   const entry = files.get(entryPath);
   if (entry === undefined) {
-    return { html: "", errors: [`Entry file "${entryPath}" not found.`] };
+    return { html: "", errors: [`Entry file "${entryPath}" not found.`], warnings: [] };
   }
 
-  const errors: string[] = [];
+  const warnings: string[] = [];
   const isRelative = (u: string) => !/^[a-zA-Z][a-zA-Z0-9+.-]*:|^\/\//.test(u) && !u.startsWith("#");
+
+  /**
+   * What to say about a reference that resolves to nothing.
+   *
+   * Named with the fix in it, for the same reason `availableModules` above is:
+   * this text is quoted into the repair prompt, and "not found in the workspace"
+   * describes the symptom without saying which of the two possible corrections
+   * — write the file, or drop the reference — is wanted.
+   */
+  const missing = (kind: string, url: string) =>
+    `${entryPath} links to ${kind} "${url}", which is not in the workspace yet. ` +
+    `Create that file, or remove the reference from ${entryPath}.`;
 
   let html = entry.replace(
     /<link\b[^>]*\brel\s*=\s*["']stylesheet["'][^>]*>/gi,
@@ -371,10 +399,12 @@ export function inlineHtmlAssets(
       if (!href || !isRelative(href)) return tag;
       const target = resolveSpecifier(entryPath, href.startsWith(".") ? href : `./${href}`, files);
       if (!target) {
-        errors.push(`${entryPath}: stylesheet "${href}" not found in the workspace.`);
-        return tag;
+        warnings.push(missing("stylesheet", href));
+        return `<!-- atlas: stylesheet ${href} not written yet -->`;
       }
-      return `<style data-from="${target}">\n${files.get(target) ?? ""}\n</style>`;
+      return `<style data-from="${target}">
+${files.get(target) ?? ""}
+</style>`;
     },
   );
 
@@ -383,17 +413,19 @@ export function inlineHtmlAssets(
       if (!isRelative(src)) return tag;
       const target = resolveSpecifier(entryPath, src.startsWith(".") ? src : `./${src}`, files);
       if (!target) {
-        errors.push(`${entryPath}: script "${src}" not found in the workspace.`);
-        return tag;
+        warnings.push(missing("script", src));
+        return `<!-- atlas: script ${src} not written yet -->`;
       }
       // `type` is preserved so a module script stays a module script.
       const attrs = `${before} ${after}`.replace(/\s+/g, " ").trim();
       const typeAttr = /\btype\s*=\s*["'][^"']*["']/i.exec(attrs)?.[0] ?? "";
-      return `<script ${typeAttr} data-from="${target}">\n${files.get(target) ?? ""}\n</script>`;
+      return `<script ${typeAttr} data-from="${target}">
+${files.get(target) ?? ""}
+</script>`;
     },
   );
 
-  return { html, errors };
+  return { html, errors: [], warnings };
 }
 
 /** Whether an entry is markup (inline its assets) or a module (bundle it). */

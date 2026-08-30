@@ -118,4 +118,44 @@ describe("buildActivity", () => {
     });
     expect(a.entries.map((e) => e.kind)).toEqual(["thinking", "tool", "artifact", "continuation"]);
   });
+
+  it("names the workspace command rather than the tool", () => {
+    // A build spends most of its rounds in `workspace`, so the live summary was
+    // "Ran workspace…" for the entire run.
+    const a = buildActivity({
+      toolCalls: [
+        call("workspace", { arguments: '{"command":"create","path":"/workspace/index.html"}' }),
+        call("workspace", { arguments: '{"command":"str_replace","path":"/workspace/app.css"}' }),
+      ],
+    });
+    expect(a.entries.map((e) => e.label)).toEqual(["Wrote a file", "Edited a file"]);
+    expect(a.entries[0].detail).toBe("/workspace/index.html");
+  });
+
+  it("falls back to the tool name for an unknown workspace command", () => {
+    const a = buildActivity({ toolCalls: [call("workspace", { arguments: '{"command":"zzz"}' })] });
+    expect(a.entries[0].label).toBe("Ran workspace");
+  });
+
+  it("survives arguments that are still streaming in", () => {
+    const a = buildActivity({ toolCalls: [call("workspace", { arguments: '{"comm' })] });
+    expect(a.entries[0].label).toBe("Ran workspace");
+    expect(a.entries[0].detail).toBeUndefined();
+  });
+
+  it("records a prose recovery as a note, not a failure", () => {
+    // The turn began as an error and recovered. It must not read as broken —
+    // that presentation is what buried a finished build under a red wall.
+    const a = buildActivity({ recovered: "Retried without tools" });
+    expect(a.entries[0].kind).toBe("recovery");
+    expect(a.entries[0].status).toBe("done");
+    expect(a.hasError).toBe(false);
+    expect(a.summary).toBe("Retried without tools");
+  });
+
+  it("still lets a real failure win the summary over a recovery", () => {
+    const a = buildActivity({ recovered: "Retried without tools", truncated: true });
+    expect(a.hasError).toBe(true);
+    expect(a.summary).toContain("still incomplete");
+  });
 });

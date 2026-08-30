@@ -49,6 +49,7 @@ import { useSettingsStore } from "@/lib/store/settings-store";
 import { isEnabled } from "@/lib/store/flags-store";
 import { buildEscalationPayload, stashEscalation } from "@/lib/chat/escalate";
 import { messageCostUsd, formatUsd } from "@/lib/chat/cost";
+import { messageView } from "@/lib/chat/message-state";
 import type { useTTS } from "@/lib/hooks/use-speech";
 import type { Attachment, ChatMessage } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
@@ -103,6 +104,16 @@ export const MessageBubble = React.memo(function MessageBubble({
   const artifact = isUser ? null : extractArtifact(message.content);
   const hasArtifact = !!artifact;
   const body = artifact ? stripArtifactBlock(message.content) : message.content;
+  // How this turn presents itself, decided in `lib/chat/message-state.ts` rather
+  // than inline. It used to be a chain of ternaries here, and two of them were
+  // wrong in ways nothing could catch: the suite is node-only, so a rule living
+  // in JSX is a rule no test can reach.
+  const view = messageView({
+    role: message.role,
+    hasBody: !!body,
+    streaming,
+    error: message.error,
+  });
   // A turn that only patched the artifact has no code in the transcript at all —
   // that is the point of patching — so it needs its own marker or it looks inert.
   const patchedArtifact =
@@ -141,17 +152,29 @@ export const MessageBubble = React.memo(function MessageBubble({
       >
         {isUser ? <User className="size-4" /> : <AtlasMark size={18} />}
       </div>
-      <div className={cn("min-w-0 max-w-[85%]", isUser && "flex flex-col items-end")}>
+      {/* The user is capped; the assistant is not. A reply was capped at 85% too,
+          which contradicted the decision two screens down that an answer is not
+          a card — it narrowed the reading measure for no reason, and narrowed it
+          again whenever the artifact pane was docked. */}
+      <div
+        className={cn(
+          "min-w-0",
+          isUser ? "flex max-w-[85%] flex-col items-end" : "flex-1",
+        )}
+      >
         <div className="mb-1 flex items-center gap-2 text-2xs text-muted-foreground">
           <span>{isUser ? "You" : message.model ? getModelById(message.model)?.name ?? modelName : modelName}</span>
           {message.pinned && <Pin className="size-3 text-amber" />}
           {siblingCount > 1 && (
             <span className="inline-flex items-center gap-0.5 rounded-md border border-border px-1 py-0.5">
+              {/* A bare 12px icon is a 12px target. Padded to 44 on touch and
+                  back to the compact stepper once there is a pointer. */}
               <button
                 onClick={() => onSibling(message.id, -1)}
                 disabled={siblingIndex === 0}
-                className="disabled:opacity-30"
+                className="grid size-11 place-items-center rounded disabled:opacity-30 sm:size-4"
                 title="Previous version"
+                aria-label="Previous version"
               >
                 <ChevronLeft className="size-3" />
               </button>
@@ -161,8 +184,9 @@ export const MessageBubble = React.memo(function MessageBubble({
               <button
                 onClick={() => onSibling(message.id, 1)}
                 disabled={siblingIndex === siblingCount - 1}
-                className="disabled:opacity-30"
+                className="grid size-11 place-items-center rounded disabled:opacity-30 sm:size-4"
                 title="Next version"
+                aria-label="Next version"
               >
                 <ChevronRight className="size-3" />
               </button>
@@ -197,6 +221,7 @@ export const MessageBubble = React.memo(function MessageBubble({
             truncated={message.truncated}
             artifactErrors={message.artifactErrors}
             capabilityDowngrade={message.capabilityNote}
+            recovered={message.recoveryNote}
             streaming={streaming && !message.content}
             defaultOpen={detailedActivity}
           />
@@ -244,29 +269,27 @@ export const MessageBubble = React.memo(function MessageBubble({
             </div>
           </div>
         ) : (
-          (body || isUser || !streaming || message.error) && (
+          view.showsBody && (
             <div
               className={cn(
-                "text-body",
+                "min-w-0 text-body",
                 // Only the user is in a bubble. An assistant reply used to be
                 // carded too, which narrowed the reading measure and made a build
                 // answer — already full of cards for its artifact, its files and
                 // its activity — read as a card of cards. Putting the reply on
                 // the page is the single biggest thing here.
-                isUser
+                view.presentation === "user"
                   ? "rounded-2xl bg-surface-3 px-4 py-2.5 text-foreground"
-                  : message.error
-                    ? "rounded-2xl border border-danger/30 bg-danger/10 px-4 py-2.5 text-danger"
+                  : view.presentation === "failed"
+                    ? "rounded-2xl border border-danger/30 bg-danger/[0.06] px-4 py-3"
                     : "px-0.5 py-0.5",
               )}
             >
-              {message.error ? (
-                <span className="flex items-center gap-2 text-sm">
-                  <AlertCircle className="size-4" /> {message.content}
-                </span>
-              ) : isUser ? (
-                <p className="whitespace-pre-wrap">{message.content || "​"}</p>
-              ) : body ? (
+              {view.presentation === "failed" ? (
+                <FailureNotice text={body || message.content} />
+              ) : view.presentation === "user" ? (
+                <p className="whitespace-pre-wrap break-words">{message.content || "​"}</p>
+              ) : view.presentation === "answer" ? (
                 <Markdown streaming={streaming}>{body}</Markdown>
               ) : (
                 // Three dots for forty seconds reads as hung. During an agentic
@@ -274,7 +297,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                 // happening instead of implying nothing is.
                 <LiveStatus message={message} />
               )}
-              {streaming && body && (
+              {view.showsCaret && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 animate-caret-blink bg-action align-text-bottom" />
               )}
             </div>
@@ -304,13 +327,13 @@ export const MessageBubble = React.memo(function MessageBubble({
         )}
 
         {/* The artifact itself: a card here, the source in the panel. */}
-        {artifact && !message.error && (
+        {artifact && view.showsDeliverables && (
           <ArtifactCard artifact={artifact} onOpen={onOpenArtifact} errorCount={message.artifactErrors?.length ?? 0} />
         )}
-        {patchedArtifact && !message.error && <ArtifactPatchNote onOpen={onOpenArtifact} />}
+        {patchedArtifact && view.showsDeliverables && <ArtifactPatchNote onOpen={onOpenArtifact} />}
 
         {/* Usage + cost */}
-        {!isUser && message.completionTokens != null && !message.error && (
+        {!isUser && message.completionTokens != null && view.showsDeliverables && (
           <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground/70">
             <span>
               {message.promptTokens != null && `${message.promptTokens} in · `}
@@ -583,6 +606,34 @@ function GeneratedImages({ images }: { images: Attachment[] }) {
  * from one that has wedged. So the dots stay, and a line naming the current step
  * appears beside them as soon as there is one.
  */
+/**
+ * A turn that failed, said once and kept small.
+ *
+ * The body is `--foreground`, not `--danger`. Terrain's rule is that a failed or
+ * destructive state always pairs the hue with an icon so the meaning never rests
+ * on colour alone (`app/globals.css:96-97`) — which frees the hue from having to
+ * carry a paragraph. It had been carrying entire pages: this branch used to
+ * render `message.content` raw inside a flex row with no wrapping, so a 49,000
+ * character build streamed through it as red run-on text that scrolled the whole
+ * transcript sideways.
+ *
+ * Hence three guards rather than one: wrap it, break long tokens, and cap the
+ * height. Whatever ends up in here, it cannot become a wall again.
+ */
+function FailureNotice({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="mb-1 text-2xs font-medium text-danger">Couldn&apos;t complete</p>
+        <div className="max-h-64 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words text-sm text-foreground">
+          {text}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LiveStatus({ message }: { message: ChatMessage }) {
   const headline = React.useMemo(
     () =>

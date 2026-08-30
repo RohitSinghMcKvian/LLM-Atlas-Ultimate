@@ -15,6 +15,7 @@ import {
   Wand2,
   Undo2,
   AlertTriangle,
+  FileWarning,
   Printer,
   Monitor,
   Tablet,
@@ -34,6 +35,7 @@ import {
   storageClientScript,
 } from "@/lib/chat/artifact-bridge";
 import { fileSlug } from "@/lib/chat/document";
+import { useInlinedRuntime } from "./use-inlined-runtime";
 import { printClientScript, printRenderedNode, requestFramePrint } from "@/lib/chat/print";
 import {
   ARTIFACT_PREVIEW_KEY,
@@ -212,7 +214,11 @@ export function ArtifactPanel({
    * parses, which is what makes a streaming preview worth showing at all.
    */
   const canBuild = canRun && !streaming;
-  const [built, setBuilt] = React.useState<{ doc: string; errors: string[] } | null>(null);
+  const [built, setBuilt] = React.useState<{
+    doc: string;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
 
   React.useEffect(() => {
     if (!canBuild || !origin) {
@@ -248,7 +254,7 @@ export function ArtifactPanel({
         transform,
       });
       if (!alive) return;
-      setBuilt({ doc: result.doc, errors: result.errors });
+      setBuilt({ doc: result.doc, errors: result.errors, warnings: result.warnings });
     })();
     return () => {
       alive = false;
@@ -290,6 +296,18 @@ export function ArtifactPanel({
     return () => clearTimeout(t);
   }, [liveDoc, streaming]);
 
+  /**
+   * The document the frame actually gets, with the runtime spliced in when the
+   * origin requires it. A no-op on a public origin; see
+   * `lib/chat/artifact-runtime-inline.ts` for why a private one does.
+   *
+   * Deliberately *after* the throttle rather than before it. Splicing operates on
+   * the whole document, and a React artifact's runtime is ~3MB — doing it on
+   * `liveDoc` would run a multi-megabyte string replace on every ~48ms stream
+   * flush instead of once per committed reload.
+   */
+  const frameDoc = useInlinedRuntime(doc, origin);
+
   // window.storage and the error channel: both served by the parent over
   // postMessage, because the frame is origin-isolated and has neither storage
   // nor a way to reach us otherwise. Both listeners are bound to this exact
@@ -324,13 +342,29 @@ export function ArtifactPanel({
     [built?.errors, errors],
   );
 
+  /**
+   * Things the page rendered in spite of.
+   *
+   * Kept out of `allErrors` on purpose. A missing sibling file used to blank the
+   * preview and shout "2 errors" in red over an empty frame, which said the
+   * build was broken when it was merely unfinished — and it is unfinished for
+   * most of every multi-file build, since a model writes the page before the
+   * files the page links to. The page now renders and this says what is still
+   * missing, in the state hue rather than the failure one.
+   */
+  const notices = React.useMemo(() => built?.warnings ?? [], [built?.warnings]);
+
   // Reported upward in an effect, not from inside the listener: calling a parent
   // setter during another component's render phase is what React warns about.
+  //
+  // Notices go up with the errors: the activity row's job is to say what is
+  // wrong with the turn's output, and "the page has no stylesheet" belongs
+  // there even though the frame did not throw.
   const reportErrors = React.useRef(onErrors);
   reportErrors.current = onErrors;
   React.useEffect(() => {
-    reportErrors.current?.(allErrors);
-  }, [allErrors]);
+    reportErrors.current?.([...allErrors, ...notices]);
+  }, [allErrors, notices]);
 
   React.useEffect(() => {
     setTab((t) => (t === "diff" && !prev ? "code" : t));
@@ -582,36 +616,28 @@ export function ArtifactPanel({
 
       {/* Runtime errors, reported by the artifact itself over postMessage. The
           model wrote this code and until now had no way to find out whether it
-          ran; this is that channel surfaced. */}
-      {allErrors.length > 0 && (
-        <div className="border-b border-danger/25 bg-danger/10 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="size-3.5 shrink-0 text-danger" />
-            <span className="text-2xs font-medium text-danger">
-              {allErrors.length === 1 ? "1 error" : `${allErrors.length} errors`}
-            </span>
-            {onFix && (
-              <button
-                onClick={() => onFix(allErrors)}
-                className="ml-auto rounded-md border border-danger/30 px-2 py-1 text-2xs text-danger transition-colors hover:bg-danger/15"
-              >
-                Fix these
-              </button>
-            )}
-          </div>
-          {/* `allErrors`, not `errors`: the count and the Fix payload above both
-              use the merged list, so listing only the runtime half meant a pure
-              bundle failure — "cannot resolve import framer-motion", the most
-              common one — rendered as "1 error" above an empty list. */}
-          <ul className="mt-1 space-y-0.5">
-            {allErrors.slice(0, 3).map((e) => (
-              <li key={e} className="truncate font-mono text-2xs text-danger/80" title={e}>
-                {e}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+          ran; this is that channel surfaced.
+
+          `allErrors`, not `errors`: the count and the Fix payload both use the
+          merged list, so listing only the runtime half meant a pure bundle
+          failure — "cannot resolve import framer-motion", the most common one —
+          rendered as "1 error" above an empty list. */}
+      <IssueStrip
+        tone="danger"
+        items={allErrors}
+        label={allErrors.length === 1 ? "1 error" : `${allErrors.length} errors`}
+        onFix={onFix}
+      />
+
+      {/* Separate strip, separate hue. The page in the frame below is rendering;
+          these are the parts of it that have not been written yet. */}
+      <IssueStrip
+        tone="warning"
+        items={notices}
+        label={notices.length === 1 ? "Missing 1 file" : `Missing ${notices.length} files`}
+        onFix={onFix}
+      />
+
 
       <div className="min-h-0 flex-1 overflow-auto" ref={proseRef}>
         {tab === "diff" && prev ? (
@@ -637,7 +663,7 @@ export function ArtifactPanel({
               <iframe
                 ref={frameRef}
                 title={artifact.title}
-                srcDoc={doc}
+                srcDoc={frameDoc}
                 // Deliberately no `allow-same-origin` — see cspFor() above. Adding
                 // it back would hand model-generated code the parent's storage.
                 sandbox={ARTIFACT_SANDBOX}
@@ -710,6 +736,82 @@ export function ArtifactPanel({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * One band of things that are wrong with the artifact.
+ *
+ * Two tones, because two different facts need telling apart and the old single
+ * red strip could not: `danger` is "this did not run", `warning` is "this ran,
+ * and here is what it is still missing". Both keep the icon beside the hue, per
+ * the token rules in globals.css, so the distinction never rests on colour.
+ *
+ * The warning text is a sentence naming the file and the fix, not a stack line,
+ * so it wraps instead of truncating into uselessness at the panel's 320px floor.
+ */
+function IssueStrip({
+  tone,
+  items,
+  label,
+  onFix,
+}: {
+  tone: "danger" | "warning";
+  items: string[];
+  label: string;
+  onFix?: (errors: string[]) => void;
+}) {
+  if (items.length === 0) return null;
+  const danger = tone === "danger";
+  const Icon = danger ? AlertTriangle : FileWarning;
+  return (
+    <div
+      className={cn(
+        "border-b px-3 py-2",
+        danger ? "border-danger/25 bg-danger/10" : "border-warning/25 bg-warning/10",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className={cn("size-3.5 shrink-0", danger ? "text-danger" : "text-warning")} />
+        <span
+          className={cn("text-2xs font-medium", danger ? "text-danger" : "text-warning")}
+        >
+          {label}
+        </span>
+        {onFix && (
+          <button
+            onClick={() => onFix(items)}
+            className={cn(
+              // 44px on touch, the original 27px once there is a pointer: the
+              // panel is reachable from the mobile bottom sheet, where the
+              // strip's own button was the last sub-target left in it.
+              "ml-auto inline-flex min-h-11 shrink-0 items-center rounded-md border px-3 text-2xs transition-colors sm:min-h-0 sm:px-2 sm:py-1",
+              danger
+                ? "border-danger/30 text-danger hover:bg-danger/15"
+                : "border-warning/30 text-warning hover:bg-warning/15",
+            )}
+          >
+            Fix these
+          </button>
+        )}
+      </div>
+      <ul className="mt-1 space-y-0.5">
+        {items.slice(0, 3).map((e) => (
+          <li
+            key={e}
+            title={e}
+            className={cn(
+              "min-w-0 text-2xs",
+              danger
+                ? "truncate font-mono text-danger/80"
+                : "break-words text-warning/90",
+            )}
+          >
+            {e}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

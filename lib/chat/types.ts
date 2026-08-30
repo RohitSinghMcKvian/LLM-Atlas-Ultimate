@@ -106,6 +106,17 @@ export interface ChatMessage {
    */
   capabilityNote?: string;
   /**
+   * The build could not get its file out through a tool call, so it was re-asked
+   * in prose and that worked. See `lib/chat/prose-fallback.ts`.
+   *
+   * Transient like `capabilityNote`, and pointedly *not* an error: the recovery
+   * used to leave `error` set for its whole run, which rendered a finished build
+   * in the failure style — red, unwrapped, with its artifact card suppressed.
+   * The flag is cleared when the recovery starts and this note carries the fact
+   * instead.
+   */
+  recoveryNote?: string;
+  /**
    * The turn ran out of budget before it ran out of work.
    *
    * `stoppedBy` is the sentence; `stopReason` is what the UI branches on, since

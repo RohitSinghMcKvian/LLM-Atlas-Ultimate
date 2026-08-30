@@ -175,7 +175,15 @@ export function RunPanel({
         </div>
 
         {hasMeters && (
-          <div className={cn("grid gap-3", contextWindow ? "grid-cols-3" : "grid-cols-2")}>
+          <div
+            className={cn(
+              // Two columns until there is room for three. The panel's minimum
+              // is 320px and it also renders inside the mobile sheet, where
+              // three columns of tabular numbers each lost half their digits.
+              "grid gap-3 grid-cols-2",
+              contextWindow && "sm:grid-cols-3",
+            )}
+          >
             <Meter
               label="rounds"
               value={`${run.meters.rounds}/${run.meters.maxRounds}`}
@@ -306,7 +314,12 @@ function TaskRow({ task }: { task: WorkspaceTask }) {
         task.status === "active" && "rounded-r bg-action/[0.06]",
       )}
     >
-      <span className="min-w-0 flex-1 truncate">{task.title}</span>
+      {/* Two lines before it gives up, and the full text on hover. A single
+          truncated line at the panel's 320px minimum cut most plan steps mid-word
+          with no way to read the rest. */}
+      <span className="line-clamp-2 min-w-0 flex-1" title={task.title}>
+        {task.title}
+      </span>
       {task.note && <span className="shrink-0 text-muted-foreground/60">{task.note}</span>}
     </li>
   );
@@ -366,7 +379,8 @@ function StepRow({ step, last }: { step: RunStep; last: boolean }) {
       <div className="min-w-0 flex-1 pb-2">
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center gap-1.5 rounded-md py-0.5 text-left text-2xs hover:bg-surface-2/60"
+          aria-expanded={open}
+          className="flex min-h-11 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-2xs hover:bg-surface-2/60 sm:min-h-0"
         >
           <ChevronRight
             className={cn(
@@ -374,7 +388,15 @@ function StepRow({ step, last }: { step: RunStep; last: boolean }) {
               open && "rotate-90",
             )}
           />
-          <span className={cn("shrink-0", step.status === "error" ? "text-danger" : "text-foreground/90")}>
+          <span
+            className={cn(
+              // Was `shrink-0`, which let a long label push the detail off the
+              // row rather than yielding any of its own width.
+              "min-w-0 shrink truncate",
+              step.status === "error" ? "text-danger" : "text-foreground/90",
+            )}
+            title={step.label}
+          >
             {step.label}
           </span>
           {step.detail && (
@@ -440,8 +462,10 @@ function StepBody({ step }: { step: RunStep }) {
   if (body.kind === "diff") {
     return (
       <div className="mb-1.5 mt-1 rounded-lg border border-border bg-surface-2/40 px-2.5 py-1.5">
-        {body.path && <p className="font-mono text-2xs text-action">{body.path}</p>}
-        <p className="text-2xs text-muted-foreground">{body.summary}</p>
+        {body.path && (
+          <p className="break-all font-mono text-2xs text-action">{body.path}</p>
+        )}
+        <p className="break-words text-2xs text-muted-foreground">{body.summary}</p>
       </div>
     );
   }

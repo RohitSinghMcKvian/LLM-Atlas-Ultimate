@@ -1,92 +1,139 @@
 "use client";
 
+import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { compareSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
+import { ArrowLeftRight, GitCompareArrows, Info, RotateCw, Unlock } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ProviderBanner } from "@/components/provider-banner";
 import { defaultCompareModels } from "@/lib/catalog/defaults";
 import { resolveModelIds } from "@/lib/catalog/resolve";
 import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  Plus,
-  Sparkles,
-  X,
-  Send,
-  Square,
-  Check,
-  AlertCircle,
-  Globe,
-  Coins,
-  BookmarkPlus,
-  Pin,
-  GitCompareArrows,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Markdown } from "@/components/markdown";
-import { ProviderBanner } from "@/components/provider-banner";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
-import { routableModels, getModelById } from "@/lib/catalog";
 import { useProviders } from "@/lib/hooks/use-providers";
-import { useKeysStore } from "@/lib/store/keys-store";
+import { useRouteEnv } from "@/lib/hooks/use-route-env";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
-import { postSSE, SSEHttpError } from "@/lib/sse-client";
-import { cn, formatUSD } from "@/lib/utils";
+import { useKeysStore } from "@/lib/store/keys-store";
+import { compareRuntime } from "@/lib/compare/runtime";
+import { planResume, describeResume } from "@/lib/compare/resume";
+import { compareRepo } from "@/lib/compare/repo";
+import { headlines as runHeadlines } from "@/lib/compare/analysis";
+import { getModelById } from "@/lib/catalog";
+import { MAX_LANES, type Depth } from "@/lib/compare/types";
+import type { Attachment } from "@/lib/chat/types";
+import { cn } from "@/lib/utils";
+import { Composer } from "./composer";
+import { EvidencePanel } from "./evidence-panel";
+import { MetricsPanel } from "./metrics-panel";
+import { Scorecard } from "./scorecard";
+import { VerdictCard } from "./verdict-card";
+import { LaneGrid } from "./lane-grid";
+import { RunSpine } from "./run-spine";
+import { useCompareDriving, useCompareView } from "./use-compare-run";
+import { FollowUpComposer } from "./follow-up-composer";
+import { TurnThread } from "./turn-thread";
+import { IncognitoBanner, IncognitoChoice } from "./incognito-banner";
+import { SessionRail } from "./session-rail";
+import { buildLedger, describeLedger } from "@/lib/compare/session-ledger";
+import type { CompareSession } from "@/lib/compare/session";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { formatUSD } from "@/lib/utils";
+import { suggestionsForTurn } from "@/lib/compare/follow-ups";
 
-type ColStatus = "idle" | "streaming" | "done" | "error";
-interface Column {
-  id: string;
-  status: ColStatus;
-  text: string;
-  provider?: string;
-  error?: string;
-}
-
-function parseSynthesis(raw: string) {
-  const sec = (name: string) => {
-    const re = new RegExp(`##\\s*${name}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, "i");
-    return re.exec(raw)?.[1]?.trim() ?? "";
-  };
-  const synthesis = sec("Synthesis");
-  const bullets = (s: string) =>
-    s
-      .split("\n")
-      .map((l) => l.replace(/^[-*]\s*/, "").trim())
-      .filter(Boolean);
-  const agreements = bullets(sec("Agreements"));
-  const divergences = bullets(sec("Divergences"));
-  const hasStructure = synthesis || agreements.length || divergences.length;
-  return {
-    synthesis: hasStructure ? synthesis || raw : raw,
-    agreements,
-    divergences,
-  };
-}
+/**
+ * Atlas Compare.
+ *
+ * The component is deliberately thin. Everything that used to live here — the
+ * abort controller, the streamed text, the run's whole state — moved into
+ * `lib/compare/runtime.ts`, a module-scoped singleton, so that leaving this page
+ * for another module no longer ends the run. What is left is layout and intent:
+ * read the run, render it, and tell the runtime what the user asked for.
+ */
 
 export function CompareClient({ initialIds }: { initialIds?: string[] }) {
+  const snapshot = useCatalogSnapshot();
   const providers = useProviders();
+  const env = useRouteEnv();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const snapshot = useCatalogSnapshot();
-  const all = React.useMemo(() => routableModels(), [snapshot]);
+
+  const view = useCompareView();
+  const run = view?.current ?? null;
+  const session = view?.session ?? null;
+  // Every turn before the one in flight, oldest first.
+  const earlier = React.useMemo(() => view?.turns.slice(0, -1) ?? [], [view]);
+  const driving = useCompareDriving();
+
+  const [question, setQuestion] = React.useState("");
+  const [depth, setDepth] = React.useState<Depth>("standard");
   const [selected, setSelected] = React.useState<string[]>(() => {
     const init = resolveModelIds(initialIds ?? []);
-    return init.length ? init : defaultCompareModels();
+    return (init.length ? init : defaultCompareModels()).slice(0, MAX_LANES);
   });
+  const [syncScroll, setSyncScroll] = React.useState(false);
+  const [focusedId, setFocusedId] = React.useState<string | null>(null);
+  const [resumeOffer, setResumeOffer] = React.useState<{ id: string; label: string } | null>(null);
+  const [tab, setTab] = React.useState<View>("answers");
+  const [web, setWeb] = React.useState<boolean | undefined>(undefined);
+  const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  /**
+   * Chosen before the session starts and frozen for its life.
+   *
+   * Deliberately unlike chat, where the mode is global and flippable: a
+   * per-session choice cannot leak by being forgotten, and there is never half
+   * a session on disk.
+   */
+  const [incognito, setIncognito] = React.useState(false);
+  const [sessions, setSessions] = React.useState<CompareSession[]>([]);
+  const [railOpen, setRailOpen] = React.useState(true);
 
-  // A model can be delisted by the daily sync while a link, a bookmark, or this
-  // very tab still names it. Drop the dead ones rather than rendering a column
+  /** Re-read the rail. Cheap: headers only, no answers. */
+  const refreshSessions = React.useCallback(() => {
+    void compareRepo()
+      .listSessions(50)
+      .then(setSessions)
+      .catch(() => {});
+  }, []);
+
+  // The rail follows the runtime: a new turn touches `updatedAt`, and a session
+  // whose title changed has to move.
+  React.useEffect(() => {
+    refreshSessions();
+  }, [refreshSessions, session?.id, session?.updatedAt, session?.title, session?.pinned]);
+
+  // Sweep expired sessions once per mount rather than on a timer, so a tab that
+  // is never opened never sweeps.
+  React.useEffect(() => {
+    void compareRepo()
+      .pruneSessions()
+      .then((n) => {
+        if (n > 0) refreshSessions();
+      })
+      .catch(() => {});
+  }, [refreshSessions]);
+
+  const ledger = React.useMemo(
+    () => (view ? buildLedger(view.session, view.turns) : null),
+    [view],
+  );
+
+  const openSession = React.useCallback(
+    (id: string) => {
+      if (!env) return;
+      void compareRuntime.openSession(id, env, keyHeaders);
+    },
+    [env, keyHeaders],
+  );
+
+  const newSessionFrom = React.useCallback((temporary: boolean) => {
+    compareRuntime.close();
+    setIncognito(temporary);
+    setQuestion("");
+    setResumeOffer(null);
+  }, []);
+
+  // A model can be retired by the daily catalog sync while a link, a bookmark or
+  // this very tab still names it. Drop the dead ones rather than planning a lane
   // for a model that no longer exists.
   React.useEffect(() => {
     setSelected((current) => {
@@ -95,181 +142,212 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
       return live.length ? live : defaultCompareModels();
     });
   }, [snapshot]);
-  const [query, setQuery] = React.useState("");
-  const [webRetrieval, setWebRetrieval] = React.useState(false);
-  const [running, setRunning] = React.useState(false);
-  const [columns, setColumns] = React.useState<Record<string, Column>>({});
-  const [synth, setSynth] = React.useState<{ status: ColStatus; text: string }>({
-    status: "idle",
-    text: "",
-  });
-  const [pinned, setPinned] = React.useState<Set<string>>(new Set());
-  const [runError, setRunError] = React.useState<string | null>(null);
-  const abortRef = React.useRef<AbortController | null>(null);
 
-  const costPreview = React.useMemo(() => {
-    const inTok = Math.ceil(query.length / 4) + 24;
-    const outTok = 500;
-    return selected.reduce((sum, id) => {
-      const m = getModelById(id);
-      if (!m) return sum;
-      return (
-        sum +
-        (inTok / 1e6) * m.pricing.inputPerM +
-        (outTok / 1e6) * m.pricing.outputPerM
-      );
-    }, 0);
-  }, [selected, query]);
-
-  function toggleModel(id: string) {
-    setSelected((s) =>
-      s.includes(id) ? s.filter((x) => x !== id) : [...s, id],
-    );
-  }
-
-  async function run() {
-    if (!query.trim() || selected.length === 0 || running) return;
-    setRunning(true);
-    setRunError(null);
-    setPinned(new Set());
-    setSynth({ status: "idle", text: "" });
-    setColumns(
-      Object.fromEntries(
-        selected.map((id) => [id, { id, status: "streaming", text: "" } as Column]),
-      ),
-    );
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
-    // Every model streams concurrently, so a setState per token meant N
-    // interleaved re-renders of the whole page per response token. Accumulate
-    // into refs and commit on a 48ms timer — the same coalescing chat and
-    // playground already do. Terminal events flush synchronously first, so no
-    // trailing text can be dropped.
-    // `modelText` holds each column's full text (the run above reset every
-    // column to ""); `dirty` is which ones changed since the last commit.
-    const modelText = new Map<string, string>();
-    const dirty = new Set<string>();
-    let synthText = "";
-    let synthDirty = false;
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const flush = () => {
-      flushTimer = null;
-      if (dirty.size) {
-        const ids = Array.from(dirty);
-        dirty.clear();
-        setColumns((c) => {
-          const next = { ...c };
-          for (const id of ids) {
-            next[id] = { ...next[id], id, status: "streaming", text: modelText.get(id) ?? "" };
-          }
-          return next;
-        });
+  // Coming back to the page: if a run was left unfinished, offer to continue it
+  // rather than silently spending money again on a question the user may have
+  // moved on from.
+  React.useEffect(() => {
+    if (run || !env) return;
+    let cancelled = false;
+    void (async () => {
+      // The newest session whose last turn never finished. Sessions rather than
+      // loose runs, because a run only means something as a turn of one.
+      const sessions = await compareRepo().listSessions(5);
+      for (const session of sessions) {
+        if (cancelled || session.incognito) continue;
+        if (Date.now() - session.updatedAt > 6 * 3600_000) continue;
+        const loaded = await compareRepo().loadSession(session.id);
+        const last = loaded?.runs.sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0)).at(-1);
+        if (!last) continue;
+        const plan = planResume(last);
+        if (plan.complete) continue;
+        if (!cancelled) setResumeOffer({ id: last.id, label: describeResume(plan) });
+        return;
       }
-      if (synthDirty) {
-        synthDirty = false;
-        const text = synthText;
-        setSynth((s) => (s.status === "streaming" ? { ...s, text } : s));
-      }
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
     };
-    const schedule = () => {
-      if (flushTimer == null) flushTimer = setTimeout(flush, 48);
-    };
-    const flushNow = () => {
-      if (flushTimer != null) {
-        clearTimeout(flushTimer);
-        flushTimer = null;
+  }, [run, env]);
+
+  const sourceCount = run?.evidence?.sources.length ?? 0;
+
+  // Suggestions come from the last turn that actually produced a merge — the
+  // turn in flight has nothing to disagree about yet.
+  const suggestions = React.useMemo(
+    () => suggestionsForTurn(run?.synthesis ? run : earlier.at(-1)),
+    [run, earlier],
+  );
+
+  // Findings worth surfacing without the reader going looking for them.
+  const headlines = React.useMemo(() => {
+    if (!run?.analysis) return [];
+    return runHeadlines(run, run.analysis, (laneId) => {
+      const lane = run.lanes.find((l) => l.id === laneId);
+      return getModelById(lane?.modelId ?? laneId)?.name ?? laneId;
+    });
+  }, [run]);
+
+  const running = React.useMemo(
+    () => Boolean(run?.lanes.some((l) => l.status === "streaming" || l.status === "queued")),
+    [run],
+  );
+
+  // "how are these two doing" means something different while lanes are still
+  // streaming, so the state of the run is part of the summary rather than only
+  // the models in it.
+  useSurfaceContext(compareSurface({ modelIds: selected, running, question }));
+
+  const toggleModel = React.useCallback((id: string) => {
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id].slice(0, MAX_LANES)));
+  }, []);
+
+  const start = React.useCallback(() => {
+    if (!env) return;
+    setResumeOffer(null);
+    setFocusedId(null);
+    void compareRuntime.start({
+      config: { question, modelIds: selected, depth, web },
+      env,
+      incognito,
+      headers: keyHeaders,
+      // Only the parsed text travels: an image attachment has no text for a
+      // shared evidence pack, and a failed parse would put its error message
+      // into every lane's prompt.
+      documents: attachments
+        .filter((a) => a.text && !a.failed)
+        .map((a) => ({ name: a.name, text: a.text as string })),
+    });
+  }, [env, question, selected, depth, web, incognito, attachments, keyHeaders]);
+
+  const askFollowUp = React.useCallback(
+    (text: string, opts: { refreshEvidence: boolean }) => {
+      if (!env) return;
+      void compareRuntime.askFollowUp(text, { env, refreshEvidence: opts.refreshEvidence });
+    },
+    [env],
+  );
+
+  const resume = React.useCallback(async () => {
+    if (!env || !resumeOffer) return;
+    const id = resumeOffer.id;
+    setResumeOffer(null);
+    await compareRuntime.resume(id, env, keyHeaders);
+  }, [env, resumeOffer, keyHeaders]);
+
+  const retryLane = React.useCallback(
+    (id: string) => {
+      if (!env) return;
+      void compareRuntime.retryLane(id, env);
+    },
+    [env],
+  );
+
+  // Keyboard: run, stop, lock scrolling, focus a lane by number. Registered on
+  // the document so they work wherever focus happens to be, except in a field.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target?.tagName === "TEXTAREA" || target?.tagName === "INPUT";
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && e.key === "Enter" && question.trim()) {
+        e.preventDefault();
+        start();
+        return;
       }
-      flush();
-    };
-
-    try {
-      for await (const ev of postSSE<any>(
-        "/api/v1/compare",
-        { query, modelIds: selected },
-        ctrl.signal,
-        keyHeaders,
-      )) {
-        switch (ev.type) {
-          case "model_meta":
-            setColumns((c) => ({
-              ...c,
-              [ev.id]: { ...c[ev.id], provider: ev.provider },
-            }));
-            break;
-          case "model_delta":
-            modelText.set(ev.id, (modelText.get(ev.id) ?? "") + ev.text);
-            dirty.add(ev.id);
-            schedule();
-            break;
-          case "model_done":
-            flushNow();
-            setColumns((c) => ({
-              ...c,
-              [ev.id]: { ...c[ev.id], status: "done" },
-            }));
-            break;
-          case "model_error":
-            flushNow();
-            if (ev.code === "key_required") setKeyModalOpen(true);
-            setColumns((c) => ({
-              ...c,
-              [ev.id]: { ...c[ev.id], status: "error", error: ev.message },
-            }));
-            break;
-          case "synthesis_start":
-            synthText = "";
-            synthDirty = false;
-            setSynth({ status: "streaming", text: "" });
-            break;
-          case "synthesis_delta":
-            synthText += ev.text;
-            synthDirty = true;
-            schedule();
-            break;
-          case "synthesis_done":
-            flushNow();
-            setSynth((s) => ({ ...s, status: "done" }));
-            break;
-          case "synthesis_error":
-            flushNow();
-            setSynth((s) => ({ ...s, status: "error" }));
-            break;
-        }
+      if (mod && e.key === ".") {
+        e.preventDefault();
+        compareRuntime.stopAll();
+        return;
       }
-      flushNow();
-    } catch (e) {
-      flushNow();
-      if (e instanceof SSEHttpError) {
-        if (e.code === "key_required" || e.status === 402) setKeyModalOpen(true);
-        setRunError(e.message);
-      } else if ((e as Error).name !== "AbortError")
-        setRunError((e as Error).message);
-    } finally {
-      setRunning(false);
-      abortRef.current = null;
-    }
-  }
+      if (typing) return;
+      if (mod && e.key === "\\") {
+        e.preventDefault();
+        setSyncScroll((s) => !s);
+        return;
+      }
+      if (!mod && /^[1-6]$/.test(e.key) && run) {
+        const lane = run.lanes[Number(e.key) - 1];
+        if (lane) setFocusedId((cur) => (cur === lane.id ? null : lane.id));
+      }
+      if (e.key === "Escape") setFocusedId(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [question, start, run]);
 
-  function stop() {
-    abortRef.current?.abort();
-    setRunning(false);
-  }
-
-  const parsed = React.useMemo(() => parseSynthesis(synth.text), [synth.text]);
-  const hasResults = Object.keys(columns).length > 0;
+  const rail = (
+    <SessionRail
+      sessions={sessions}
+      activeId={session?.id ?? null}
+      onNew={newSessionFrom}
+      onSelect={openSession}
+      onRename={(id, title) => {
+        if (id === session?.id) compareRuntime.updateSession({ title });
+        else
+          void compareRepo()
+            .loadSession(id)
+            .then((l) => l && compareRepo().saveSession({ ...l.session, title, updatedAt: Date.now() }))
+            .then(refreshSessions)
+            .catch(() => {});
+      }}
+      onTogglePin={(id) => {
+        const target = sessions.find((s) => s.id === id);
+        if (!target) return;
+        if (id === session?.id) compareRuntime.updateSession({ pinned: !target.pinned });
+        else
+          void compareRepo()
+            .saveSession({ ...target, pinned: !target.pinned, updatedAt: Date.now() })
+            .then(refreshSessions)
+            .catch(() => {});
+      }}
+      onDelete={(id) => {
+        if (id === session?.id) compareRuntime.close();
+        void compareRepo().deleteSession(id).then(refreshSessions).catch(() => {});
+      }}
+      footer={
+        ledger && ledger.turns > 0 ? (
+          <p className="flex items-center justify-between px-1 text-2xs text-muted-foreground">
+            <span>{describeLedger(ledger)}</span>
+            <span className="font-mono tabular-nums">
+              {ledger.costIncomplete ? "~" : ""}
+              {formatUSD(ledger.costUsd, { precise: true })}
+            </span>
+          </p>
+        ) : null
+      }
+    />
+  );
 
   return (
+    <div className="flex">
+      <aside
+        className={cn(
+          "sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 border-r border-border bg-surface/40 transition-[width] duration-300 lg:block",
+          railOpen ? "w-64" : "w-0 overflow-hidden border-r-0",
+        )}
+      >
+        {railOpen && rail}
+      </aside>
+
+      <div className="min-w-0 flex-1">
     <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:py-10">
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-          Compare
-        </h1>
+      <div className="mb-6 flex items-start gap-3">
+        <button
+          onClick={() => setRailOpen((o) => !o)}
+          aria-label={railOpen ? "Hide comparison history" : "Show comparison history"}
+          className="mt-1 hidden size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground lg:grid"
+        >
+          {railOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+        </button>
+        <div className="min-w-0">
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Compare</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          One question, many models, in parallel — then synthesized into a
-          single answer with agreements and divergences.
+          One question, up to {MAX_LANES} models, all answering from the same evidence — then
+          scored, and merged into a single answer.
         </p>
+        </div>
       </div>
 
       {!providers.loading && !providers.any && (
@@ -278,289 +356,176 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
         </div>
       )}
 
-      {/* Composer */}
-      <div className="rounded-2xl border border-border bg-surface/50 p-4 shadow-glow sm:p-5">
-        <textarea
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) run();
-          }}
-          rows={3}
-          placeholder="Ask anything — e.g. 'Explain the trade-offs between RAG and long-context for a 200-page knowledge base.'"
-          className="w-full resize-none bg-transparent text-body outline-none placeholder:text-muted-foreground/60"
-        />
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-          {selected.map((id) => {
-            const m = getModelById(id);
-            if (!m) return null;
-            return (
-              <Badge key={id} variant="primary" className="gap-1.5 py-1">
-                <Sparkles className="size-3" />
-                {m.name}
-                <button onClick={() => toggleModel(id)} disabled={running}>
-                  <X className="size-3 opacity-70 hover:opacity-100" />
+      {resumeOffer && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-action/25 bg-action/10 px-4 py-3 text-sm">
+          <RotateCw className="size-4 shrink-0 text-action" />
+          <span className="min-w-0 flex-1">
+            A run was left unfinished. {resumeOffer.label}
+          </span>
+          <Button size="sm" variant="primary" onClick={resume}>
+            Continue
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setResumeOffer(null)}>
+            Discard
+          </Button>
+        </div>
+      )}
+
+      {session?.incognito && <IncognitoBanner className="mb-2" />}
+
+      <Composer
+        question={question}
+        onQuestionChange={setQuestion}
+        selected={selected}
+        onToggleModel={toggleModel}
+        depth={depth}
+        onDepthChange={setDepth}
+        web={web}
+        onWebChange={setWeb}
+        attachments={attachments}
+        onAttachmentsChange={setAttachments}
+        env={env}
+        disabled={running}
+        onRun={start}
+        collapsed={Boolean(run)}
+        beforeRun={
+          session ? null : (
+            <IncognitoChoice value={incognito} onChange={setIncognito} disabled={running} />
+          )
+        }
+      />
+
+      {run && (
+        <div className="mt-5 space-y-4">
+          <RunSpine run={run} running={running} onStop={() => compareRuntime.stopAll()} />
+
+          {!driving && (
+            <p className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-3.5 py-2.5 text-2xs text-muted-foreground">
+              <Info className="size-3.5 shrink-0" />
+              Another tab is running this comparison. This one is following along — its controls stay
+              off so the run is not paid for twice.
+            </p>
+          )}
+
+          {earlier.length > 0 && <TurnThread turns={earlier} />}
+
+          <VerdictCard run={run} headlines={headlines} onOpenScores={() => setTab("scores")} />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <nav className="flex items-center gap-1" aria-label="Run views">
+              {VIEWS.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setTab(v.id)}
+                  aria-current={tab === v.id ? "page" : undefined}
+                  className={cn(
+                    "rounded-lg px-2.5 py-1.5 text-2xs font-medium transition-colors",
+                    tab === v.id
+                      ? "bg-surface-2 text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {v.label}
+                  {v.id === "evidence" && sourceCount > 0 && (
+                    <span className="ml-1.5 font-mono text-muted-foreground">{sourceCount}</span>
+                  )}
                 </button>
-              </Badge>
-            );
-          })}
+              ))}
+            </nav>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                disabled={running}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-action hover:text-foreground disabled:opacity-50"
+            {tab === "answers" && (
+              <ViewToggle
+                active={syncScroll}
+                onClick={() => setSyncScroll((s) => !s)}
+                icon={syncScroll ? ArrowLeftRight : Unlock}
+                className="ml-auto"
               >
-                <Plus className="size-3" /> Add model
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 p-0">
-              <Command>
-                <CommandInput placeholder="Add a model…" />
-                <CommandList>
-                  <CommandEmpty>No model found.</CommandEmpty>
-                  <CommandGroup>
-                    {all
-                      .filter((m) => !selected.includes(m.id))
-                      .map((m) => (
-                        <CommandItem
-                          key={m.id}
-                          value={`${m.name} ${m.provider}`}
-                          onSelect={() => toggleModel(m.id)}
-                        >
-                          <Sparkles />
-                          {m.name}
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {m.provider}
-                          </span>
-                        </CommandItem>
-                      ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-
-          <label className="ml-1 inline-flex items-center gap-2 text-xs text-muted-foreground">
-            <Globe className="size-3.5" /> Web
-            <Switch
-              checked={webRetrieval}
-              onCheckedChange={setWebRetrieval}
-            />
-          </label>
-
-          <div className="ml-auto flex items-center gap-3">
-            <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
-              <Coins className="size-3.5 text-amber" />
-              est. {formatUSD(costPreview, { precise: true })}/run
-            </span>
-            {running ? (
-              <Button variant="danger" onClick={stop}>
-                <Square className="size-4" /> Stop
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                onClick={run}
-                disabled={!query.trim() || selected.length === 0}
-              >
-                <Send className="size-4" /> Run compare
-              </Button>
+                {syncScroll ? "Scrolling together" : "Scroll each lane"}
+              </ViewToggle>
             )}
           </div>
-        </div>
-      </div>
 
-      {runError && (
-        <div className="mt-4 flex items-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          <AlertCircle className="size-4" /> {runError}
-        </div>
-      )}
+          {tab === "answers" && (
+            <LaneGrid
+              lanes={run.lanes}
+              syncScroll={syncScroll}
+              focusedId={focusedId}
+              onFocus={setFocusedId}
+              onStop={(id) => compareRuntime.stopLane(id)}
+              onRetry={driving ? retryLane : undefined}
+              onConnectKey={() => setKeyModalOpen(true)}
+            />
+          )}
+          {tab === "scores" && <Scorecard run={run} />}
+          {tab === "metrics" && <MetricsPanel run={run} />}
+          {tab === "evidence" && <EvidencePanel run={run} />}
 
-      {/* Synthesis */}
-      <AnimatePresence>
-        {synth.status !== "idle" && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6"
-          >
-            <div className="rounded-2xl border border-action/25 bg-action/10 p-5 shadow-glow">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <span className="grid size-6 place-items-center rounded-lg bg-action text-action-foreground">
-                    <GitCompareArrows className="size-3.5" />
-                  </span>
-                  Synthesis
-                  {synth.status === "streaming" && (
-                    <span className="inline-block h-3 w-1.5 animate-caret-blink bg-action align-middle" />
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => alert("Saved to Atlas Notebooks (coming soon)")}
-                >
-                  <BookmarkPlus className="size-4" /> Save
-                </Button>
-              </div>
-
-              {parsed.synthesis && <Markdown>{parsed.synthesis}</Markdown>}
-
-              {(parsed.agreements.length > 0 ||
-                parsed.divergences.length > 0) && (
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  {parsed.agreements.length > 0 && (
-                    <div className="rounded-xl border border-success/25 bg-success/5 p-3.5">
-                      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-success">
-                        <Check className="size-3.5" /> Agreements
-                      </p>
-                      <ul className="space-y-1.5 text-sm">
-                        {parsed.agreements.map((a, i) => (
-                          <li key={i} className="flex gap-2">
-                            <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-success" />
-                            {a}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {parsed.divergences.length > 0 && (
-                    <div className="rounded-xl border border-amber/25 bg-amber/5 p-3.5">
-                      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber">
-                        <AlertCircle className="size-3.5" /> Divergences
-                      </p>
-                      <ul className="space-y-1.5 text-sm">
-                        {parsed.divergences.map((d, i) => {
-                          const isPinned = pinned.has(d);
-                          return (
-                            <li
-                              key={i}
-                              className={cn(
-                                "flex items-start gap-2 rounded-lg p-1 transition-colors",
-                                isPinned && "bg-amber/10",
-                              )}
-                            >
-                              <button
-                                onClick={() =>
-                                  setPinned((s) => {
-                                    const n = new Set(s);
-                                    n.has(d) ? n.delete(d) : n.add(d);
-                                    return n;
-                                  })
-                                }
-                                className={cn(
-                                  "mt-0.5 shrink-0 transition-colors",
-                                  isPinned
-                                    ? "text-amber"
-                                    : "text-muted-foreground/50 hover:text-amber",
-                                )}
-                                aria-label="Pin divergence"
-                              >
-                                <Pin className="size-3.5" />
-                              </button>
-                              {d}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Columns */}
-      {hasResults && (
-        <div className="mt-6">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Per-model answers
-          </p>
-          <div className="flex snap-x gap-4 overflow-x-auto pb-2 no-scrollbar">
-            {selected.map((id) => {
-              const col = columns[id];
-              const m = getModelById(id);
-              if (!col || !m) return null;
-              return (
-                <div
-                  key={id}
-                  className="flex w-[300px] shrink-0 snap-start flex-col rounded-2xl border border-border bg-surface/50 sm:w-[340px] lg:flex-1"
-                >
-                  <div className="flex items-center justify-between gap-2 border-b border-border p-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-sm font-medium">
-                        {m.name}
-                      </span>
-                      {col.provider && (
-                        <Badge variant="outline" className="shrink-0 text-2xs">
-                          {col.provider}
-                        </Badge>
-                      )}
-                    </div>
-                    <ColStatusIcon status={col.status} />
-                  </div>
-                  <div className="min-h-[120px] flex-1 overflow-y-auto p-4 text-sm">
-                    {col.status === "error" ? (
-                      <div className="flex items-start gap-2 text-danger">
-                        <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                        {col.error}
-                      </div>
-                    ) : col.text ? (
-                      <Markdown>{col.text}</Markdown>
-                    ) : (
-                      <ThinkingDots />
-                    )}
-                    {col.status === "streaming" && col.text && (
-                      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-caret-blink bg-action align-text-bottom" />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <FollowUpComposer
+            onAsk={askFollowUp}
+            suggestions={suggestions}
+            disabled={running}
+            canAsk={driving}
+          />
         </div>
       )}
 
-      {!hasResults && !running && (
+      {!run && (
         <div className="mt-10 rounded-2xl border border-dashed border-border p-12 text-center">
           <GitCompareArrows className="mx-auto mb-3 size-8 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground">
-            Pick your models, ask a question, and run a parallel comparison.
+            Pick your models and ask a question. The run keeps going if you switch tabs.
           </p>
         </div>
       )}
+    </div>
+      </div>
     </div>
   );
 }
 
-function ColStatusIcon({ status }: { status: ColStatus }) {
-  if (status === "done")
-    return <Check className="size-4 text-success" />;
-  if (status === "error")
-    return <AlertCircle className="size-4 text-danger" />;
-  if (status === "streaming")
-    return (
-      <span className="flex items-center gap-1 text-2xs text-action">
-        <span className="size-1.5 animate-pulse-dot rounded-full bg-action" />
-        thinking
-      </span>
-    );
-  return <span className="size-1.5 rounded-full bg-muted-foreground/40" />;
-}
+/**
+ * The run's views.
+ *
+ * Switching between them never touches the run — they are projections over the
+ * same state in the runtime, so reading the evidence while six lanes stream is
+ * free and cannot interrupt anything.
+ */
+type View = "answers" | "scores" | "metrics" | "evidence";
 
-function ThinkingDots() {
+const VIEWS: { id: View; label: string }[] = [
+  { id: "answers", label: "Answers" },
+  { id: "scores", label: "Scores" },
+  { id: "metrics", label: "Metrics" },
+  { id: "evidence", label: "Evidence" },
+];
+
+function ViewToggle({
+  active,
+  onClick,
+  icon: Icon,
+  className,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: LucideIcon;
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-1 text-muted-foreground">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="size-1.5 animate-pulse-dot rounded-full bg-muted-foreground/60"
-          style={{ animationDelay: `${i * 0.18}s` }}
-        />
-      ))}
-    </div>
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-2xs transition-colors",
+        active
+          ? "border-action/40 bg-action/10 text-foreground"
+          : "border-border bg-surface-2/60 text-muted-foreground hover:border-border-strong hover:text-foreground",
+        className,
+      )}
+    >
+      <Icon className="size-3.5" />
+      {children}
+    </button>
   );
 }

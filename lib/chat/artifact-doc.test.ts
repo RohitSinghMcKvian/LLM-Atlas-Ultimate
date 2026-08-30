@@ -125,9 +125,13 @@ describe("markup and svg entries", () => {
     expect(r.doc).toContain("color:red");
   });
 
-  it("reports a stylesheet the workspace does not have", () => {
+  // A stylesheet that is not there yet is not a build failure. A browser given
+  // one that 404s renders the page unstyled, and so does this — blanking the
+  // frame instead discarded the whole page over a file the next tool round was
+  // about to write.
+  it("still builds a page whose stylesheet has not been written yet", () => {
     const files = new Map([
-      ["index.html", `<html><head><link rel="stylesheet" href="./missing.css"></head></html>`],
+      ["index.html", `<html><head><link rel="stylesheet" href="./missing.css"></head><body>hi</body></html>`],
     ]);
     const r = buildArtifactDoc({
       files,
@@ -135,8 +139,24 @@ describe("markup and svg entries", () => {
       artifact: art("html", files.get("index.html")!),
       origin: ORIGIN,
     });
-    expect(r.doc).toBe("");
-    expect(r.errors.join()).toContain("not found in the workspace");
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.join()).toContain("missing.css");
+    expect(r.doc).toContain("hi");
+  });
+
+  // The entry is the one thing there is no degraded rendering of.
+  it("fails when the entry file itself is gone", () => {
+    const files = new Map([["other.css", "a{}"]]);
+    const r = buildArtifactDoc({
+      files,
+      entry: "index.html",
+      artifact: art("html", "<html></html>"),
+      origin: ORIGIN,
+    });
+    // `files.has(entry)` is false, so the artifact's own code is used — the
+    // single-artifact path, which has no siblings and cannot be missing them.
+    expect(r.errors).toEqual([]);
+    expect(r.warnings).toEqual([]);
   });
 
   it("centres an svg without involving Babel", () => {
@@ -157,7 +177,7 @@ describe("markup and svg entries", () => {
       artifact: art("document", "# Report"),
       origin: ORIGIN,
     });
-    expect(r).toEqual({ doc: "", errors: [], mode: "none" });
+    expect(r).toEqual({ doc: "", errors: [], warnings: [], mode: "none" });
   });
 });
 

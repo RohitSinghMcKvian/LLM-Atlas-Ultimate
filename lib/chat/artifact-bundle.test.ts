@@ -404,13 +404,45 @@ describe("inlineHtmlAssets", () => {
     expect(html).toContain("https://cdn.example/x.css");
   });
 
-  it("reports a missing asset instead of silently dropping it", () => {
+  // The state every multi-file build passes through, and the state a build the
+  // provider cut short stays in: the page exists and the files it links to do
+  // not. This used to be a build failure, which blanked the preview and threw
+  // away the only markup there was.
+  it("renders the page when an asset is missing, and says which one", () => {
     const f = files({ "index.html": page(`<link rel="stylesheet" href="./gone.css">`) });
-    expect(inlineHtmlAssets("index.html", f).errors.join()).toContain("gone.css");
+    const { html, errors, warnings } = inlineHtmlAssets("index.html", f);
+    expect(errors).toEqual([]);
+    expect(warnings.join()).toContain("gone.css");
+    expect(html).toContain("<h1>Hi</h1>");
+  });
+
+  // Left in place, the relative URL resolves against the opaque origin and
+  // fires a `resource` error as well, which artifact-verify classifies as
+  // fatal — one missing file reported twice, one of the two a hard failure.
+  it("drops the dead reference rather than leaving it to fail again", () => {
+    const f = files({
+      "index.html": page(`<link rel="stylesheet" href="./gone.css"><script src="./gone.js"></script>`),
+    });
+    const { html, warnings } = inlineHtmlAssets("index.html", f);
+    expect(html).not.toContain("gone.css\"");
+    expect(html).not.toContain("src=");
+    expect(html).toContain("<!-- atlas: stylesheet ./gone.css not written yet -->");
+    expect(warnings).toHaveLength(2);
+  });
+
+  // The message is quoted into the repair prompt, so it has to name the fix
+  // rather than only the symptom — the same reason `availableModules` does.
+  it("names the correction in the warning", () => {
+    const f = files({ "index.html": page(`<script src="app.js"></script>`) });
+    const [w] = inlineHtmlAssets("index.html", f).warnings;
+    expect(w).toContain("app.js");
+    expect(w).toContain("Create that file");
   });
 
   it("errors when the entry itself is missing", () => {
-    expect(inlineHtmlAssets("nope.html", files({})).errors.join()).toContain("not found");
+    const r = inlineHtmlAssets("nope.html", files({}));
+    expect(r.errors.join()).toContain("not found");
+    expect(r.warnings).toEqual([]);
   });
 
   it("leaves a page with no assets untouched", () => {

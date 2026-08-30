@@ -12,7 +12,7 @@
 // Object stores give per-record writes and orders of magnitude more room.
 
 export const DB_NAME = "atlas-chat";
-export const DB_VERSION = 11;
+export const DB_VERSION = 12;
 export const CONVERSATIONS = "conversations";
 export const MESSAGES = "messages";
 /** Artifacts and their immutable version history (§4 Artifacts). */
@@ -89,8 +89,35 @@ export const GRAPH_EDGES = "graph_edges";
 export const ORCHESTRA_RUNS = "orchestra_runs";
 /** Index on graph_nodes.kind. */
 export const BY_KIND = "by_kind";
+/**
+ * Comparison runs and their lanes (Atlas Compare).
+ *
+ * Two stores rather than one document, because a run is checkpointed while six
+ * lanes are streaming at once: keeping lanes separate means a write for one
+ * lane's progress does not re-serialize the other five, and a checkpoint taken
+ * as the tab goes away cannot half-write the run's own header.
+ *
+ * Deliberately not the chat stores. A run is not a conversation — it has no
+ * turns, no branches, and a lifetime measured in minutes — and reusing
+ * `conversations` would have made every chat query filter a discriminator.
+ */
+export const COMPARE_RUNS = "compare_runs";
+export const COMPARE_LANES = "compare_lanes";
+/**
+ * Comparison sessions — the conversation a run belongs to.
+ *
+ * Its own store rather than a field on the newest run, because a session
+ * outlives every individual turn: it is renamed, pinned and listed in the
+ * history rail while its runs come and go, and the rail must be able to read
+ * every session header without loading a single answer.
+ */
+export const COMPARE_SESSIONS = "compare_sessions";
 /** Index on messages.conversationId, for loading one thread. */
 export const BY_CONVERSATION = "by_conversation";
+/** Index on compare_lanes.runId, for loading one run's lanes. */
+export const BY_RUN = "by_run";
+/** Index on compare_runs.sessionId, for loading a session's turns in one read. */
+export const BY_SESSION = "by_session";
 /** Index on artifact_versions.artifactId / artifact_storage.artifactId. */
 export const BY_ARTIFACT = "by_artifact";
 /** Index on project_chunks.projectId. */
@@ -182,6 +209,27 @@ export function openChatDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(ORCHESTRA_RUNS)) {
         const s = db.createObjectStore(ORCHESTRA_RUNS, { keyPath: "id" });
         s.createIndex(BY_CONVERSATION, "conversationId", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(COMPARE_SESSIONS)) {
+        db.createObjectStore(COMPARE_SESSIONS, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(COMPARE_RUNS)) {
+        const s = db.createObjectStore(COMPARE_RUNS, { keyPath: "id" });
+        s.createIndex(BY_SESSION, "sessionId", { unique: false });
+      } else {
+        // The store already exists from v11, so the guard above cannot add the
+        // index to it. An index added after a store has to be created inside the
+        // version-change transaction, which is the one this handler runs in.
+        const s = req.transaction?.objectStore(COMPARE_RUNS);
+        if (s && !s.indexNames.contains(BY_SESSION)) {
+          s.createIndex(BY_SESSION, "sessionId", { unique: false });
+        }
+      }
+      if (!db.objectStoreNames.contains(COMPARE_LANES)) {
+        // Composite key: lane ids are unique per run, not globally, and the same
+        // model routinely appears in many runs.
+        const s = db.createObjectStore(COMPARE_LANES, { keyPath: ["runId", "id"] });
+        s.createIndex(BY_RUN, "runId", { unique: false });
       }
       if (!db.objectStoreNames.contains(BLOB_FILES)) {
         // Same composite key as WORKSPACE_FILES, so a produced file and a text

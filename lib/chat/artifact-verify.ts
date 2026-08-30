@@ -298,7 +298,15 @@ export async function verifyArtifact(
   if (outcome.skipped || outcome.aborted) return null;
 
   return {
-    ...triageArtifactErrors(outcome.errors, { timedOut: outcome.timedOut }),
+    // Build warnings ride the same channel as what the frame reported, and stay
+    // fatal in the triage sense — a page missing its stylesheet rendered, so it
+    // is not a build failure, but it is still unfinished and the model is the
+    // one who can finish it. Severity here means "worth a repair turn", not
+    // "the preview is blank".
+    ...triageArtifactErrors(outcome.errors, {
+      timedOut: outcome.timedOut,
+      bundleErrors: built.warnings,
+    }),
     ran: true,
     elapsedMs: outcome.elapsedMs,
   };

@@ -23,6 +23,7 @@ export type ActivityKind =
   | "tool"
   | "artifact"
   | "continuation"
+  | "recovery"
   | "truncated"
   | "downgrade"
   | "artifact-error";
@@ -65,6 +66,17 @@ export interface ActivityInput {
    * promoted to the collapsed summary like a failure, while staying a note.
    */
   capabilityDowngrade?: string;
+  /**
+   * The turn failed to get its file out through a tool call and was re-asked in
+   * prose, which worked. See `lib/chat/prose-fallback.ts`.
+   *
+   * A note rather than an error, because the answer is real — this is the step
+   * that used to present a finished build as a failure. It is still said out
+   * loud: a build assembled from a second, tool-less request is a real reason
+   * the model might have skipped a file, and a user comparing the result against
+   * what they asked for deserves to know which path produced it.
+   */
+  recovered?: string;
   /** The turn is still in flight. */
   streaming?: boolean;
 }
@@ -79,10 +91,47 @@ const TOOL_LABELS: Record<string, string> = {
   artifact: "Edited the artifact",
   read_project_file: "Read a project file",
   list_project_files: "Listed project files",
+  run_python: "Ran Python",
+  tasks: "Updated the plan",
+  spawn_subagents: "Ran sub-agents",
+  recall_context: "Recalled context",
 };
 
+/**
+ * `workspace` is seven different actions behind one name, and it is the tool a
+ * build spends most of its rounds in — so "Ran workspace" for a whole minute is
+ * the least informative thing the live summary could say. The command is in the
+ * arguments; use it.
+ */
+const WORKSPACE_LABELS: Record<string, string> = {
+  view: "Read a file",
+  create: "Wrote a file",
+  append: "Extended a file",
+  str_replace: "Edited a file",
+  insert: "Edited a file",
+  delete: "Deleted a file",
+  rename: "Renamed a file",
+};
+
+/** Arguments as an object, or null while they are still streaming in. */
+function parseArgs(raw?: string): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** `mcp__notion__search` reads as "Called search on notion". */
-function labelForTool(name: string): string {
+function labelForTool(call: StoredToolCall): string {
+  const { name } = call;
+  if (name === "workspace") {
+    const command = parseArgs(call.arguments)?.command;
+    const known = typeof command === "string" ? WORKSPACE_LABELS[command] : undefined;
+    if (known) return known;
+  }
   const known = TOOL_LABELS[name];
   if (known) return known;
   const mcp = /^mcp__([^_]+(?:_[^_]+)*?)__(.+)$/.exec(name);
@@ -97,14 +146,9 @@ function labelForTool(name: string): string {
  * and the full arguments are one click away in the expanded step.
  */
 function detailForTool(call: StoredToolCall): string | undefined {
-  if (!call.arguments) return undefined;
-  let args: Record<string, unknown>;
-  try {
-    args = JSON.parse(call.arguments) as Record<string, unknown>;
-  } catch {
-    return undefined; // arguments still streaming in
-  }
-  for (const key of ["search_query", "query", "repo", "path", "name", "command", "id"]) {
+  const args = parseArgs(call.arguments);
+  if (!args) return undefined; // no arguments, or still streaming in
+  for (const key of ["search_query", "query", "repo", "path", "file", "name", "command", "id"]) {
     const v = args[key];
     if (typeof v === "string" && v.trim()) return v.length > 60 ? `${v.slice(0, 60)}…` : v;
   }
@@ -145,7 +189,7 @@ export function buildActivity(input: ActivityInput): ActivityFold {
     entries.push({
       id: call.id,
       kind: call.name === "artifact" ? "artifact" : "tool",
-      label: labelForTool(call.name),
+      label: labelForTool(call),
       detail: detailForTool(call),
       status: call.result === undefined ? "running" : toolFailed(call) ? "error" : "done",
     });
@@ -160,6 +204,14 @@ export function buildActivity(input: ActivityInput): ActivityFold {
       // might read oddly.
       label: "Resumed a truncated answer",
       detail: `${input.continuations} ${input.continuations === 1 ? "time" : "times"}`,
+      status: "done",
+    });
+
+  if (input.recovered)
+    entries.push({
+      id: "recovery",
+      kind: "recovery",
+      label: input.recovered,
       status: "done",
     });
 

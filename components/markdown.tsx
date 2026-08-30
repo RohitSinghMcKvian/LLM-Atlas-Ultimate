@@ -109,7 +109,10 @@ export const Markdown = React.memo(function Markdown({
   return (
     <div
       className={cn(
-        "prose prose-sm max-w-none prose-invert",
+        // `break-words` because `max-w-none` removes typography's own measure
+        // cap, so nothing else stops a long unbroken token — a URL, a base64
+        // blob, a minified line — from widening the whole transcript.
+        "prose prose-sm max-w-none break-words prose-invert",
         "prose-headings:font-display prose-headings:tracking-tight",
         "prose-p:text-foreground/90 prose-li:text-foreground/90",
         "prose-a:text-action prose-a:no-underline hover:prose-a:underline",

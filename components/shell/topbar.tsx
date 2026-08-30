@@ -12,6 +12,7 @@ import {
   ConnectKeyButton,
 } from "@/components/keys/connect-key-dialog";
 import { SyncButton } from "@/components/auth/sync-dialog";
+import { CompareRunPill } from "@/components/compare/run-pill";
 import { AccountMenu } from "@/components/auth/account-menu";
 import {
   DropdownMenu,
@@ -88,6 +89,10 @@ export function Topbar() {
       >
         <Search className="size-[18px]" />
       </button>
+
+      {/* A comparison keeps running after you leave /compare, so it needs to be
+          visible from wherever you went. Renders nothing when none is live. */}
+      <CompareRunPill className="hidden sm:inline-flex" />
 
       <ModelSwitcher className="hidden md:inline-flex" />
 

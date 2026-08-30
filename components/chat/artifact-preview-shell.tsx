@@ -8,6 +8,7 @@ import {
   isExecutable,
   type Artifact,
 } from "./artifact-panel";
+import { useInlinedRuntime } from "./use-inlined-runtime";
 
 /**
  * Full-page host for the artifact panel's "open in a new tab" action.
@@ -51,6 +52,12 @@ export function ArtifactPreviewShell() {
     }
   }, []);
 
+  // Computed before the early returns, because `useInlinedRuntime` is a hook and
+  // may not sit behind a conditional. Empty until both halves have landed, which
+  // the hook passes through untouched.
+  const rawDoc = artifact && origin ? docFor(artifact, origin) : "";
+  const doc = useInlinedRuntime(rawDoc, origin);
+
   if (error) {
     return (
       <main className="grid min-h-dvh place-items-center bg-background p-8">
@@ -67,7 +74,7 @@ export function ArtifactPreviewShell() {
     <main className="min-h-dvh bg-background">
       <iframe
         title={artifact.title}
-        srcDoc={docFor(artifact, origin)}
+        srcDoc={doc}
         sandbox={ARTIFACT_SANDBOX}
         className="h-dvh w-full border-0 bg-white"
       />

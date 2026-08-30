@@ -331,6 +331,37 @@ export function stripArtifactBlock(content: string): string {
   return joinAround(content, matches);
 }
 
+/** One artifact as the turn should file it. */
+export interface RecordableArtifact extends ArtifactMatch {
+  /** The fence never closed, so `code` is a fragment. */
+  truncated: boolean;
+}
+
+/**
+ * What a finished turn should write to the artifact repo.
+ *
+ * Pure, exported and tested because the decision it encodes was previously one
+ * `.filter()` inside `chat-client.tsx` — and `vitest.config.ts` only reaches
+ * `lib/**`, so the single most consequential line in the artifact path had no
+ * coverage at all. It was wrong for months and nothing could have caught it.
+ *
+ * The rule: **at turn end, an unclosed fence is truncated, not unfinished.**
+ * `complete` answers a different question depending on when it is asked. While
+ * the stream is open it means "still arriving", and recording then would put a
+ * half-written document in the revert history — the concern the old filter was
+ * protecting. Once the turn is over it can only mean "the provider stopped",
+ * and discarding it there is how a fully-written page ends up with no artifact,
+ * no preview and no panel: `artifactCount` never moves, so `autoOpen` never
+ * fires.
+ *
+ * So nothing is dropped; the fragment is flagged instead. Call this only when
+ * the turn has actually ended.
+ */
+export function artifactsToRecord(finalText: string): RecordableArtifact[] {
+  if (!finalText) return [];
+  return extractArtifacts(finalText).map((a) => ({ ...a, truncated: a.complete === false }));
+}
+
 /** Remove several ranges, back to front so earlier offsets stay valid. */
 function joinAround(content: string, ranges: { start: number; end: number }[]): string {
   let out = content;

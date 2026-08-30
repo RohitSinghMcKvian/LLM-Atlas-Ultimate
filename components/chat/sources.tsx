@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Globe, ExternalLink } from "lucide-react";
+import { ChevronRight, Globe, ExternalLink } from "lucide-react";
+import { Collapsible } from "@/components/ui/collapsible";
 import type { WebSource } from "@/lib/chat/types";
+import { cn } from "@/lib/utils";
 
 function hostOf(url: string): string {
   try {
@@ -20,13 +22,20 @@ export function Sources({ sources }: { sources: WebSource[] }) {
     <div className="mb-1.5 rounded-xl border border-border bg-surface-2/40 px-3 py-2">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 text-2xs font-medium text-muted-foreground hover:text-foreground"
+        aria-expanded={open}
+        // A chevron, not a Show/Hide word. Every other disclosure in the chat
+        // uses one, and a lone text toggle reads as a link to somewhere else.
+        className="flex min-h-11 w-full items-center gap-1.5 text-2xs font-medium text-muted-foreground hover:text-foreground sm:min-h-0"
       >
-        <Globe className="size-3.5 text-action" />
-        {sources.length} web source{sources.length === 1 ? "" : "s"}
-        <span className="ml-auto">{open ? "Hide" : "Show"}</span>
+        <Globe className="size-3.5 shrink-0 text-action" />
+        <span className="min-w-0 truncate">
+          {sources.length} web source{sources.length === 1 ? "" : "s"}
+        </span>
+        <ChevronRight
+          className={cn("ml-auto size-3.5 shrink-0 transition-transform", open && "rotate-90")}
+        />
       </button>
-      {open && (
+      <Collapsible open={open}>
         <ol className="mt-2 space-y-1.5">
           {sources.map((s, i) => (
             <li key={i} className="flex gap-2 text-xs">
@@ -51,7 +60,7 @@ export function Sources({ sources }: { sources: WebSource[] }) {
             </li>
           ))}
         </ol>
-      )}
+      </Collapsible>
     </div>
   );
 }

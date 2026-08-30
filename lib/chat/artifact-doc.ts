@@ -56,6 +56,18 @@ export interface DocResult {
   doc: string;
   /** Fatal build problems. Non-empty means `doc` must not be run. */
   errors: string[];
+  /**
+   * Problems the document was built in spite of.
+   *
+   * A page that links to a stylesheet nobody has written yet still renders —
+   * unstyled, which is exactly what a browser does with a 404 — so blanking the
+   * preview over it destroyed the only part of the build that existed. The
+   * distinction is load-bearing during a build, because a model plans the entry
+   * before the files it links to, and it is permanent for a build the provider
+   * cut short. Still reported: the file really is missing and the model really
+   * should write it, so this reaches the panel's fix channel unchanged.
+   */
+  warnings: string[];
   mode: DocMode;
 }
 
@@ -120,7 +132,7 @@ export function needsTransform(
 export function buildArtifactDoc(input: DocInput): DocResult {
   const { files, entry, artifact, origin, head = "", transform } = input;
 
-  if (!isExecutable(artifact.type)) return { doc: "", errors: [], mode: "none" };
+  if (!isExecutable(artifact.type)) return { doc: "", errors: [], warnings: [], mode: "none" };
 
   if (artifact.type === "svg") {
     return {
@@ -130,6 +142,7 @@ export function buildArtifactDoc(input: DocInput): DocResult {
         head,
       ),
       errors: [],
+      warnings: [],
       mode: "svg",
     };
   }
@@ -137,13 +150,14 @@ export function buildArtifactDoc(input: DocInput): DocResult {
   if (isHtmlEntry(entry) || (artifact.type === "html" && files.size <= 1)) {
     // A lone HTML artifact has no siblings to inline, but it goes through the
     // same call so that gaining a sibling is not a change of code path.
-    const { html, errors } = files.has(entry)
+    const { html, errors, warnings } = files.has(entry)
       ? inlineHtmlAssets(entry, files)
-      : { html: artifact.code, errors: [] as string[] };
-    if (errors.length) return { doc: "", errors, mode: "html" };
+      : { html: artifact.code, errors: [] as string[], warnings: [] as string[] };
+    if (errors.length) return { doc: "", errors, warnings, mode: "html" };
     return {
       doc: withCsp(html, origin, head + optionalLibTags(html, origin)),
       errors: [],
+      warnings,
       mode: "html",
     };
   }
@@ -152,12 +166,14 @@ export function buildArtifactDoc(input: DocInput): DocResult {
     return {
       doc: "",
       errors: [`Cannot build "${entry}": no JavaScript transform was provided.`],
+      warnings: [],
       mode: "module",
     };
   }
 
   const bundle = bundleModules(entry, files, transform);
-  if (bundle.errors.length) return { doc: "", errors: bundle.errors, mode: "module" };
+  if (bundle.errors.length)
+    return { doc: "", errors: bundle.errors, warnings: [], mode: "module" };
 
   return {
     doc: buildBundledDoc({
@@ -170,6 +186,7 @@ export function buildArtifactDoc(input: DocInput): DocResult {
       detectSource: [...files.values()].join("\n"),
     }),
     errors: [],
+    warnings: [],
     mode: "module",
   };
 }

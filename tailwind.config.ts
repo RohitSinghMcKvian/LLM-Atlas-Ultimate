@@ -1,4 +1,11 @@
 import type { Config } from "tailwindcss";
+// Imported, not `require`d. Node 24 loads this `.ts` config through the ESM
+// path (`loadESMFromCJS`), where `require` is not defined — so a bare
+// `require("tailwindcss-animate")` here threw inside PostCSS and took the whole
+// dev server down with it, mid-session, on the first route whose CSS was
+// compiled after the config cache was cold.
+import tailwindcssAnimate from "tailwindcss-animate";
+import typography from "@tailwindcss/typography";
 
 const config: Config = {
   darkMode: "class",
@@ -174,7 +181,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [tailwindcssAnimate, typography],
 };
 
 export default config;

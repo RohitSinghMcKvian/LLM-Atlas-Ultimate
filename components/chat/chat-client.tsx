@@ -158,6 +158,7 @@ import {
   shouldFallBackToProse,
   type ProseFile,
 } from "@/lib/chat/prose-fallback";
+import { recoveryNote, recoveryOutcome } from "@/lib/chat/message-state";
 import { buildWorkspaceContext } from "@/lib/chat/workspace/context";
 import { workspaceSnapshot } from "@/lib/chat/workspace/repo";
 import {
@@ -169,7 +170,7 @@ import {
 import { EMPTY_SNAPSHOT, type WorkspaceSnapshot } from "@/lib/chat/workspace/types";
 import { entryPathOf, mirrorInputs } from "@/lib/chat/workspace/mirror";
 import {
-  extractArtifacts,
+  artifactsToRecord,
   extractArtifactMatches,
   kindAndLangForPath,
 } from "@/lib/chat/artifact-extract";
@@ -1848,6 +1849,10 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
     let reasoning = "";
     let errored = false;
     let errorCode: string | undefined;
+    // Kept so a recovery that comes back empty can put the original sentence
+    // back. The bubble's content is overwritten by the retry's own stream, and
+    // "Retrying without tools…" is not a thing to leave a user looking at.
+    let errorMessage = "";
     const tools: StoredToolCall[] = [];
     // Sources accumulate across tool rounds so every search in a turn is cited.
     const collectedSources: WebSource[] = sources ? [...sources] : [];
@@ -2233,6 +2238,7 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
           onError: (e) => {
             errored = true;
             errorCode = e.code;
+            errorMessage = e.message;
             clearFlush();
             if (e.code === "key_required") setKeyModalOpen(true);
             patchMessage(asstId, { content: e.message, error: true });
@@ -2278,7 +2284,16 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
           filesWritten: (await workspaceSnapshot(conversationId)).files.length,
         })
       ) {
-        patchMessage(asstId, { content: "Retrying without tools…" });
+        // A recovery is not a failure, and must stop presenting itself as one
+        // for the minute it takes.
+        //
+        // `onError` above set `error: true`; `patchMessage` is a shallow merge,
+        // so it survives every content-only patch the stream below makes; and
+        // this fallback is *gated on that very flag*. Without this line the
+        // whole build streams inside the error style — red, unwrapped, artifact
+        // card suppressed — which is exactly what a user reported seeing. What
+        // actually happened is recorded as a note once the retry ends.
+        patchMessage(asstId, { content: "Retrying without tools…", error: undefined });
         let text = "";
         // Resumed exactly like an ordinary answer. Without this the fallback
         // hands back whatever fitted in one output budget, and a landing page
@@ -2326,20 +2341,31 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
           if (budget.exhausted || ctrl.signal.aborted) break;
         }
         proseFiles = filesFromProse(text);
-        if (proseFiles.length) {
-          // The turn produced files after all, so it must stop presenting itself
-          // as failed — the error bubble would otherwise sit above a finished
-          // page in the Files tab.
+        const recovery = recoveryOutcome({ text, files: proseFiles.length });
+        if (recovery === "nothing") {
+          // The retry added nothing, so the sentence the user needs is the one
+          // from before it — not the placeholder above, and not an empty bubble.
+          patchMessage(asstId, { content: errorMessage || acc, error: true });
+        } else {
+          // Text is an answer even when no file parsed out of it. Presenting
+          // several thousand words of a finished page as an error is the bug
+          // this whole path had; saying "no files in the answer" as a note is
+          // the honest version, and it leaves the answer readable.
           errored = false;
-          patchMessage(asstId, { error: undefined });
-          const stores = buildStores ?? (await bindWorkspace(conversationId));
-          for (const f of proseFiles) {
-            const abs = toWorkspacePath(f.path);
-            if (abs) await stores.files.write(abs, f.text);
+          patchMessage(asstId, {
+            error: undefined,
+            recoveryNote: recoveryNote(recovery) ?? undefined,
+          });
+          if (proseFiles.length) {
+            const stores = buildStores ?? (await bindWorkspace(conversationId));
+            for (const f of proseFiles) {
+              const abs = toWorkspacePath(f.path);
+              if (abs) await stores.files.write(abs, f.text);
+            }
+            setWorkspaceTick((t) => t + 1);
           }
-          setWorkspaceTick((t) => t + 1);
+          acc = text;
         }
-        acc = text;
       }
 
       clearFlush();
@@ -2445,10 +2471,10 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
       // the other. With paths that is no longer a cosmetic loss: the second file
       // is what the first one links to.
       //
-      // `complete !== false` guards a truncated answer: its fence never closed,
-      // so the code is a fragment. It is still previewed — that is the fix — but
-      // recording it would put a broken document in the revert history.
-      const arts = finalText ? extractArtifacts(finalText).filter((a) => a.complete !== false) : [];
+      // A fence that never closed is recorded too, flagged `truncated`. The rule
+      // and the reasoning live in `artifactsToRecord`, where they can be tested;
+      // this used to be a bare `.filter()` here, which is why nothing caught it.
+      const arts = artifactsToRecord(finalText);
       if (convId && arts.length) {
         try {
           for (const art of arts) {
@@ -2463,6 +2489,7 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
               lang: art.lang,
               title: art.title,
               code: art.code,
+              ...(art.truncated ? { truncated: true } : {}),
             });
           }
           setArtifactTick((t) => t + 1);
@@ -3484,7 +3511,15 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
 
         {/* Messages */}
         <div className="relative min-h-0 flex-1">
-          <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto">
+          {/* `overflow-x-hidden` is load-bearing, not tidying: setting only one
+              axis to a non-`visible` value makes the other compute to `auto`, so
+              `overflow-y-auto` alone gave the whole transcript a horizontal
+              scrollbar the moment any descendant refused to wrap. */}
+          <div
+            ref={scrollRef}
+            onScroll={onScroll}
+            className="h-full overflow-y-auto overflow-x-hidden"
+          >
             {!providers.loading && !providers.any && (
               <div className="mx-auto max-w-3xl px-4 pt-5">
                 <ProviderBanner />

@@ -72,7 +72,14 @@ export function ChatRail({
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
       <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
-        <div role="tablist" aria-label="Build" className="flex min-w-0 flex-1 items-center gap-0.5">
+        {/* Scrolls rather than squeezing: the rail's minimum is 320px and it also
+            renders in the mobile sheet, where three labelled tabs plus the close
+            button do not fit. */}
+        <div
+          role="tablist"
+          aria-label="Build"
+          className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+        >
           {TABS.map((t) => {
             const disabled = !tabEnabled(t.id, hasPreview);
             const active = shown === t.id;
@@ -86,7 +93,9 @@ export function ChatRail({
                 // value that renders nothing on the next load.
                 onClick={() => !disabled && onTabChange(t.id)}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors",
+                  // Fills the 44px header on touch, back to a compact chip once
+                  // there is a pointer. The header height is unchanged either way.
+                  "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors sm:h-8",
                   active
                     ? "bg-surface-2 text-foreground"
                     : disabled
@@ -109,7 +118,7 @@ export function ChatRail({
         <button
           onClick={onClose}
           aria-label="Close panel"
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground sm:size-8"
         >
           <X className="size-4" />
         </button>

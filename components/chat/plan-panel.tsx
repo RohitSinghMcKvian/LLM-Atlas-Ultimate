@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Check, Loader2, ListChecks, Pencil, Square, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Loader2, ListChecks, Pencil, Square, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Collapsible } from "@/components/ui/collapsible";
 import type { ChatPlan } from "@/lib/agent/plan";
 import { planProgress } from "@/lib/agent/plan";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,35 @@ export function PlanPanel({
   const running = plan.status === "running";
   const { done, total, failed } = planProgress(plan);
 
+  // A draft is the approval gate, so it never folds — hiding what you are about
+  // to approve behind a chevron is the one thing this panel must not do. A live
+  // plan stays open too, because the step list *is* the progress. A finished one
+  // folds: it sits directly above the composer, and by then it is history.
+  const foldable = !draft && !running;
+  const [open, setOpen] = React.useState(true);
+  const wasFoldable = React.useRef(foldable);
+  React.useEffect(() => {
+    if (foldable && !wasFoldable.current) setOpen(false);
+    wasFoldable.current = foldable;
+  }, [foldable]);
+  // Same rule as the activity row: a failure is never collapsed over.
+  React.useEffect(() => {
+    if (failed) setOpen(true);
+  }, [failed]);
+  const shown = !foldable || open;
+
+  const summary = draft
+    ? "Plan — review before Atlas starts"
+    : running
+      ? `Running step ${Math.min(done + 1, total)} of ${total}`
+      : plan.status === "done"
+        ? failed
+          ? `Plan finished — ${done} of ${total} done, ${failed} failed`
+          : `Plan complete — ${total} step${total === 1 ? "" : "s"}`
+        : plan.status === "aborted"
+          ? (plan.stoppedBy ?? "Plan stopped")
+          : "Plan rejected";
+
   return (
     <div
       className={cn(
@@ -57,36 +87,46 @@ export function PlanPanel({
       )}
     >
       <div className="flex items-center gap-2">
-        {running ? (
-          <Loader2 className="size-3.5 shrink-0 animate-spin text-action" />
-        ) : (
-          <ListChecks className={cn("size-3.5 shrink-0", draft ? "text-accent" : "text-action")} />
-        )}
-        <span className="text-2xs font-medium">
-          {draft
-            ? "Plan — review before Atlas starts"
-            : running
-              ? `Running step ${Math.min(done + 1, total)} of ${total}`
-              : plan.status === "done"
-                ? failed
-                  ? `Plan finished — ${done} of ${total} done, ${failed} failed`
-                  : `Plan complete — ${total} step${total === 1 ? "" : "s"}`
-                : plan.status === "aborted"
-                  ? (plan.stoppedBy ?? "Plan stopped")
-                  : "Plan rejected"}
-        </span>
-        {!draft && !running && (
+        {/* The disclosure and the dismiss are siblings, not nested: one button
+            inside another is invalid, and the two do different things. */}
+        <button
+          type="button"
+          onClick={() => foldable && setOpen((v) => !v)}
+          aria-expanded={foldable ? shown : undefined}
+          disabled={!foldable}
+          className={cn(
+            "flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left sm:min-h-0",
+            foldable && "-mx-1 px-1 hover:bg-surface-2/60",
+          )}
+        >
+          {running ? (
+            <Loader2 className="size-3.5 shrink-0 animate-spin text-action" />
+          ) : (
+            <ListChecks className={cn("size-3.5 shrink-0", draft ? "text-accent" : "text-action")} />
+          )}
+          <span className="min-w-0 flex-1 truncate text-2xs font-medium">{summary}</span>
+          {foldable && (
+            <ChevronRight
+              className={cn(
+                "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                shown && "rotate-90",
+              )}
+            />
+          )}
+        </button>
+        {foldable && (
           <button
             onClick={onDismiss}
             aria-label="Dismiss plan"
-            className="ml-auto text-muted-foreground hover:text-foreground"
+            className="grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-surface-2/60 hover:text-foreground sm:size-6"
           >
             <X className="size-3.5" />
           </button>
         )}
       </div>
 
-      <p className="mt-1 pl-5 text-2xs text-muted-foreground">{plan.goal}</p>
+      <Collapsible open={shown}>
+      <p className="mt-1 break-words pl-5 text-2xs text-muted-foreground">{plan.goal}</p>
 
       <ol className="mt-1.5 space-y-1">
         {plan.steps.map((s, i) => (
@@ -149,8 +189,8 @@ export function PlanPanel({
       </ol>
 
       {draft && (
-        <div className="mt-2 flex items-center gap-2 pl-5">
-          <p className="text-2xs text-muted-foreground">
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-5">
+          <p className="min-w-0 flex-1 text-2xs text-muted-foreground">
             Atlas will run these one at a time. Nothing happens until you approve.
           </p>
           <Button
@@ -175,6 +215,7 @@ export function PlanPanel({
           </Button>
         </div>
       )}
+      </Collapsible>
     </div>
   );
 }
