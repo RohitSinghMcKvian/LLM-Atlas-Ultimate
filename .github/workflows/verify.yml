@@ -1,5 +1,5 @@
 # The pre-merge gate: the same `npm run verify` (typecheck + tests) the repo
-# documents for local use.
+# documents for local use, plus a production build.
 #
 # The live provider test in lib/catalog/sync/live.test.ts skips itself when no
 # API keys are present, so this passes without secrets.
@@ -11,17 +11,60 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A branch pushed three times in a minute should be tested once, on the last
+# commit. Without this every superseded push kept a runner busy producing a
+# verdict about code nobody would merge.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: this workflow only ever reads the repository. Anything that
+# needs to write (release-please) declares its own scopes.
+permissions:
+  contents: read
+
+env:
+  # Kept in step with .nvmrc — see CONTRIBUTING.md.
+  NODE_VERSION: "20"
+
 jobs:
   verify:
+    name: typecheck + tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - run: npm ci
 
       - run: npm run verify
+
+  build:
+    name: production build
+    runs-on: ubuntu-latest
+    # A separate job rather than another step, so it runs in parallel with the
+    # tests instead of behind them, and so branch protection can require the two
+    # independently.
+    #
+    # Worth its own runner because nothing else covered it: `next build` was
+    # never run in CI, and `next.config.mjs` sets `typescript.ignoreBuildErrors:
+    # false`, so a build break reached `main` and was first reported by Vercel —
+    # after merge, against production.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # No secrets are provided on purpose. The build must not require a
+      # provider key, and this is what keeps that true: every fork PR builds
+      # here too, and a build that needed a key would fail for them.
+      - run: npm run build
