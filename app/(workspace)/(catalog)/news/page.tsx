@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { CatalogScope } from "@/components/catalog/catalog-scope";
 import { NewsClient } from "@/components/news/news-client";
-import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { getNewsSnapshot, toWireNews } from "@/lib/news/store";
+import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { parseNewsSearchParams } from "@/lib/news/select";
 
 /**
@@ -30,9 +29,10 @@ export const dynamic = "force-dynamic";
  *
  * The news corpus arrives as a server prop rather than a client fetch, so the
  * first paint is the real feed — no spinner, no layout shift, and no request
- * from the browser at all on the initial load. `<CatalogScope>` installs the
- * model catalog before the client root renders, so server HTML and hydration
- * agree on which models exist.
+ * from the browser at all on the initial load. The model catalog is installed
+ * a level up, by the workspace layout, so this route only reads the one field
+ * of it the feed actually draws — the diff — rather than re-serializing all
+ * ~400 models into this page's payload as well.
  *
  * Reading `getNewsSnapshot()` here is also what drives the zero-configuration
  * sync: if the corpus is older than the interval it schedules a refresh behind
@@ -50,16 +50,14 @@ export default async function NewsPage({
   ]);
 
   return (
-    <CatalogScope snapshot={catalog}>
-      <NewsClient
-        snapshot={toWireNews(news, { limit: PAGE_ARTICLE_LIMIT })}
-        totalArticles={news.articles.length}
-        catalogDiff={catalog.diff}
-        initial={parseNewsSearchParams(params)}
-        // The operator can remove the public Refresh surface entirely; the
-        // client hides the button rather than offering one that 404s.
-        publicRefresh={process.env.ATLAS_NEWS_PUBLIC_REFRESH !== "false"}
-      />
-    </CatalogScope>
+    <NewsClient
+      snapshot={toWireNews(news, { limit: PAGE_ARTICLE_LIMIT })}
+      totalArticles={news.articles.length}
+      catalogDiff={catalog.diff}
+      initial={parseNewsSearchParams(params)}
+      // The operator can remove the public Refresh surface entirely; the
+      // client hides the button rather than offering one that 404s.
+      publicRefresh={process.env.ATLAS_NEWS_PUBLIC_REFRESH !== "false"}
+    />
   );
 }

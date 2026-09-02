@@ -2,9 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { CatalogScope } from "@/components/catalog/catalog-scope";
 import { NewsDetailBody } from "@/components/news/news-detail-body";
-import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { newsImageSrc } from "@/lib/news/image";
 import { clusterSiblings, relatedArticles } from "@/lib/news/select";
 import { getNewsSnapshot } from "@/lib/news/store";
@@ -52,10 +50,7 @@ export async function generateMetadata({
 
 export default async function NewsArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [{ snapshot, article }, catalog] = await Promise.all([
-    findArticle(id),
-    getCatalogSnapshot(),
-  ]);
+  const { snapshot, article } = await findArticle(id);
 
   // A story that has aged out of the two-week retention window is genuinely
   // gone, so a 404 is honest. The original link in the metadata still works.
@@ -65,20 +60,18 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ id
   const related = relatedArticles(article, snapshot.articles);
 
   return (
-    <CatalogScope snapshot={catalog}>
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:py-10">
-        <Link
-          href="/news"
-          className="mb-5 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-3.5" aria-hidden="true" />
-          All news
-        </Link>
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:py-10">
+      <Link
+        href="/news"
+        className="mb-5 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden="true" />
+        All news
+      </Link>
 
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <NewsDetailBody article={article} siblings={siblings} related={related} />
-        </div>
+      <div className="rounded-2xl border border-border bg-surface p-6">
+        <NewsDetailBody article={article} siblings={siblings} related={related} />
       </div>
-    </CatalogScope>
+    </div>
   );
 }
