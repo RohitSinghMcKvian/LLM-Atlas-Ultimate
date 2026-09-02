@@ -6,7 +6,11 @@ import { usePathname } from "next/navigation";
 import { GitCompareArrows } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useCompareRun } from "./use-compare-run";
+import {
+  getCompareProgress,
+  getCompareProgressServer,
+  subscribeCompareProgress,
+} from "@/lib/compare/live-pill";
 
 /**
  * A live comparison, visible from anywhere in the workspace.
@@ -16,16 +20,28 @@ import { useCompareRun } from "./use-compare-run";
  * many lanes have answered, and a way back. It renders nothing at all when there
  * is no live run, and nothing on the Compare page itself, where the spine
  * already says everything this would.
+ *
+ * ### Why it does not read the runtime
+ *
+ * This is mounted in the Topbar, so it renders on all sixteen workspace modules.
+ * Subscribing to `compareRuntime` directly — which is what it did — imported the
+ * lane planner, the session store and `@/lib/catalog`, putting the whole model
+ * catalog and the compare engine into the shell chunk that `/docs` parses before
+ * its own page code. It reads `lib/compare/live-pill.ts` instead, a module with
+ * no imports at all that the runtime pushes two integers into. Same pill, and
+ * the compare engine is now fetched only by Compare.
  */
 export function CompareRunPill({ className }: { className?: string }) {
   const pathname = usePathname();
-  const run = useCompareRun();
+  const progress = React.useSyncExternalStore(
+    subscribeCompareProgress,
+    getCompareProgress,
+    getCompareProgressServer,
+  );
 
-  const live = run?.lanes.some((l) => l.status === "streaming" || l.status === "queued") ?? false;
-  if (!run || !live || pathname?.startsWith("/compare")) return null;
+  if (!progress || pathname?.startsWith("/compare")) return null;
 
-  const total = run.lanes.filter((l) => !l.blocked).length;
-  const done = run.lanes.filter((l) => l.status === "done").length;
+  const { done, total } = progress;
 
   return (
     <Tooltip>

@@ -41,6 +41,7 @@ import {
   type LanePlanResult,
 } from "./lanes";
 import { getModelById } from "@/lib/catalog";
+import { deriveCompareProgress, publishCompareProgress } from "./live-pill";
 import { compareRepo } from "./repo";
 import {
   appendTurn,
@@ -219,7 +220,21 @@ class CompareRuntime {
     this.view = this.session
       ? { session: this.session, turns: [...this.earlier, this.run], current: this.run }
       : null;
+    this.publishProgress();
     this.emit();
+  }
+
+  /**
+   * Push the two numbers the always-mounted topbar pill draws.
+   *
+   * The pill cannot subscribe to this runtime directly without dragging the
+   * catalog and the whole compare engine into every route's shell chunk — see
+   * `lib/compare/live-pill.ts`. So the dependency is inverted: the runtime,
+   * which is only ever loaded by Compare itself, publishes; the shell reads a
+   * module that imports nothing.
+   */
+  private publishProgress(): void {
+    publishCompareProgress(this.run ? deriveCompareProgress(this.run.lanes) : null);
   }
 
   /** Replace the session header and refresh the view without touching the turn. */
@@ -925,6 +940,7 @@ class CompareRuntime {
       if (this.driving) return;
       if (!ev.data || ev.data.id !== this.run?.id) return;
       this.run = ev.data;
+      this.publishProgress();
       this.emit();
     };
     this.channel = channel;
@@ -1287,6 +1303,7 @@ class CompareRuntime {
     this.view = null;
     this.buffers.clear();
     this.dirty.clear();
+    this.publishProgress();
     this.emit();
   }
 }
