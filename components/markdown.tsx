@@ -4,12 +4,10 @@ import * as React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import rehypeHighlight from "rehype-highlight";
-import rehypeKatex from "rehype-katex";
 import { Check, Copy, Hash } from "lucide-react";
 import { MermaidBlock } from "@/components/mermaid";
+import { useMarkdownPlugins } from "./markdown-plugins";
 import { cn } from "@/lib/utils";
-import "katex/dist/katex.min.css";
 // No highlight.js stylesheet. `github-dark.css` used to be imported here and
 // the `.hljs-*` rules in globals.css then had to out-specify it, which is why
 // code blocks stayed dark on the light theme. The token rules stand alone now.
@@ -106,6 +104,11 @@ export const Markdown = React.memo(function Markdown({
    */
   streaming?: boolean;
 }) {
+  // Chosen from the text, and fetched on demand — KaTeX and highlight.js are
+  // ~580 KB between them and most documents need neither. See
+  // `components/markdown-plugins.tsx`.
+  const rehypePlugins = useMarkdownPlugins(children, streaming);
+
   return (
     <div
       className={cn(
@@ -131,7 +134,7 @@ export const Markdown = React.memo(function Markdown({
         // squashed, italicised nonsense. `$$…$$` still works for real math;
         // a lone `$` now stays literal, which is what a price is.
         remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
-        rehypePlugins={streaming ? [rehypeKatex] : [rehypeHighlight, rehypeKatex]}
+        rehypePlugins={rehypePlugins}
         components={{
           pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
           code: ({ className, children, ...props }) => {
