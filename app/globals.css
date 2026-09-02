@@ -288,6 +288,24 @@
   }
 }
 
+/* The route fade — see `components/shell/page-transition.tsx`.
+
+   `both` matters: it holds the 0% state before the first frame (so a route
+   never flashes in at full opacity) and holds the 100% state afterwards (so
+   the reduced-motion override above, which collapses the duration to 0.001ms,
+   lands the page visible rather than leaving it at opacity 0). */
+.atlas-route-fade {
+  animation: atlas-route-fade 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes atlas-route-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* The empty state's aurora. A slow drift so the first screen is not static,
    cheap enough to leave running: one composited transform, no canvas, no RAF.
    Parked under reduced motion by the blanket block above. */
