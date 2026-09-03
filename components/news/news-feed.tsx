@@ -36,6 +36,15 @@ export interface NewsFeedProps {
  */
 const REVEAL = { magazine: 24, grid: 24, compact: 60, timeline: 60 } as const;
 
+/**
+ * One shared empty array for the cards with no cluster siblings.
+ *
+ * `?? []` allocated a fresh array on every render, which is a changed prop on
+ * every such card — and that is most of them. `React.memo` on `NewsCard` cannot
+ * hold against it.
+ */
+const NO_SIBLINGS: NewsArticle[] = [];
+
 export function NewsFeed({
   articles: allSelected,
   clusters,
@@ -104,7 +113,7 @@ export function NewsFeed({
       className={className}
       article={article}
       variant={variant}
-      siblings={siblingsByArticle.get(article.id) ?? []}
+      siblings={siblingsByArticle.get(article.id) ?? NO_SIBLINGS}
       query={query}
       saved={savedIds.has(article.id)}
       read={readIds.has(article.id)}

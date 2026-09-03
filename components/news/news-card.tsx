@@ -81,7 +81,22 @@ function ArticleTime({ iso, mounted }: { iso: string; mounted?: boolean }) {
   );
 }
 
-export function NewsCard({
+/**
+ * Memoized, because the feed re-renders for reasons that have nothing to do
+ * with any individual card.
+ *
+ * Changing a filter, toggling a view, saving one story or revealing the next
+ * chunk all re-render `NewsFeed`, and every mounted card with it — roughly 65
+ * DOM nodes each, times the two dozen the reveal keeps mounted. None of those
+ * cards' own data changed.
+ *
+ * This only pays off because the props it receives are referentially stable:
+ * `siblings` falls back to a shared `NO_SIBLINGS` array rather than a fresh
+ * `[]`, and `onOpen`/`onToggleSave` are `useCallback`s that no longer close
+ * over the saved-id set. Either one regressing silently turns this back into a
+ * full re-render, which is why both are commented where they are defined.
+ */
+export const NewsCard = React.memo(function NewsCard({
   article,
   variant = "grid",
   siblings = [],
@@ -365,4 +380,4 @@ export function NewsCard({
       </div>
     </li>
   );
-}
+});

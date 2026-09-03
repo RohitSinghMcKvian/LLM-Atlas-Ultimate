@@ -109,12 +109,36 @@ export function NewsClient({
     }
   }, []);
 
-  // The tail. The server sends the top slice so the document stays small; the
-  // rest arrives immediately after mount, before the reader has scrolled past
-  // what they were given.
+  /**
+   * The tail, fetched once the browser is idle rather than the moment we mount.
+   *
+   * The server sends the top 60 articles so the document stays small; the rest
+   * is another ~430 KB of JSON. Pulling it in a mount effect put
+   * `response.json()` and the full re-render it triggers directly behind
+   * hydration — measured on the production build, entering /news cost a 205 ms
+   * mount task followed by 58 ms and 76 ms tasks as the corpus landed and the
+   * feed re-selected and re-rendered against it.
+   *
+   * None of that is needed for the first screen: the feed only mounts 24 cards,
+   * and the reveal is what pages further in. Deferring to `requestIdleCallback`
+   * lets hydration and the first paint finish first, and the corpus still
+   * arrives long before anyone scrolls past what the server gave them. The
+   * timeout is the guarantee — an idle callback that never gets scheduled on a
+   * busy tab still fires within it.
+   */
   React.useEffect(() => {
     if (totalArticles <= snapshot.articles.length) return;
-    void pullCorpus();
+
+    const idle = typeof window !== "undefined" && "requestIdleCallback" in window;
+    if (!idle) {
+      // Safari has no requestIdleCallback. A macrotask is still enough to get
+      // this out of the commit that mounts the feed.
+      const timer = setTimeout(() => void pullCorpus(), 200);
+      return () => clearTimeout(timer);
+    }
+
+    const handle = window.requestIdleCallback(() => void pullCorpus(), { timeout: 2_000 });
+    return () => window.cancelIdleCallback(handle);
   }, [totalArticles, snapshot.articles.length, pullCorpus]);
 
   /**
@@ -262,13 +286,25 @@ export function NewsClient({
 
   const handleClose = React.useCallback(() => patch({ articleId: undefined }), [patch]);
 
+  /**
+   * Read the saved set through a ref so this callback keeps one identity.
+   *
+   * `savedIds` is rebuilt (`new Set(saved)`) whenever anything is saved, so
+   * depending on it directly gave this a new identity on every save — which is
+   * a prop change on every mounted `<NewsCard>`, and the memo on the card would
+   * never hold. The announcement only needs the value at call time, which is
+   * exactly what a ref gives.
+   */
+  const savedIdsRef = React.useRef(savedIds);
+  savedIdsRef.current = savedIds;
+
   const handleToggleSave = React.useCallback(
     (id: string) => {
-      const wasSaved = savedIds.has(id);
+      const wasSaved = savedIdsRef.current.has(id);
       toggleSaved(id);
       announce(wasSaved ? "Removed from saved" : "Saved");
     },
-    [toggleSaved, savedIds],
+    [toggleSaved],
   );
 
   // --- Refresh --------------------------------------------------------------
