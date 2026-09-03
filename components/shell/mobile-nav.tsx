@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import { usePathname } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
@@ -99,7 +100,7 @@ export function MobileDrawer() {
                   const active = pathname === m.href;
                   const Icon = m.icon;
                   return (
-                    <Link
+                    <AppLink
                       key={m.id}
                       href={m.href}
                       prefetch={true}
@@ -123,7 +124,7 @@ export function MobileDrawer() {
                           Soon
                         </span>
                       )}
-                    </Link>
+                    </AppLink>
                   );
                 })}
               </div>

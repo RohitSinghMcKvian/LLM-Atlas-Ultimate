@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import { usePathname } from "next/navigation";
 import {
   PanelLeftClose,
@@ -40,7 +41,7 @@ function NavItem({
 }) {
   const Icon = module.icon;
   const link = (
-    <Link
+    <AppLink
       href={module.href}
       // The workspace routes are dynamic (several read searchParams), so the
       // default "auto" strategy would only prefetch down to the nearest
@@ -70,7 +71,7 @@ function NavItem({
           Soon
         </span>
       )}
-    </Link>
+    </AppLink>
   );
 
   if (collapsed) {

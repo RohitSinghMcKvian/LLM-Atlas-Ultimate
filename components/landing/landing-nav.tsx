@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Star, Github, Menu, X, ChevronRight, ArrowRight } from "lucide-react";
 import { BrandLockup } from "@/components/brand/logo";
@@ -56,7 +57,7 @@ export function LandingNav() {
                     </p>
                     <div className="space-y-0.5">
                       {modulesByGroup(group).map((m) => (
-                        <Link
+                        <AppLink
                           key={m.id}
                           href={m.href}
                           className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-surface-2"
@@ -68,7 +69,7 @@ export function LandingNav() {
                               soon
                             </span>
                           )}
-                        </Link>
+                        </AppLink>
                       ))}
                     </div>
                   </div>
@@ -142,7 +143,7 @@ export function LandingNav() {
                   </p>
                   <div className="grid grid-cols-2 gap-1">
                     {modulesByGroup(group).map((m) => (
-                      <Link
+                      <AppLink
                         key={m.id}
                         href={m.href}
                         onClick={() => setMobileOpen(false)}
@@ -150,7 +151,7 @@ export function LandingNav() {
                       >
                         <m.icon className="size-4 text-muted-foreground" />
                         {m.label}
-                      </Link>
+                      </AppLink>
                     ))}
                   </div>
                 </div>

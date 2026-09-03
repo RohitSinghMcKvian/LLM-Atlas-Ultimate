@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import { motion } from "framer-motion";
 import {
   Sparkles,
@@ -168,9 +169,9 @@ function Rail({
             Connect key →
           </button>
         ) : cta ? (
-          <Link href={cta.href} className="shrink-0 text-xs font-medium text-action hover:underline">
+          <AppLink href={cta.href} className="shrink-0 text-xs font-medium text-action hover:underline">
             {cta.label} →
-          </Link>
+          </AppLink>
         ) : null}
       </div>
 

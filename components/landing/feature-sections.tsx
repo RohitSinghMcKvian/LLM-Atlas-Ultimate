@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import { ArrowRight, Check } from "lucide-react";
 import {
   PreviewCompare,
@@ -104,13 +105,13 @@ export function FeatureSections() {
                   </li>
                 ))}
               </ul>
-              <Link
+              <AppLink
                 href={f.href}
                 className="group mt-7 inline-flex items-center gap-1.5 text-sm font-medium text-action"
               >
                 {f.cta}
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
+              </AppLink>
             </Reveal>
 
             <Reveal

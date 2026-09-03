@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import { Github, Twitter, MessageCircle } from "lucide-react";
 import { BrandLockup } from "@/components/brand/logo";
 import { MODULE_GROUPS, modulesByGroup } from "@/lib/modules";
@@ -59,12 +60,12 @@ export function Footer() {
                 <ul className="space-y-2">
                   {modulesByGroup(group).map((m) => (
                     <li key={m.id}>
-                      <Link
+                      <AppLink
                         href={m.href}
                         className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                       >
                         {m.label}
-                      </Link>
+                      </AppLink>
                     </li>
                   ))}
                 </ul>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { ModuleGlyph } from "@/components/brand/glyph";
 import { Badge } from "@/components/ui/badge";
@@ -136,10 +137,10 @@ export function ModulePlaceholder({ id }: { id: string }) {
         <div className="flex flex-wrap items-center justify-center gap-3">
           {flagships.map((f) => (
             <Button key={f.id} asChild variant="secondary">
-              <Link href={f.href}>
+              <AppLink href={f.href}>
                 <f.icon className="size-4" />
                 {f.name}
-              </Link>
+              </AppLink>
             </Button>
           ))}
         </div>

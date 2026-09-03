@@ -26,6 +26,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { MODULES } from "@/lib/modules";
+import { navigateTo } from "@/lib/nav/document-routes";
 import { useUIStore } from "@/lib/store/ui-store";
 
 // The palette is mounted in the workspace layout, so its imports are parsed on
@@ -193,7 +194,7 @@ export function CommandPalette() {
                     <CommandItem
                       key={m.id}
                       value={`${m.name} ${m.label} ${m.tagline}`}
-                      onSelect={() => run(() => router.push(m.href))}
+                      onSelect={() => run(() => navigateTo(m.href, router.push))}
                     >
                       <m.icon />
                       <span>{m.name}</span>

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { AppLink } from "@/components/nav/app-link";
 import { motion, useReducedMotion } from "framer-motion";
 import { AtlasMark } from "@/components/brand/logo";
 import { ModuleGlyph } from "@/components/brand/glyph";
@@ -108,7 +109,7 @@ export function EcosystemMap() {
             >
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href={m.href}>
+                  <AppLink href={m.href}>
                     <motion.div
                       initial={reduce ? undefined : { opacity: 0, scale: 0.6 }}
                       whileInView={reduce ? undefined : { opacity: 1, scale: 1 }}
@@ -122,7 +123,7 @@ export function EcosystemMap() {
                       </div>
                       <span className="text-xs font-medium">{m.label}</span>
                     </motion.div>
-                  </Link>
+                  </AppLink>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[200px] text-center font-normal">
                   <span className="font-semibold">{m.name}</span> — {m.tagline}
@@ -136,7 +137,7 @@ export function EcosystemMap() {
       {/* Grid fallback (mobile) */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:hidden">
         {MODULES.map((m) => (
-          <Link
+          <AppLink
             key={m.id}
             href={m.href}
             className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-surface/50 p-4 text-center transition-colors hover:border-action/40"
@@ -144,7 +145,7 @@ export function EcosystemMap() {
             <ModuleGlyph seed={m.id} accent={m.accent} size={36} />
             <span className="text-sm font-medium">{m.label}</span>
             <span className="text-2xs text-muted-foreground">{m.tagline}</span>
-          </Link>
+          </AppLink>
         ))}
       </div>
     </section>
