@@ -3,8 +3,8 @@ import type { CatalogSnapshot } from "@/lib/catalog/snapshot";
 import { activeFeeds, type FeedSource } from "../feeds";
 import type { NewsSnapshotRecord } from "../types";
 import { fetchFeed } from "./adapters/rss";
-import { mergeNews, type MergeResult } from "./merge";
-import type { FeedFetchOutcome } from "./types";
+import { carriedArticles, mergeNews, type MergeResult } from "./merge";
+import type { FeedFetchOutcome, RawArticle } from "./types";
 
 // Orchestration for one sync run.
 //
@@ -98,13 +98,110 @@ export async function runNewsSync(options: RunNewsSyncOptions = {}): Promise<Run
   const deadline = AbortSignal.timeout(budgetMs);
   const fetchSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
 
+  const startedAt = Date.now();
+
   const outcomes = await runPool(feeds, concurrency, (feed) =>
     fetchFeed(feed, { catalog, now, signal: fetchSignal, ...validatorsFor(previous, feed) }),
   );
 
+  // The carried corpus is rehydrated HERE rather than inside `mergeNews`, because
+  // the image pass below needs to see it. In the steady state every feed answers
+  // 304 and `outcomes` carries no articles at all, so a pass that only looked at
+  // fresh arrivals would find nothing to do on every sweep after the first — and
+  // coverage would freeze at whatever the cold start happened to manage.
+  const carried = carriedArticles(previous);
+
+  const missed = await recoverImages([...outcomes.flatMap((o) => o.articles), ...carried], {
+    signal,
+    elapsedMs: Date.now() - startedAt,
+    misses: previous?.imageMisses,
+  });
+
   const llmEnriched = await maybeEnrich(outcomes, { now });
 
-  return mergeNews({ outcomes, previous, now, llmEnriched, feeds });
+  return mergeNews({ outcomes, previous, carried, now, llmEnriched, feeds, imageMissed: missed });
+}
+
+/**
+ * The OpenGraph image pass.
+ *
+ * Runs over the WHOLE corpus — this sweep's arrivals first, then everything
+ * carried forward that still has no picture — and enriches a bounded number of
+ * them. `mergeNews` preserves an image once found, so coverage climbs sweep by
+ * sweep towards the whole corpus instead of being capped at what any single run
+ * could reach.
+ *
+ * Doing it per-sweep-only was the obvious design and it was wrong in a way that
+ * a single run cannot show: conditional requests mean the steady state is all
+ * 304s, so after the first sweep there are no fresh articles, and coverage
+ * froze exactly where the cold start left it.
+ *
+ * Deliberately positioned *after* the feed sweep rather than inside it. The feed
+ * sweep has its own budget and a hard serverless ceiling above it; letting an
+ * unbounded set of publisher page loads share that budget would mean a slow news
+ * hour costs us feed coverage, which is the thing that actually matters. This
+ * pass takes only what the sweep left and is allowed to give up with work
+ * outstanding — whatever it did not reach gets another chance next hour.
+ *
+ * Failure here is never fatal and never even a warning: an image is the one part
+ * of an article Atlas can do without.
+ */
+async function recoverImages(
+  articles: readonly RawArticle[],
+  context: {
+    signal?: AbortSignal;
+    elapsedMs: number;
+    misses?: Readonly<Record<string, number>>;
+  },
+): Promise<string[]> {
+  if (process.env.ATLAS_NEWS_OG_IMAGES === "false") return [];
+
+  const budgetMs = imageBudgetMs(context.elapsedMs);
+  // Below a few seconds there is no point starting: one page load plus its HEAD
+  // probe is most of that, and a pass that aborts mid-flight has spent the
+  // requests without keeping the answers.
+  if (budgetMs < 4_000) return [];
+
+  try {
+    const { discoverImages } = await import("./og");
+    const result = await discoverImages(articles, {
+      signal: context.signal,
+      budgetMs,
+      misses: context.misses,
+    });
+    return result.missed;
+  } catch {
+    // A network failure, an expired budget, a malformed page. The corpus is
+    // already complete without this.
+    return [];
+  }
+}
+
+/**
+ * What is left of the invocation, minus a reserve for finishing the job.
+ *
+ * A fixed budget here was simply wrong arithmetic, and the sums did not close:
+ * the feed sweep is allowed 45 seconds and the platform kills the invocation at
+ * 60, so a fixed 20-second image pass could only ever run if the feeds finished
+ * early — and on the run where they did not, it would take the whole sync down
+ * with it, persisting nothing at all.
+ *
+ * So the pass takes what is actually left. In the steady state most feeds answer
+ * 304 in a couple of seconds and the images get nearly the whole window; on a
+ * slow sweep they get very little, which is the correct trade — a story with no
+ * picture is worth vastly more than a picture with no story, and the next sweep
+ * picks up what this one could not reach.
+ */
+function imageBudgetMs(elapsedMs: number): number {
+  // Matches `maxDuration` on the routes that call this. Configurable because a
+  // self-hosted deployment on a long-lived server has no such ceiling.
+  const ceiling = envInt("ATLAS_NEWS_SYNC_CEILING_MS", 60_000);
+  // Clustering, verification, ranking and the Supabase write all happen after
+  // this pass and are not free at several hundred articles.
+  const reserve = envInt("ATLAS_NEWS_SYNC_RESERVE_MS", 8_000);
+  const configured = envInt("ATLAS_NEWS_OG_BUDGET_MS", 20_000);
+
+  return Math.min(configured, ceiling - reserve - elapsedMs);
 }
 
 function validatorsFor(

@@ -22,6 +22,7 @@ export const DEFAULT_FILTERS: NewsFilterState = {
   sources: [],
   verifiedOnly: false,
   savedOnly: false,
+  imagesOnly: true,
   sort: "top",
   view: "magazine",
 };
@@ -58,6 +59,10 @@ export function parseNewsSearchParams(
     sources: list("src").slice(0, 40),
     verifiedOnly: get("verified") === "1",
     savedOnly: get("saved") === "1",
+    // Inverted, because the default is on: a bare `/news` must mean "images
+    // only", and only an explicit `img=0` turns the gate off. Serialising the
+    // default would put a parameter on every shared link.
+    imagesOnly: get("img") !== "0",
     sort: SORTS.includes(sort as NewsSort) ? (sort as NewsSort) : "top",
     view: VIEWS.includes(view as NewsView) ? (view as NewsView) : "magazine",
     articleId: get("a") || undefined,
@@ -72,6 +77,7 @@ export function toNewsSearchParams(state: NewsFilterState): string {
   if (state.sources.length) params.set("src", state.sources.join(","));
   if (state.verifiedOnly) params.set("verified", "1");
   if (state.savedOnly) params.set("saved", "1");
+  if (!state.imagesOnly) params.set("img", "0");
   if (state.sort !== "top") params.set("sort", state.sort);
   if (state.view !== "magazine") params.set("view", state.view);
   if (state.articleId) params.set("a", state.articleId);
@@ -130,6 +136,17 @@ export interface SelectOptions {
 
 export interface SelectResult {
   articles: NewsArticle[];
+  /**
+   * True when `imagesOnly` was asked for and then ignored.
+   *
+   * The gate is a presentation preference, not a promise, and it must never be
+   * the reason a reader sees nothing. A corpus persisted before the OpenGraph
+   * pass existed carries images on only a third of its articles, and a narrow
+   * filter on top of that can select a handful of stories that all happen to
+   * lack one. Rather than render an empty page for a filter the reader never
+   * consciously set, the gate drops itself and says so.
+   */
+  imageGateRelaxed: boolean;
   /** How many articles were available before filtering, for "showing 48 of 612". */
   total: number;
   /** Live counts per topic, for the chip row. Computed against the OTHER filters. */
@@ -158,6 +175,23 @@ export function selectArticles(options: SelectOptions): SelectResult {
   const topicSet = new Set(filters.topics);
   const sourceSet = new Set(filters.sources);
 
+  // Whether the image gate survives this particular filter combination is
+  // decided once, up front, so every consumer below — the selection, the cluster
+  // promotion, and the chip counts — agrees on it. Deciding per call site is how
+  // a count ends up disagreeing with the list it labels.
+  //
+  // Relaxing requires TWO facts, not one: that nothing survives with the gate,
+  // and that something would survive without it. Checking only the first
+  // reported the gate as relaxed whenever a query matched nothing at all, which
+  // would have put "showing stories without images" on a page showing no
+  // stories.
+  const wantImagesOnly = filters.imagesOnly;
+  const imageGateRelaxed =
+    wantImagesOnly &&
+    !anyPasses(articles, filters, saved, needle, true) &&
+    anyPasses(articles, filters, saved, needle, false);
+  const imagesOnly = wantImagesOnly && !imageGateRelaxed;
+
   // Cluster membership is only meaningful for articles that are present, so the
   // lead lookup is built from the corpus rather than trusted from the index.
   const presentIds = new Set(articles.map((a) => a.id));
@@ -167,11 +201,12 @@ export function selectArticles(options: SelectOptions): SelectResult {
     if (lead) leadOfCluster.set(cluster.id, lead);
   }
 
-  const passes = (article: NewsArticle, ignore?: "topics" | "sources"): boolean => {
+  const passes = (article: NewsArticle, ignore?: "topics" | "sources" | "images"): boolean => {
     if (ignore !== "topics" && topicSet.size) {
       if (!article.topics.some((t) => topicSet.has(t))) return false;
     }
     if (ignore !== "sources" && sourceSet.size && !sourceSet.has(article.sourceId)) return false;
+    if (ignore !== "images" && imagesOnly && !article.image?.url) return false;
     if (filters.verifiedOnly) {
       const level = article.verification.level;
       if (level !== "verified" && level !== "corroborated") return false;
@@ -228,10 +263,42 @@ export function selectArticles(options: SelectOptions): SelectResult {
 
   return {
     articles: selected,
+    imageGateRelaxed,
     total: collapseClusters ? countLeads(articles, leadOfCluster) : articles.length,
     topicCounts,
     sourceCounts,
   };
+}
+
+/**
+ * Would *anything* survive the filters, with or without the image requirement?
+ *
+ * A deliberately cheap pre-pass rather than a second full selection: it stops at
+ * the first match, so the common case (a corpus with plenty of imagery) costs one
+ * article's worth of work. Cluster collapsing is irrelevant here — collapsing can
+ * only ever reduce a non-empty set to a smaller non-empty set, never to nothing.
+ */
+function anyPasses(
+  articles: readonly NewsArticle[],
+  filters: NewsFilterState,
+  saved: ReadonlySet<string> | undefined,
+  needle: string,
+  requireImage: boolean,
+): boolean {
+  const topicSet = new Set(filters.topics);
+  const sourceSet = new Set(filters.sources);
+
+  return articles.some((article) => {
+    if (requireImage && !article.image?.url) return false;
+    if (topicSet.size && !article.topics.some((t) => topicSet.has(t))) return false;
+    if (sourceSet.size && !sourceSet.has(article.sourceId)) return false;
+    if (filters.verifiedOnly) {
+      const level = article.verification.level;
+      if (level !== "verified" && level !== "corroborated") return false;
+    }
+    if (filters.savedOnly && !saved?.has(article.id)) return false;
+    return matchesQuery(article, needle);
+  });
 }
 
 /** Points deducted for each earlier article already placed from the same source. */

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Newspaper, SearchX, WifiOff, X } from "lucide-react";
+import { Loader2, SearchX, WifiOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { topicLabel } from "@/lib/news/topics";
 import type { NewsFilterState } from "@/lib/news/types";
@@ -16,40 +16,29 @@ import { NewsGeneratedArt } from "./news-generated-art";
  * deployment with outbound network, brief: the first request schedules a sweep
  * and the feeds need no API keys.
  */
-export function NewsColdStart({
-  syncing,
-  onRefresh,
-}: {
-  syncing?: boolean;
-  onRefresh?: () => void;
-}) {
+export function NewsColdStart() {
   return (
     <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-surface px-6 py-16 text-center">
       <div className="relative size-20 overflow-hidden rounded-2xl opacity-70">
         <NewsGeneratedArt seed="atlas-cold-start" />
       </div>
       <div className="max-w-md space-y-2">
-        <h2 className="font-display text-lg font-semibold">The first sync is still running</h2>
+        <h2 className="font-display text-lg font-semibold">The first sync is running</h2>
         <p className="text-sm text-muted-foreground">
-          Atlas is pulling stories from around thirty AI sources right now. No API key is needed —
-          this normally takes a few seconds. Reload in a moment.
+          Atlas is pulling stories from around forty AI sources right now, and finding a picture for
+          each one. No API key is needed, and nothing here needs pressing — the page fills itself in
+          as soon as the sweep lands.
         </p>
       </div>
-      {onRefresh && (
-        <Button variant="primary" onClick={onRefresh} disabled={syncing}>
-          {syncing ? (
-            <>
-              <Loader2 className="animate-spin" aria-hidden="true" />
-              Syncing…
-            </>
-          ) : (
-            <>
-              <Newspaper aria-hidden="true" />
-              Sync now
-            </>
-          )}
-        </Button>
-      )}
+      {/* The Sync now button that used to live here has gone, along with the
+          rest of the manual sync surface. It was the least defensible one in the
+          product: the cold-start page already polls, and offering a button on a
+          screen that is about to update itself invites the reader to press it
+          and then watch nothing visibly happen. */}
+      <p className="inline-flex items-center gap-2 text-2xs uppercase tracking-wide text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+        Waiting for the first sweep
+      </p>
     </div>
   );
 }

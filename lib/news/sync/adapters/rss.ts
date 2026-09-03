@@ -1,5 +1,6 @@
 import type { CatalogSnapshot } from "@/lib/catalog/snapshot";
 import type { FeedSource } from "../../feeds";
+import { isUsableStoryImage } from "../../image";
 import { classify, isAiRelevant, relevanceScore } from "../classify";
 import { signatureOf } from "../cluster";
 import { extractEntities } from "../entities";
@@ -227,6 +228,12 @@ export function toArticle(
  * `src` still works, and restricted to https because the proxy will refuse
  * anything else anyway — better to drop it here than to render a card whose
  * image is guaranteed to 404.
+ *
+ * The quality gate runs here too, and rejecting is the *better* outcome: an
+ * article whose only feed image is a FeedBurner tracking pixel is left with no
+ * image at all, which is precisely what makes it eligible for the OpenGraph pass
+ * in `sync/og.ts` and gets it a real photograph instead. Before the gate existed
+ * the pixel won, because it was technically an image and nothing looked closer.
  */
 function toImage(item: RawFeedItem, articleUrl: string): NewsImage | undefined {
   if (!item.image?.url) return undefined;
@@ -235,11 +242,16 @@ function toImage(item: RawFeedItem, articleUrl: string): NewsImage | undefined {
   if (!resolved) return undefined;
   if (!resolved.url.startsWith("https://")) return undefined;
 
+  if (!isUsableStoryImage(resolved.url, { width: item.image.width, height: item.image.height })) {
+    return undefined;
+  }
+
   return {
     url: resolved.url,
     host: resolved.host,
     width: item.image.width,
     height: item.image.height,
+    source: "feed",
   };
 }
 

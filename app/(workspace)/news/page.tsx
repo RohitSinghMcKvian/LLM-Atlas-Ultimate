@@ -18,7 +18,7 @@ const PAGE_ARTICLE_LIMIT = 60;
 export const metadata: Metadata = {
   title: "Atlas News",
   description:
-    "Verified AI news from first-party labs, arXiv, press and analysts. De-duplicated across publishers, provenance-scored, and re-synced every hour.",
+    "Verified AI news from first-party labs, arXiv, press and analysts. De-duplicated across publishers, provenance-scored, illustrated, and kept current without a single click.",
 };
 
 // The corpus is a runtime snapshot that changes hourly, so this page can never
@@ -36,7 +36,9 @@ export const dynamic = "force-dynamic";
  *
  * Reading `getNewsSnapshot()` here is also what drives the zero-configuration
  * sync: if the corpus is older than the interval it schedules a refresh behind
- * this response and serves the current one immediately.
+ * this response and serves the current one immediately. The client then keeps
+ * itself current from there — see `use-news-auto-sync.ts`. There is no manual
+ * sync control anywhere in this feature, by design.
  */
 export default async function NewsPage({
   searchParams,
@@ -56,9 +58,6 @@ export default async function NewsPage({
         totalArticles={news.articles.length}
         catalogDiff={catalog.diff}
         initial={parseNewsSearchParams(params)}
-        // The operator can remove the public Refresh surface entirely; the
-        // client hides the button rather than offering one that 404s.
-        publicRefresh={process.env.ATLAS_NEWS_PUBLIC_REFRESH !== "false"}
       />
     </CatalogScope>
   );

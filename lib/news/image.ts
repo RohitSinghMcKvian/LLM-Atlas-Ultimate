@@ -176,3 +176,180 @@ export function generativeArt(seed: string): GenerativeArt {
     seed: hash,
   };
 }
+
+// --- Image quality gate -----------------------------------------------------
+//
+// WHY A SECOND GATE AT ALL
+//
+// `isSafeImageUrl` answers "is this safe to fetch". This answers a different and
+// equally load-bearing question: "is this a picture of the story, or is it
+// furniture". Feeds are full of the latter — FeedBurner tracking pixels, 1×1
+// spacers, subscribe buttons, the publisher's own logo repeated on all forty
+// items, share-icon sprites. Every one of them passes the safety check, renders
+// without error, and makes the grid look broken.
+//
+// This is the difference between "we found an image" and "we found the image",
+// and it runs before an image is ever written to a `NewsArticle`.
+
+/**
+ * Path fragments that mark an image as site furniture rather than editorial art.
+ *
+ * Matched against the lowercased pathname only — never the host, or
+ * `images.logos-cdn.example` would reject a perfectly good CDN. `logo` earns its
+ * place here despite occasionally rejecting a legitimate hero: a publisher logo
+ * is the single most common `og:image` fallback, and forty cards showing the
+ * same mark is precisely the failure this gate exists to prevent.
+ */
+const FURNITURE_PATTERNS = [
+  "pixel",
+  "spacer",
+  "blank",
+  "transparent",
+  "placeholder",
+  "default-",
+  "-default",
+  "avatar",
+  "gravatar",
+  "logo",
+  "favicon",
+  "feed-icon",
+  "rss-icon",
+  "sprite",
+  "share-",
+  "social-",
+  "button",
+  "badge",
+  "banner-ad",
+  "advert",
+  "watermark",
+  "1x1",
+  "px.gif",
+  "dot.gif",
+  "clear.gif",
+];
+
+/** Hosts that serve analytics beacons dressed as images. */
+const BEACON_HOSTS = [
+  "pixel.wp.com",
+  "stats.wordpress.com",
+  "feeds.feedburner.com",
+  "feedburner.com",
+  "doubleclick.net",
+  "googletagmanager.com",
+  "google-analytics.com",
+  "scorecardresearch.com",
+  "quantserve.com",
+  "b.scorecardresearch.com",
+];
+
+/**
+ * Extensions that are never editorial photography.
+ *
+ * `.svg` is excluded deliberately even though it renders: in feed data it is
+ * almost always a logo or an icon, and it is the one image format that can carry
+ * script — so the proxy is better off never serving one at all.
+ */
+const REJECTED_EXTENSIONS = [".svg", ".ico", ".bmp", ".tif", ".tiff"];
+
+/** Below this on either axis, an image is an icon rather than a hero. */
+export const MIN_IMAGE_EDGE = 200;
+
+/**
+ * Widest and narrowest usable aspect ratios.
+ *
+ * A 1000×50 strip is a masthead and a 200×900 column is a sidebar rail; neither
+ * survives being cropped into a 16:9 card without becoming abstract texture.
+ */
+const MAX_ASPECT = 3.5;
+const MIN_ASPECT = 1 / 3.5;
+
+export interface ImageDimensions {
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Dimension hints a CDN put in the query string.
+ *
+ * Publishers routinely serve `.../hero.jpg?w=64&h=64` for a thumbnail and the
+ * same path at full size elsewhere, so the declared `width`/`height` attributes
+ * are not the only evidence available. Reading these catches the thumbnail
+ * variant that would otherwise upscale into a blurry card.
+ */
+function queryDimensions(url: URL): ImageDimensions {
+  const read = (...keys: string[]): number | undefined => {
+    for (const key of keys) {
+      const value = Number(url.searchParams.get(key));
+      if (Number.isFinite(value) && value > 0) return value;
+    }
+    return undefined;
+  };
+  return { width: read("w", "width", "mw"), height: read("h", "height", "mh") };
+}
+
+/**
+ * Is this image worth showing as a story's hero?
+ *
+ * Conservative in one direction only: an image with no dimension information
+ * anywhere passes, because most publishers declare nothing and rejecting them
+ * would empty the feed. Dimensions are used to reject when they are present and
+ * damning, never required to accept.
+ */
+export function isUsableStoryImage(raw: string, declared: ImageDimensions = {}): boolean {
+  if (!isSafeImageUrl(raw)) return false;
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  const host = url.hostname.toLowerCase();
+  if (BEACON_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return false;
+
+  const path = url.pathname.toLowerCase();
+  if (REJECTED_EXTENSIONS.some((ext) => path.endsWith(ext))) return false;
+  if (FURNITURE_PATTERNS.some((pattern) => path.includes(pattern))) return false;
+
+  // Declared attributes win over query hints: a CDN can be asked for 64px of a
+  // 2000px original, but an `<img width>` is what the publisher says it is.
+  const hints = queryDimensions(url);
+  const width = declared.width ?? hints.width;
+  const height = declared.height ?? hints.height;
+
+  if (width !== undefined && width < MIN_IMAGE_EDGE) return false;
+  if (height !== undefined && height < MIN_IMAGE_EDGE) return false;
+
+  if (width !== undefined && height !== undefined && height > 0) {
+    const aspect = width / height;
+    if (aspect > MAX_ASPECT || aspect < MIN_ASPECT) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Content-type and content-length verdict for a fetched image.
+ *
+ * Used by the OpenGraph pass, which sees the response headers the sync's other
+ * stages never do. A URL that ends `.jpg` and answers `text/html` is a soft 404
+ * — the single most common way a card ends up rendering a broken image, because
+ * nothing before this point had any way to know.
+ */
+export function isUsableImageResponse(
+  contentType: string | null,
+  contentLength: string | null,
+): boolean {
+  const type = (contentType ?? "").toLowerCase();
+  if (!type.startsWith("image/")) return false;
+  // SVG and ICO are rejected by path above; catch the extensionless variants too.
+  if (type.includes("svg") || type.includes("icon")) return false;
+
+  const bytes = Number(contentLength);
+  // A "photograph" under 3 KB is a pixel, a spacer, or a solid-colour rectangle.
+  // Absent or unparseable is fine — many CDNs omit it on a streamed response.
+  if (Number.isFinite(bytes) && bytes > 0 && bytes < 3_000) return false;
+
+  return true;
+}

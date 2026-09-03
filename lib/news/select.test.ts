@@ -483,3 +483,88 @@ describe("empty corpus", () => {
     expect(result.topicCounts).toEqual({});
   });
 });
+
+// --- The image gate ---------------------------------------------------------
+//
+// `imagesOnly` defaults to ON, which makes its failure mode the dangerous kind:
+// a filter nobody consciously set, silently emptying the page. The relaxation
+// below is the safety valve, and these pin both halves of it.
+
+const withImage = (title: string, patch: Partial<NewsArticle> = {}) =>
+  article({
+    title,
+    image: { url: `https://cdn.press.test/${title.replace(/\W+/g, "-")}.jpg`, host: "cdn.press.test" },
+    ...patch,
+  });
+
+describe("imagesOnly", () => {
+  it("hides articles with no image when some articles have one", () => {
+    const result = run([withImage("Has art"), article({ title: "No art" })]);
+
+    expect(result.articles.map((a) => a.title)).toEqual(["Has art"]);
+    expect(result.imageGateRelaxed).toBe(false);
+  });
+
+  it("shows everything when the gate is turned off", () => {
+    const result = run([withImage("Has art"), article({ title: "No art" })], {
+      imagesOnly: false,
+    });
+
+    expect(result.articles).toHaveLength(2);
+    expect(result.imageGateRelaxed).toBe(false);
+  });
+
+  it("relaxes itself rather than rendering an empty feed", () => {
+    // A corpus persisted before the OpenGraph pass existed. Showing nothing here
+    // would be a blank page for a filter the reader never set.
+    const result = run([article({ title: "No art" }), article({ title: "Also none" })]);
+
+    expect(result.articles).toHaveLength(2);
+    expect(result.imageGateRelaxed).toBe(true);
+  });
+
+  it("relaxes when the gate is empty only in combination with other filters", () => {
+    // Images exist in the corpus, but none among the articles matching the query
+    // — so the gate is still what would empty the page, and still has to yield.
+    const result = run([withImage("Vision model ships"), article({ title: "Router pricing drop" })], {
+      query: "router",
+    });
+
+    expect(result.articles.map((a) => a.title)).toEqual(["Router pricing drop"]);
+    expect(result.imageGateRelaxed).toBe(true);
+  });
+
+  it("does not relax when the emptiness is caused by something else", () => {
+    // Nothing matches the query at all. The image gate is not to blame, so it
+    // stays on and the empty state the reader sees is the honest one.
+    const result = run([withImage("Vision model ships")], { query: "nothing matches this" });
+
+    expect(result.articles).toHaveLength(0);
+    expect(result.imageGateRelaxed).toBe(false);
+  });
+
+  it("counts chips against the gated set, so a count matches what a click shows", () => {
+    const result = run([
+      withImage("Agent art", { topics: ["agents"] }),
+      article({ title: "Agent no art", topics: ["agents"] }),
+    ]);
+
+    expect(result.topicCounts.agents).toBe(1);
+  });
+
+  it("round-trips through the URL, serialising only when off", () => {
+    expect(toNewsSearchParams(filters())).not.toContain("img");
+    expect(toNewsSearchParams(filters({ imagesOnly: false }))).toContain("img=0");
+
+    expect(parseNewsSearchParams(new URLSearchParams("")).imagesOnly).toBe(true);
+    expect(parseNewsSearchParams(new URLSearchParams("img=0")).imagesOnly).toBe(false);
+    expect(parseNewsSearchParams(new URLSearchParams("img=1")).imagesOnly).toBe(true);
+  });
+
+  it("is not counted as an active filter", () => {
+    // It is a display preference, like sort and view. "Clear filters" must not
+    // toggle whether the reader sees pictures.
+    expect(hasActiveFilters(filters({ imagesOnly: false }))).toBe(false);
+    expect(hasActiveFilters(filters({ imagesOnly: true }))).toBe(false);
+  });
+});

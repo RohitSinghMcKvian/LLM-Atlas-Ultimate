@@ -219,6 +219,18 @@ export async function fetchText(url: string, options: FetchTextOptions = {}): Pr
       if (!res.ok) {
         await res.body?.cancel().catch(() => {});
         const error = new SyncFetchError(`${url} responded ${res.status}`, res.status);
+
+        // Deliberately NOT retried without the User-Agent on a 403.
+        //
+        // That was tried, against OpenAI's site, whose article pages all carry a
+        // good `og:image` and answer 403 to this fetcher. Removing the UA
+        // changes nothing: the same request answers 403 anonymously too, while
+        // `curl` with the identical headers is served — so the refusal is keyed
+        // on the TLS/HTTP fingerprint, not on what we call ourselves. A retry
+        // would have doubled the requests to a publisher who has already said no
+        // and fixed nothing, and the only thing that WOULD work is impersonating
+        // a browser, which is evading an access control the publisher chose to
+        // set. Those articles keep their generated art.
         if (attempt < retries && isRetryable(res.status)) {
           lastError = error;
           await sleep(backoffMs(attempt, baseDelayMs));

@@ -5,7 +5,8 @@ import { Radio, ShieldCheck, Signal, Clock } from "lucide-react";
 import type { NewsSnapshot, NewsArticle } from "@/lib/news/types";
 import { cn } from "@/lib/utils";
 import { NewsLiveWire } from "./news-live-wire";
-import { NewsSyncPill, type SyncState } from "./news-sync-pill";
+import { NewsLiveStatus, NewsSyncWhisper } from "./news-live-status";
+import type { AutoSyncPhase } from "./use-news-auto-sync";
 
 // The page header.
 //
@@ -17,19 +18,15 @@ import { NewsSyncPill, type SyncState } from "./news-sync-pill";
 export function NewsHero({
   snapshot,
   latest,
-  syncState,
-  canRefresh,
+  syncPhase,
   mounted,
-  onRefresh,
   onOpen,
   onShowSources,
 }: {
   snapshot: NewsSnapshot;
   latest: NewsArticle[];
-  syncState: SyncState;
-  canRefresh: boolean;
+  syncPhase: AutoSyncPhase;
   mounted?: boolean;
-  onRefresh: () => void;
   onOpen: (article: NewsArticle) => void;
   onShowSources: () => void;
 }) {
@@ -68,27 +65,28 @@ export function NewsHero({
                   >
                     {stats.sources} live sources
                   </button>
-                  , de-duplicated across publishers and re-synced every hour. Every story links to
-                  the original.
+                  , de-duplicated across publishers, illustrated from each publisher&rsquo;s own artwork,
+                  and kept current on its own. Every story links to the original.
                 </>
               ) : (
                 <>
-                  Verified AI news from around thirty first-party, research and press sources.
-                  Re-synced every hour, no API key required.
+                  Verified AI news from around forty first-party, research and press sources.
+                  Syncs itself, no API key required.
                 </>
               )}
             </p>
           </div>
 
-          <NewsSyncPill
-            syncedAt={snapshot.syncedAt}
-            state={syncState}
-            warnings={snapshot.warnings}
-            canRefresh={canRefresh}
-            mounted={mounted}
-            onRefresh={onRefresh}
-            className="shrink-0"
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <NewsSyncWhisper phase={syncPhase} />
+            <NewsLiveStatus
+              syncedAt={snapshot.syncedAt}
+              origin={snapshot.origin}
+              phase={syncPhase}
+              warnings={snapshot.warnings}
+              mounted={mounted}
+            />
+          </div>
         </div>
 
         {stats.articles > 0 && (

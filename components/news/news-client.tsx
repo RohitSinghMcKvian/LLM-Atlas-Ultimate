@@ -4,13 +4,14 @@ import { useSurfaceContext } from "@/lib/agent/surface-context";
 import { newsSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, ImageOff, X } from "lucide-react";
 import type { CatalogDiffEntry } from "@/lib/catalog/snapshot";
 import { announce } from "@/lib/atlas-events";
 import { useMounted } from "@/lib/hooks/use-media-query";
 import {
   DEFAULT_FILTERS,
   clusterSiblings,
+  hasActiveFilters,
   relatedArticles,
   selectArticles,
   toNewsSearchParams,
@@ -24,11 +25,14 @@ import { NewsFeed } from "./news-feed";
 import { NewsFilterBar } from "./news-filter-bar";
 import { NewsHero } from "./news-hero";
 import { NewsRail } from "./news-rail";
-import type { SyncState } from "./news-sync-pill";
+import { NewsBrief } from "./news-brief";
+import { NewsNewStoriesRibbon } from "./news-live-status";
+import { NewsNotify } from "./news-notify";
+import { useNewsAutoSync } from "./use-news-auto-sync";
 
 // The /news orchestrator.
 //
-// Owns filter state, URL synchronisation, the keyboard model, the refresh
+// Owns filter state, URL synchronisation, the keyboard model, the auto-sync
 // lifecycle and the screen-reader announcements. Everything below it is
 // presentational, which is why none of those components needs to know about the
 // router or the store.
@@ -47,7 +51,6 @@ export function NewsClient({
   totalArticles,
   catalogDiff,
   initial,
-  publicRefresh,
 }: {
   snapshot: NewsSnapshot;
   /**
@@ -58,15 +61,12 @@ export function NewsClient({
   totalArticles: number;
   catalogDiff: readonly CatalogDiffEntry[];
   initial: NewsFilterState;
-  /** Whether the operator left the public Refresh endpoint enabled. */
-  publicRefresh: boolean;
 }) {
   const mounted = useMounted();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [filters, setFilters] = React.useState<NewsFilterState>(initial);
-  const [syncState, setSyncState] = React.useState<SyncState>({ kind: "idle" });
   const [live, setLive] = React.useState<NewsSnapshot>(snapshot);
   const [dismissedWarning, setDismissedWarning] = React.useState(false);
 
@@ -271,73 +271,32 @@ export function NewsClient({
     [toggleSaved, savedIds],
   );
 
-  // --- Refresh --------------------------------------------------------------
+  // --- Staying current ------------------------------------------------------
+  //
+  // No button, no `r` shortcut, no state machine reporting the outcome of a
+  // press. The hook polls while the tab is visible, adopts a new corpus outright
+  // when the reader is at the top of the feed, and holds it as a count when they
+  // are not — because re-sorting a page someone is reading is the one thing a
+  // live feed must never do.
+  //
+  // The cold-start poll below owns the empty case on its own clock, so the two
+  // loops are mutually exclusive rather than both hammering the same endpoint.
 
-  const refresh = React.useCallback(async () => {
-    if (syncState.kind === "syncing") return;
-    setSyncState({ kind: "syncing" });
-    announce("Syncing news");
+  const autoSync = useNewsAutoSync({
+    version: live.version,
+    articleCount: live.articles.length,
+    onAdopt: pullCorpus,
+    enabled: live.articles.length > 0,
+  });
 
-    try {
-      const response = await fetch("/api/v1/news/refresh", {
-        method: "POST",
-        // The CSRF guard: a cross-origin form POST cannot set a custom header
-        // without a preflight, and the route sends no CORS headers.
-        headers: { "x-atlas-refresh": "1" },
-      });
-
-      if (response.status === 429) {
-        const body = await response.json();
-        setSyncState({ kind: "rate_limited", retryAfterSeconds: body.retryAfterSeconds ?? 60 });
-        announce("Too many refreshes. Try again shortly.");
-        return;
-      }
-      if (!response.ok) throw new Error(`Refresh failed (${response.status})`);
-
-      const body = await response.json();
-
-      const before = live.articles.length;
-
-      if (body.status === "fresh") {
-        // The server's global cooldown: no upstream sweep ran. That does NOT
-        // mean this page is showing what the server has.
-        //
-        // The bug this guards against was the whole feature failing in front of
-        // a reader: a cold-start page renders empty, the background sweep fills
-        // the server's corpus seconds later, and the reader presses Sync now.
-        // The cooldown answers "fresh", and returning here left them staring at
-        // "the first sync is still running" while 245 stories sat one fetch
-        // away. Whenever the server's corpus differs from ours, adopt it —
-        // "up to date" has to mean the screen is, not just the server.
-        const stale =
-          body.syncedAt !== live.syncedAt || (body.articles ?? 0) !== before;
-        if (stale) {
-          const count = await pullCorpus();
-          if (count !== null) {
-            setDismissedWarning(false);
-            setSyncState({ kind: "synced", added: Math.max(0, count - before) });
-            announce(count > before ? `${count - before} new stories.` : "Up to date.");
-            return;
-          }
-        }
-
-        setSyncState({ kind: "fresh", nextEligibleAt: body.nextEligibleAt });
-        announce("Already up to date");
-        return;
-      }
-
-      const count = await pullCorpus();
-      setDismissedWarning(false);
-
-      const added = Math.max(0, (count ?? before) - before);
-      setSyncState({ kind: "synced", added });
-      announce(added > 0 ? `Synced. ${added} new stories.` : "Synced. Nothing new.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Refresh failed";
-      setSyncState({ kind: "error", message });
-      announce(message);
-    }
-  }, [syncState.kind, live.articles.length, live.syncedAt, pullCorpus]);
+  // Announce arrivals rather than showing them silently: a reader on a screen
+  // reader gets no benefit from a ribbon they cannot see.
+  const previousVersion = React.useRef(live.version);
+  React.useEffect(() => {
+    if (previousVersion.current === live.version) return;
+    previousVersion.current = live.version;
+    if (mounted) announce("Feed updated");
+  }, [live.version, mounted]);
 
   // --- Keyboard -------------------------------------------------------------
 
@@ -378,11 +337,6 @@ export function NewsClient({
       if (event.key === "/" && !typing) {
         event.preventDefault();
         searchRef.current?.focus();
-        return;
-      }
-      if (event.key === "r" && !typing && !event.shiftKey) {
-        event.preventDefault();
-        if (publicRefresh) void refresh();
         return;
       }
       if (typing) return;
@@ -458,7 +412,7 @@ export function NewsClient({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [filters, live.articles, handleOpen, handleToggleSave, patch, refresh, publicRefresh]);
+  }, [filters, live.articles, handleOpen, handleToggleSave, patch]);
 
   // --- Render ---------------------------------------------------------------
 
@@ -475,10 +429,8 @@ export function NewsClient({
       <NewsHero
         snapshot={live}
         latest={latest}
-        syncState={syncState}
-        canRefresh={publicRefresh}
+        syncPhase={autoSync.phase}
         mounted={mounted}
-        onRefresh={refresh}
         onOpen={handleOpen}
         onShowSources={() =>
           document.getElementById("news-feed")?.scrollIntoView({ behavior: "smooth" })
@@ -500,6 +452,18 @@ export function NewsClient({
         />
       )}
 
+      {/* The image gate yielded rather than show an empty page. Stated plainly,
+          because the alternative is a reader wondering why the "With images"
+          switch appears to do nothing. Not dismissible and not styled as a
+          warning: nothing is wrong, the feed is just being honest about which
+          of its own preferences it set aside. */}
+      {selection.imageGateRelaxed && !coldStart && selection.articles.length > 0 && (
+        <p className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
+          <ImageOff className="size-3.5 shrink-0" aria-hidden="true" />
+          Nothing in this view has a publisher image, so stories without one are being shown.
+        </p>
+      )}
+
       {/* Partial failure. Dismissible — a reader who has seen it once does not
           need it every render — but never hidden by default. */}
       {live.warnings.length > 0 && !dismissedWarning && !coldStart && (
@@ -519,13 +483,28 @@ export function NewsClient({
 
       <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div id="news-feed" ref={feedRef}>
+          {/* Stories that arrived while the reader was scrolled down, offered
+              rather than applied. Floats over the feed and takes no layout
+              space, so breaking news never shoves the page around. */}
+          <NewsNewStoriesRibbon count={autoSync.pending} onReveal={autoSync.reveal} />
+
+          {/* Today's brief: the same stories the daily notification carries,
+              chosen by the same function. Shown only in the default view — a
+              reader who has filtered down to one topic is asking a question the
+              edited brief does not answer, and the feed below does. */}
+          {!coldStart && !hasActiveFilters(filters) && (
+            <NewsBrief
+              articles={live.articles}
+              mounted={mounted}
+              onOpen={handleOpen}
+              className="mb-4"
+            />
+          )}
+
           {everythingFailed ? (
             <NewsOffline warnings={live.warnings} />
           ) : coldStart ? (
-            <NewsColdStart
-              syncing={syncState.kind === "syncing"}
-              onRefresh={publicRefresh ? refresh : undefined}
-            />
+            <NewsColdStart />
           ) : selection.articles.length === 0 ? (
             <NewsFilteredEmpty
               filters={filters}
@@ -545,14 +524,18 @@ export function NewsClient({
               savedIds={savedIds}
               readIds={readIds}
               mounted={mounted}
-              busy={syncState.kind === "syncing"}
+              busy={autoSync.phase === "updating"}
               onOpen={handleOpen}
               onToggleSave={handleToggleSave}
             />
           )}
         </div>
 
-        <div className="lg:sticky lg:top-20 lg:self-start">
+        <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          {/* The opt-in. Renders nothing at all when the deployment has no VAPID
+              keys, when the browser cannot receive a push, or once dismissed. */}
+          <NewsNotify />
+
           <NewsRail
             catalogDiff={catalogDiff}
             articles={live.articles}

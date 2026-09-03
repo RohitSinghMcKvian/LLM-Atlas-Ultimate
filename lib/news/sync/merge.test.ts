@@ -433,3 +433,144 @@ describe("mergeNews — cold start", () => {
     expect(record.articles).toEqual([]);
   });
 });
+
+// --- Image enrichment across sweeps ------------------------------------------
+//
+// Two bugs found by driving a real sync against real feeds for an hour, both
+// invisible in a single run and both fatal to image coverage over a day. They
+// are pinned here because neither would ever fail a test that only merges once.
+
+const IMAGE = { url: "https://cdn.example-lab.com/hero.jpg", host: "cdn.example-lab.com" };
+
+describe("mergeNews — carried enrichment", () => {
+  it("keeps an image the previous sweep recovered when the fresh copy has none", () => {
+    // THE BUG: "a fresh copy always wins" is right for a headline the publisher
+    // corrected, and catastrophic for an image we derived ourselves. A re-parsed
+    // feed item simply has no image field, so every recovered picture was thrown
+    // away on the very next sweep — and coverage could never exceed what one run
+    // managed.
+    const enriched = article(LAB, {
+      id: "keep",
+      title: "Example Lab introduces Nova 3",
+      image: { ...IMAGE, source: "opengraph" },
+    });
+    const { record: first } = merge([outcome(LAB, [enriched])]);
+    expect(first.articles[0].image?.url).toBe(IMAGE.url);
+
+    // The same article, re-parsed from the feed on the next sweep. No image.
+    const reparsed = article(LAB, {
+      id: "keep",
+      title: "Example Lab introduces Nova 3",
+      url: enriched.url,
+    });
+    const { record: second } = merge([outcome(LAB, [reparsed])], first);
+
+    expect(second.articles[0].image?.url).toBe(IMAGE.url);
+    expect(second.articles[0].image?.source).toBe("opengraph");
+  });
+
+  it("lets a fresh image win when the publisher actually changed their artwork", () => {
+    const before = article(LAB, { id: "swap", title: "Example Lab introduces Nova 3", image: IMAGE });
+    const { record: first } = merge([outcome(LAB, [before])]);
+
+    const after = article(LAB, {
+      id: "swap",
+      title: "Example Lab introduces Nova 3",
+      url: before.url,
+      image: { url: "https://cdn.example-lab.com/new-hero.jpg", host: "cdn.example-lab.com" },
+    });
+    const { record: second } = merge([outcome(LAB, [after])], first);
+
+    expect(second.articles[0].image?.url).toBe("https://cdn.example-lab.com/new-hero.jpg");
+  });
+
+  it("counts image coverage in the stats", () => {
+    const { record } = merge([
+      outcome(LAB, [article(LAB, { title: "Example Lab introduces Nova 3", image: IMAGE })]),
+      outcome(PRESS, [article(PRESS, { title: "Something else entirely happened today" })]),
+    ]);
+
+    expect(record.stats.withImage).toBe(1);
+    expect(record.stats.articles).toBe(2);
+  });
+
+  it("publishes every image host to the proxy allowlist", () => {
+    const { record } = merge([
+      outcome(LAB, [article(LAB, { title: "Example Lab introduces Nova 3", image: IMAGE })]),
+    ]);
+    expect(record.imageHosts).toContain("cdn.example-lab.com");
+  });
+});
+
+describe("mergeNews — image miss bookkeeping", () => {
+  it("accumulates failed lookups so the next sweep tries different candidates", () => {
+    // THE BUG: with no memory, a bounded pass over a corpus in a stable order
+    // picks the SAME candidates every hour — the ones whose pages have no usable
+    // og:image. Coverage plateaued permanently a few points above the cold start
+    // while the budget was spent re-proving the same failures.
+    const a = article(LAB, { id: "miss1", title: "Example Lab introduces Nova 3" });
+
+    const { record: first } = mergeNews({
+      outcomes: [outcome(LAB, [a])],
+      now: NOW,
+      feeds: FEEDS,
+      imageMissed: ["miss1"],
+    });
+    expect(first.imageMisses).toEqual({ miss1: 1 });
+
+    const { record: second } = mergeNews({
+      outcomes: [outcome(LAB, [a])],
+      previous: first,
+      now: NOW,
+      feeds: FEEDS,
+      imageMissed: ["miss1"],
+    });
+    expect(second.imageMisses).toEqual({ miss1: 2 });
+  });
+
+  it("carries misses forward on a sweep that attempted nothing", () => {
+    const a = article(LAB, { id: "miss1", title: "Example Lab introduces Nova 3" });
+    const { record: first } = mergeNews({
+      outcomes: [outcome(LAB, [a])],
+      now: NOW,
+      feeds: FEEDS,
+      imageMissed: ["miss1"],
+    });
+
+    const { record: second } = merge([outcome(LAB, [a])], first);
+    expect(second.imageMisses).toEqual({ miss1: 1 });
+  });
+
+  it("prunes misses for articles that have left the corpus", () => {
+    // Otherwise the map grows without bound across months of hourly syncs, and
+    // it is persisted as jsonb on every single snapshot row.
+    const gone = article(LAB, { id: "gone", title: "Example Lab introduces Nova 3" });
+    const { record: first } = mergeNews({
+      outcomes: [outcome(LAB, [gone])],
+      now: NOW,
+      feeds: FEEDS,
+      imageMissed: ["gone"],
+    });
+    expect(first.imageMisses).toEqual({ gone: 1 });
+
+    // The article ages out past retention; a different one takes its place.
+    const { record: second } = mergeNews({
+      outcomes: [outcome(LAB, [article(LAB, { id: "fresh", title: "A completely different story" })])],
+      previous: { ...first, articles: [] },
+      now: NOW,
+      feeds: FEEDS,
+    });
+
+    expect(second.imageMisses).toEqual({});
+  });
+
+  it("ignores a reported miss for an article that is not in the corpus", () => {
+    const { record } = mergeNews({
+      outcomes: [outcome(LAB, [article(LAB, { title: "Example Lab introduces Nova 3" })])],
+      now: NOW,
+      feeds: FEEDS,
+      imageMissed: ["not-a-real-id"],
+    });
+    expect(record.imageMisses).toEqual({});
+  });
+});

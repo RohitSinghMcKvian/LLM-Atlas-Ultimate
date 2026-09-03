@@ -3,6 +3,8 @@ import {
   generativeArt,
   isAllowedImageUrl,
   isSafeImageUrl,
+  isUsableImageResponse,
+  isUsableStoryImage,
   newsImageSrc,
   NEWS_IMAGE_ENDPOINT,
 } from "./image";
@@ -180,5 +182,120 @@ describe("generativeArt", () => {
 
   it("handles an empty seed without throwing", () => {
     expect(() => generativeArt("")).not.toThrow();
+  });
+});
+
+// --- Quality gate -----------------------------------------------------------
+//
+// `isSafeImageUrl` asks whether a URL is safe to fetch. This asks the separate
+// question of whether what comes back is a picture of the story or a piece of
+// site furniture — the distinction between a feed of photographs and a feed that
+// looks broken.
+
+describe("isUsableStoryImage", () => {
+  it("accepts an ordinary editorial image", () => {
+    expect(isUsableStoryImage("https://cdn.press.test/2025/07/hero.jpg")).toBe(true);
+  });
+
+  it("accepts an image with no dimension information at all", () => {
+    // The common case. Requiring dimensions would empty the feed, so they are
+    // only ever used to reject, never required to accept.
+    expect(isUsableStoryImage("https://cdn.press.test/photo.png", {})).toBe(true);
+  });
+
+  it("inherits every rejection from the safety gate", () => {
+    expect(isUsableStoryImage("http://cdn.press.test/hero.jpg")).toBe(false);
+    expect(isUsableStoryImage("https://127.0.0.1/hero.jpg")).toBe(false);
+    expect(isUsableStoryImage("not a url")).toBe(false);
+  });
+
+  describe("furniture", () => {
+    it.each([
+      ["a tracking pixel", "https://cdn.press.test/img/pixel.gif"],
+      ["a spacer", "https://cdn.press.test/assets/spacer.png"],
+      ["a 1x1", "https://cdn.press.test/1x1.gif"],
+      ["a publisher logo", "https://cdn.press.test/static/logo-dark.png"],
+      ["a favicon", "https://cdn.press.test/favicon.png"],
+      ["an avatar", "https://cdn.press.test/users/avatar.jpg"],
+      ["a share icon", "https://cdn.press.test/share-twitter.png"],
+      ["a sprite sheet", "https://cdn.press.test/sprite.png"],
+      ["a placeholder", "https://cdn.press.test/placeholder.jpg"],
+    ])("rejects %s", (_label, url) => {
+      expect(isUsableStoryImage(url)).toBe(false);
+    });
+
+    it("matches furniture patterns in the path only, never the host", () => {
+      // `images.logos-cdn.test` is a perfectly good CDN; rejecting on the host
+      // would throw away every image a whole publisher serves.
+      expect(isUsableStoryImage("https://images.logos-cdn.test/2025/hero.jpg")).toBe(true);
+    });
+  });
+
+  it("rejects analytics beacon hosts", () => {
+    expect(isUsableStoryImage("https://pixel.wp.com/g.gif?blog=1")).toBe(false);
+    expect(isUsableStoryImage("https://feeds.feedburner.com/~ff/aifeed?a=b")).toBe(false);
+  });
+
+  it("rejects SVG and ICO, which are icons rather than photographs", () => {
+    expect(isUsableStoryImage("https://cdn.press.test/art.svg")).toBe(false);
+    expect(isUsableStoryImage("https://cdn.press.test/art.ico")).toBe(false);
+  });
+
+  it("rejects anything declared smaller than an icon on either axis", () => {
+    expect(isUsableStoryImage("https://cdn.press.test/a.jpg", { width: 64, height: 800 })).toBe(false);
+    expect(isUsableStoryImage("https://cdn.press.test/a.jpg", { width: 800, height: 64 })).toBe(false);
+    expect(isUsableStoryImage("https://cdn.press.test/a.jpg", { width: 800, height: 600 })).toBe(true);
+  });
+
+  it("reads CDN dimension hints out of the query string", () => {
+    // The same path is often served full-size elsewhere; this is the thumbnail
+    // variant, and upscaling it into a card is what makes a hero look blurry.
+    expect(isUsableStoryImage("https://cdn.press.test/hero.jpg?w=48&h=48")).toBe(false);
+    expect(isUsableStoryImage("https://cdn.press.test/hero.jpg?w=1200&h=630")).toBe(true);
+  });
+
+  it("prefers the declared attributes over the query hints", () => {
+    expect(
+      isUsableStoryImage("https://cdn.press.test/hero.jpg?w=48", { width: 1200, height: 630 }),
+    ).toBe(true);
+  });
+
+  it("rejects mastheads and sidebar rails by aspect ratio", () => {
+    expect(isUsableStoryImage("https://cdn.press.test/a.jpg", { width: 1000, height: 200 })).toBe(false);
+    expect(isUsableStoryImage("https://cdn.press.test/a.jpg", { width: 200, height: 1000 })).toBe(false);
+    // 16:9 and 1:1 both survive.
+    expect(isUsableStoryImage("https://cdn.press.test/a.jpg", { width: 1600, height: 900 })).toBe(true);
+    expect(isUsableStoryImage("https://cdn.press.test/a.jpg", { width: 600, height: 600 })).toBe(true);
+  });
+});
+
+describe("isUsableImageResponse", () => {
+  it("accepts a normal image response", () => {
+    expect(isUsableImageResponse("image/jpeg", "148213")).toBe(true);
+  });
+
+  it("rejects a soft 404 that answers with HTML", () => {
+    // The failure this exists for: a URL ending .jpg that returns an error page
+    // with status 200. Nothing earlier in the pipeline can see this.
+    expect(isUsableImageResponse("text/html; charset=utf-8", "5120")).toBe(false);
+  });
+
+  it("rejects SVG and icon content types", () => {
+    expect(isUsableImageResponse("image/svg+xml", "9000")).toBe(false);
+    expect(isUsableImageResponse("image/vnd.microsoft.icon", "9000")).toBe(false);
+  });
+
+  it("rejects a body too small to be a photograph", () => {
+    expect(isUsableImageResponse("image/gif", "43")).toBe(false);
+  });
+
+  it("accepts when the length is absent or unparseable", () => {
+    // Omitted on any streamed response; absence is not evidence of a pixel.
+    expect(isUsableImageResponse("image/webp", null)).toBe(true);
+    expect(isUsableImageResponse("image/webp", "chunked")).toBe(true);
+  });
+
+  it("rejects a missing content type", () => {
+    expect(isUsableImageResponse(null, "148213")).toBe(false);
   });
 });

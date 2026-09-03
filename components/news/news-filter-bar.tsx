@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Bookmark,
   GitCommitVertical,
+  ImageIcon,
   Grid3x3,
   LayoutGrid,
   Rows3,
@@ -114,6 +115,7 @@ export function NewsFilterBar(props: NewsFilterBarProps) {
 
         <div className="hidden items-center gap-3 sm:flex">
           <VerifiedToggle {...props} />
+          <ImagesToggle {...props} />
           <SavedToggle {...props} />
         </div>
 
@@ -157,6 +159,7 @@ export function NewsFilterBar(props: NewsFilterBarProps) {
 
             <div className="flex flex-col gap-3 text-xs">
               <VerifiedToggle {...props} />
+              <ImagesToggle {...props} />
               <SavedToggle {...props} />
             </div>
 
@@ -311,6 +314,27 @@ function VerifiedToggle({ filters, onChange }: NewsFilterBarProps) {
       />
       <ShieldCheck className="size-3" aria-hidden="true" />
       Verified only
+    </label>
+  );
+}
+
+/**
+ * The image gate.
+ *
+ * Phrased as "With images" rather than "Hide imageless stories" because the
+ * switch is ON by default, and a default-on control should read as a description
+ * of what you are looking at, not as a suppression you have to reason about.
+ */
+function ImagesToggle({ filters, onChange }: NewsFilterBarProps) {
+  return (
+    <label className="flex cursor-pointer items-center gap-1.5">
+      <Switch
+        checked={filters.imagesOnly}
+        onCheckedChange={(imagesOnly) => onChange({ imagesOnly })}
+        aria-label="Show only stories that have a publisher image"
+      />
+      <ImageIcon className="size-3" aria-hidden="true" />
+      With images
     </label>
   );
 }

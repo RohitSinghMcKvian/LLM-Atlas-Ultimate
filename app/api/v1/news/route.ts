@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getNewsSnapshot } from "@/lib/news/store";
+import { getNewsSnapshot, isStale } from "@/lib/news/store";
 import { liveScore } from "@/lib/news/rank";
 import type { NewsArticle } from "@/lib/news/types";
 
@@ -36,8 +36,18 @@ export async function GET(req: NextRequest) {
         stats: snapshot.stats,
         warnings: snapshot.warnings,
         enrichment: snapshot.enrichment,
+        // The server's own verdict on its freshness, so the client's auto-sync
+        // loop never has to reimplement the threshold — and cannot drift from it
+        // when `ATLAS_NEWS_SYNC_INTERVAL_MINUTES` is tuned on the server only.
+        stale: isStale(snapshot),
       },
-      { headers: cacheHeaders(snapshot.version, "stats") },
+      {
+        // `stale` is a function of wall-clock time, not of the corpus, so this
+        // one projection must not be served from a CDN copy minted an hour ago:
+        // a cached `stale: false` is exactly the state the client polls to
+        // escape. The ETag stays for conditional requests within a response.
+        headers: { ETag: `"${snapshot.version}-stats"`, "Cache-Control": "no-store" },
+      },
     );
   }
 

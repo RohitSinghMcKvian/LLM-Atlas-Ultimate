@@ -91,6 +91,18 @@ export interface NewsImage {
   width?: number;
   height?: number;
   alt?: string;
+  /**
+   * How the image was found.
+   *
+   * `feed` came out of the feed's own `media:content`/`enclosure`/inline markup.
+   * `opengraph` was recovered from the article page's `<head>` by
+   * `lib/news/sync/og.ts`, which is where the large majority come from — RSS
+   * almost never carries one.
+   *
+   * Optional because snapshots persisted before the OpenGraph pass existed have
+   * no value here, and a stored corpus must keep deserialising across a deploy.
+   */
+  source?: "feed" | "opengraph";
 }
 
 export interface NewsArticle {
@@ -225,6 +237,16 @@ export interface NewsStats {
   verified: number;
   firstParty: number;
   last24h: number;
+  /**
+   * Articles carrying a real publisher image.
+   *
+   * Tracked as a headline number because it is the one quality metric that
+   * degrades silently: an OpenGraph pass that starts timing out does not fail
+   * any sanity gate, it just quietly returns a feed of gradients. Surfacing the
+   * count means the regression is visible in the UI and in the sync log rather
+   * than only to whoever happens to scroll.
+   */
+  withImage: number;
   byTopic: Record<NewsTopic, number>;
 }
 
@@ -279,6 +301,20 @@ export interface NewsSnapshotRecord extends NewsSnapshot {
   signatures: Record<string, string[]>;
   /** Ids retention dropped, so a re-crawled item is not announced as "new" a second time. */
   retired: string[];
+  /**
+   * Article id → how many times the OpenGraph pass has tried and failed to find
+   * it a picture.
+   *
+   * Without this the pass has no memory, and a bounded sweep over a corpus
+   * ordered by source weight picks the *same* candidates every hour: the ones
+   * whose pages genuinely have no usable `og:image`. Coverage then plateaus
+   * permanently a little above where the cold start left it, having spent a
+   * bounded budget re-proving the same failures forever.
+   *
+   * Two strikes and an article is left alone. Pruned to live ids on every merge,
+   * so it cannot outgrow the corpus.
+   */
+  imageMisses?: Record<string, number>;
 }
 
 /** Sort modes offered in the filter bar. */
@@ -294,6 +330,20 @@ export interface NewsFilterState {
   sources: string[];
   verifiedOnly: boolean;
   savedOnly: boolean;
+  /**
+   * Hide stories that have no real publisher image.
+   *
+   * On by default, and the default is the point: with the OpenGraph pass in
+   * place the large majority of the corpus carries a genuine photograph, and a
+   * grid where every fourth tile is a generated gradient reads as a broken page
+   * rather than as a considered one. Treated as a display preference rather than
+   * a content filter — `hasActiveFilters` ignores it and "clear filters"
+   * preserves it, the same way `sort` and `view` are preserved.
+   *
+   * `selectArticles` relaxes it automatically rather than ever showing an empty
+   * feed; see `imageGateRelaxed`.
+   */
+  imagesOnly: boolean;
   sort: NewsSort;
   view: NewsView;
   /** Article id whose deep dive is open, if any. */

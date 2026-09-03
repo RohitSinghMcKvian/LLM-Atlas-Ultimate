@@ -39,6 +39,17 @@ export interface MergeOptions {
   llmEnriched?: boolean;
   /** Feeds that were in scope for this run; defaults to the active registry. */
   feeds?: readonly FeedSource[];
+  /**
+   * The previous corpus, already rehydrated.
+   *
+   * Passed in when the caller needed the carried articles *before* the merge —
+   * `runNewsSync` does, because the OpenGraph image pass runs over the whole
+   * corpus rather than only over what this sweep fetched. Rehydrating twice
+   * would be wasteful and, worse, would discard the images that pass just found.
+   */
+  carried?: readonly RawArticle[];
+  /** Ids the OpenGraph pass tried and failed on this run. */
+  imageMissed?: readonly string[];
 }
 
 export interface MergeResult {
@@ -112,17 +123,39 @@ export function mergeNews(options: MergeOptions): MergeResult {
   // --- Combine fresh articles with the carried-forward corpus ---------------
 
   const fresh = outcomes.flatMap((o) => o.articles);
-  const carried = previous ? rehydrate(previous) : [];
+  const carried = options.carried ?? carriedArticles(previous);
 
-  // A fresh copy always wins over a carried one: the publisher may have
-  // corrected a headline or added an image. But `firstSeen` is preserved from
-  // the record, so "new since your last visit" does not reset when a publisher
-  // edits a post.
+  // A fresh copy wins over a carried one for everything the FEED asserts: the
+  // publisher may have corrected a headline or a summary, and their version is
+  // authoritative.
+  //
+  // It does NOT win for enrichment we derived ourselves. An image recovered from
+  // the article's `og:image` by `sync/og.ts` is not something the feed has an
+  // opinion about — a re-parsed item simply has no image field at all — so
+  // letting the fresh copy overwrite it would throw the image away on the very
+  // next sweep. That defect is invisible in one run and devastating over a day:
+  // the OpenGraph pass enriches a bounded number of articles per sweep, so
+  // coverage is supposed to ACCUMULATE towards the whole corpus. Overwriting
+  // would have pinned it to whatever one run managed, permanently.
+  //
+  // `firstSeen` is preserved for a related reason: "new since your last visit"
+  // must not reset because a publisher edited a post.
   const byId = new Map<string, RawArticle>();
   for (const article of carried) byId.set(article.id, article);
   for (const article of fresh) {
     const existing = byId.get(article.id);
-    byId.set(article.id, existing ? { ...article, firstSeenAt: existing.firstSeenAt } : article);
+    if (!existing) {
+      byId.set(article.id, article);
+      continue;
+    }
+    byId.set(article.id, {
+      ...article,
+      firstSeenAt: existing.firstSeenAt,
+      // Carried enrichment survives a fresh copy that lacks it. A fresh copy
+      // that HAS an image still wins — the publisher changed their artwork.
+      image: article.image ?? existing.image,
+      abstract: article.abstract ?? existing.abstract,
+    });
   }
 
   const firstSeen: Record<string, string> = { ...(previous?.firstSeen ?? {}) };
@@ -254,6 +287,19 @@ export function mergeNews(options: MergeOptions): MergeResult {
   const signatures: Record<string, string[]> = {};
   for (const raw of kept) signatures[raw.id] = raw.signature;
 
+  // Failed image lookups, accumulated and then pruned to what is still in the
+  // corpus. Pruning here rather than on write is what stops the map growing
+  // without bound across months of hourly syncs — the same treatment
+  // `firstSeen` gets a few lines below.
+  const liveArticleIds = new Set(kept.map((raw) => raw.id));
+  const imageMisses: Record<string, number> = {};
+  for (const [id, count] of Object.entries(previous?.imageMisses ?? {})) {
+    if (liveArticleIds.has(id)) imageMisses[id] = count;
+  }
+  for (const id of options.imageMissed ?? []) {
+    if (liveArticleIds.has(id)) imageMisses[id] = (imageMisses[id] ?? 0) + 1;
+  }
+
   // Prune `firstSeen` down to what is still reachable, so it does not grow
   // without bound across months of hourly syncs.
   const liveIds = new Set(articles.map((a) => a.id));
@@ -285,6 +331,7 @@ export function mergeNews(options: MergeOptions): MergeResult {
     // Bounded: only the most recent retirements matter, and only to stop a
     // re-crawled item being announced as "new" twice.
     retired: [...retired].slice(-2_000),
+    imageMisses,
   };
 
   return { record, ok: failed.length === 0 };
@@ -333,6 +380,19 @@ function compareIds(a: RawArticle, b: RawArticle): number {
  * (`sourceWeight`, `aggregator`). A source that has since been removed from the
  * registry falls back to conservative values rather than dropping its articles.
  */
+/**
+ * The previous corpus as raw articles, ready to be merged or re-enriched.
+ *
+ * Exported because `runNewsSync` needs it before the merge: in the steady state
+ * every feed answers 304 and this sweep therefore has NO fresh articles at all,
+ * so an image pass that only looked at fresh arrivals would have nothing to do
+ * forever. Image coverage is meant to accumulate across sweeps, and this is the
+ * set it accumulates over.
+ */
+export function carriedArticles(previous: NewsSnapshotRecord | null): RawArticle[] {
+  return previous ? rehydrate(previous) : [];
+}
+
 function rehydrate(record: NewsSnapshotRecord): RawArticle[] {
   const feedById = new Map(activeFeeds().map((f) => [f.id, f]));
 
@@ -410,6 +470,7 @@ function carryForward(
     firstSeen: {},
     signatures: {},
     retired: [],
+    imageMisses: {},
   };
 }
 
@@ -450,6 +511,7 @@ export function emptyStats(): NewsStats {
     verified: 0,
     firstParty: 0,
     last24h: 0,
+    withImage: 0,
     byTopic: Object.fromEntries(TOPIC_IDS.map((t) => [t, 0])) as Record<NewsTopic, number>,
   };
 }
@@ -464,6 +526,7 @@ export function computeStats(
   let verified = 0;
   let firstParty = 0;
   let last24h = 0;
+  let withImage = 0;
   const dayAgo = now - 86_400_000;
 
   for (const article of articles) {
@@ -472,6 +535,7 @@ export function computeStats(
       verified++;
     }
     if (article.tier === "first_party") firstParty++;
+    if (article.image?.url) withImage++;
     const published = Date.parse(article.publishedAt);
     if (Number.isFinite(published) && published >= dayAgo) last24h++;
   }
@@ -486,6 +550,7 @@ export function computeStats(
     verified,
     firstParty,
     last24h,
+    withImage,
     byTopic,
   };
 }
