@@ -6,6 +6,7 @@ import type {
   NewsArticle,
   NewsCluster,
   NewsSnapshotRecord,
+  SourceImageYield,
   NewsSourceResult,
   NewsSourceSummary,
   NewsStats,
@@ -50,6 +51,8 @@ export interface MergeOptions {
   carried?: readonly RawArticle[];
   /** Ids the OpenGraph pass tried and failed on this run. */
   imageMissed?: readonly string[];
+  /** This run's per-source image outcomes, folded into the record's running totals. */
+  imageOutcomes?: Readonly<Record<string, SourceImageYield>>;
 }
 
 export interface MergeResult {
@@ -300,6 +303,12 @@ export function mergeNews(options: MergeOptions): MergeResult {
     if (liveArticleIds.has(id)) imageMisses[id] = (imageMisses[id] ?? 0) + 1;
   }
 
+  const imageYield = accumulateImageYield(
+    previous?.imageYield,
+    options.imageOutcomes,
+    new Set(feeds.map((feed) => feed.id)),
+  );
+
   // Prune `firstSeen` down to what is still reachable, so it does not grow
   // without bound across months of hourly syncs.
   const liveIds = new Set(articles.map((a) => a.id));
@@ -332,12 +341,61 @@ export function mergeNews(options: MergeOptions): MergeResult {
     // re-crawled item being announced as "new" twice.
     retired: [...retired].slice(-2_000),
     imageMisses,
+    imageYield,
   };
 
   return { record, ok: failed.length === 0 };
 }
 
 // --- Helpers ----------------------------------------------------------------
+
+/**
+ * Fold this run's per-source image outcomes into the running totals.
+ *
+ * Two things beyond addition, and both matter.
+ *
+ * PRUNING. Keyed by feed id and cut down to the feeds that still exist, exactly
+ * as `firstSeen` and `imageMisses` are. A retired feed's record is of no use to
+ * anyone and would otherwise sit in the row forever.
+ *
+ * DECAY. Counts are halved once a source passes `YIELD_HALF_LIFE` attempts.
+ * Without it the totals are a permanent verdict: a publisher that adds
+ * `og:image` tags after ten thousand recorded misses would need another ten
+ * thousand hits to climb back out, so the pass would go on believing a stale
+ * fact for months. Halving preserves the ratio — a source that is genuinely
+ * barren stays barren — while keeping recent evidence able to outweigh old.
+ */
+export const YIELD_HALF_LIFE = 500;
+
+export function accumulateImageYield(
+  previous: Readonly<Record<string, SourceImageYield>> | undefined,
+  outcomes: Readonly<Record<string, SourceImageYield>> | undefined,
+  liveSourceIds: ReadonlySet<string>,
+): Record<string, SourceImageYield> {
+  const merged: Record<string, SourceImageYield> = {};
+
+  for (const [sourceId, stats] of Object.entries(previous ?? {})) {
+    if (!liveSourceIds.has(sourceId)) continue;
+    merged[sourceId] = { tried: stats.tried, resolved: stats.resolved };
+  }
+
+  for (const [sourceId, stats] of Object.entries(outcomes ?? {})) {
+    if (!liveSourceIds.has(sourceId)) continue;
+    const entry = (merged[sourceId] ??= { tried: 0, resolved: 0 });
+    entry.tried += stats.tried;
+    entry.resolved += stats.resolved;
+  }
+
+  for (const entry of Object.values(merged)) {
+    if (entry.tried < YIELD_HALF_LIFE) continue;
+    // `round` rather than `floor` so a source sitting on an odd count does not
+    // lose a hit it earned every time it is halved.
+    entry.tried = Math.round(entry.tried / 2);
+    entry.resolved = Math.round(entry.resolved / 2);
+  }
+
+  return merged;
+}
 
 /**
  * The snapshot's content hash.
@@ -471,6 +529,7 @@ function carryForward(
     signatures: {},
     retired: [],
     imageMisses: {},
+    imageYield: {},
   };
 }
 

@@ -1,5 +1,5 @@
 import { isUsableImageResponse, isUsableStoryImage } from "../image";
-import type { NewsImage } from "../types";
+import type { NewsImage, SourceImageYield } from "../types";
 import { ATLAS_UA, fetchText } from "./fetch";
 import { decodeEntities } from "./xml";
 import type { RawArticle } from "./types";
@@ -301,6 +301,11 @@ export interface DiscoverImagesOptions {
    * candidates the last one never got to.
    */
   misses?: Readonly<Record<string, number>>;
+  /**
+   * Source id → how that source has fared historically. Sources with a proven
+   * hit rate are served before sources without one; see `MIN_YIELD_SAMPLE`.
+   */
+  sourceYield?: Readonly<Record<string, SourceImageYield>>;
   signal?: AbortSignal;
 }
 
@@ -322,6 +327,39 @@ export interface DiscoverImagesResult {
   resolved: number;
   /** Ids tried without success this run, for the caller to persist. */
   missed: string[];
+  /** This run's per-source outcomes, for the caller to fold into the record. */
+  sourceOutcomes: Record<string, SourceImageYield>;
+}
+
+/**
+ * Attempts against a source before its hit rate is trusted enough to act on.
+ *
+ * Twenty is roughly one sweep's worth of a single busy source. Below it the
+ * ordering falls back to source weight alone, so a newly added feed is never
+ * demoted on the strength of three unlucky timeouts.
+ */
+export const MIN_YIELD_SAMPLE = 20;
+
+/**
+ * Hit rate at or below which a source is served last.
+ *
+ * Not zero. A source that resolves one page in fifty is not meaningfully better
+ * than one that resolves none, and treating it as productive lets it keep a
+ * share of the budget it cannot earn back.
+ */
+export const BARREN_YIELD_RATE = 0.05;
+
+/**
+ * Is this source worth spending the budget on before the others?
+ *
+ * Three states, not two: `0` proven productive, `1` unproven, `2` proven barren.
+ * Unproven sits in the middle deliberately — a source nobody has measured must
+ * outrank one measured to be barren, or a new feed could never accumulate the
+ * sample it needs to prove itself.
+ */
+export function yieldRank(stats: SourceImageYield | undefined): 0 | 1 | 2 {
+  if (!stats || stats.tried < MIN_YIELD_SAMPLE) return 1;
+  return stats.resolved / stats.tried > BARREN_YIELD_RATE ? 0 : 2;
 }
 
 function envInt(name: string, fallback: number): number {
@@ -403,29 +441,20 @@ export async function discoverImages(
     limit = envInt("ATLAS_NEWS_OG_LIMIT", 120),
     verify = process.env.ATLAS_NEWS_OG_VERIFY !== "false",
     misses = {},
+    sourceYield = {},
     signal,
   } = options;
 
-  // Ordering decides what gets a picture when the budget runs out, so it is
-  // ordered the way the feed is read: trusted sources first, and within a source
-  // the newest story first. Sorting by source weight alone spent the budget on a
-  // first-party blog's back catalogue while today's headlines stayed grey.
-  // De-duplicate by id, keeping the first occurrence. The caller passes this
+  // Ordering decides what gets a picture when the budget runs out, and it is the
+  // difference between coverage that climbs and coverage that crawls. Each key's
+  // rationale is at the comparator itself, below.
+  //
+  // De-duplicating by id here keeps the first occurrence. The caller passes this
   // sweep's arrivals ahead of the carried corpus, so a story present in both is
   // enriched once, on the object the merge will actually keep.
-  // Ordering decides what gets a picture when the budget runs out, and it is the
-  // difference between coverage that climbs and coverage that crawls.
-  //
-  //   1. NEVER TRIED first. A bounded pass over a fixed ordering otherwise
-  //      spends its whole budget re-attempting the same failures for two full
-  //      sweeps before the strike count lets it move on — so the corpus creeps
-  //      forward one batch every two hours instead of one every hour, while an
-  //      untried tail sits there untouched.
-  //   2. Then source weight, so a first-party announcement outranks the fourth
-  //      rewrite of it.
-  //   3. Then recency, so today's headlines beat a blog's back catalogue.
   const seen = new Set<string>();
   const attempts = (id: string): number => misses[id] ?? 0;
+  const rank = (sourceId: string): number => yieldRank(sourceYield[sourceId]);
 
   const pending = articles
     .filter((article) => {
@@ -436,13 +465,32 @@ export async function discoverImages(
     })
     .sort(
       (a, b) =>
+        // SOURCE HIT RATE OUTRANKS EVERYTHING, including "never tried".
+        //
+        // This is the only ordering key that looks past the individual article,
+        // and it has to come first. Below it, "never tried" was doing exactly
+        // what it was written to do and the corpus still went nowhere: arXiv
+        // ships ~120 brand-new preprints every day, each one arrives untried, and
+        // research tier outranks press — so the budget was spent, in full, every
+        // single day, on the one source whose `og:image` is a logo the quality
+        // gate is right to reject. A per-article memory cannot see that, because
+        // no article is ever asked twice; only the source's own record shows it.
+        rank(a.sourceId) - rank(b.sourceId) ||
+        // Then never-tried first, WITHIN a source's rank. A bounded pass over a
+        // fixed order otherwise re-attempts the same failures for two full sweeps
+        // before the strike count releases them, while an untried tail sits
+        // untouched — coverage creeping one batch every two hours instead of one
+        // every hour.
         attempts(a.id) - attempts(b.id) ||
+        // Then source weight, so a first-party announcement outranks the fourth
+        // rewrite of it, and finally recency, so today's headlines beat a blog's
+        // back catalogue.
         b.sourceWeight - a.sourceWeight ||
         Date.parse(b.publishedAt) - Date.parse(a.publishedAt),
     )
     .slice(0, limit);
 
-  if (!pending.length) return { attempted: 0, resolved: 0, missed: [] };
+  if (!pending.length) return { attempted: 0, resolved: 0, missed: [], sourceOutcomes: {} };
 
   const deadline = AbortSignal.timeout(budgetMs);
   const passSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
@@ -451,6 +499,13 @@ export async function discoverImages(
   let attempted = 0;
   let resolved = 0;
   const missed: string[] = [];
+  const sourceOutcomes: Record<string, SourceImageYield> = {};
+
+  const record = (sourceId: string, hit: boolean): void => {
+    const entry = (sourceOutcomes[sourceId] ??= { tried: 0, resolved: 0 });
+    entry.tried += 1;
+    if (hit) entry.resolved += 1;
+  };
 
   async function drain(): Promise<void> {
     for (;;) {
@@ -465,6 +520,7 @@ export async function discoverImages(
       const article = pending[index];
       attempted += 1;
       const image = await resolveOne(article, { verify, signal: passSignal });
+      record(article.sourceId, Boolean(image));
       if (image) {
         article.image = image;
         resolved += 1;
@@ -476,5 +532,5 @@ export async function discoverImages(
 
   await Promise.all(Array.from({ length: Math.min(concurrency, pending.length) }, drain));
 
-  return { attempted, resolved, missed };
+  return { attempted, resolved, missed, sourceOutcomes };
 }

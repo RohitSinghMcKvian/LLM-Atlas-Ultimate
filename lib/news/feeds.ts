@@ -527,6 +527,17 @@ const PRESS: FeedSource[] = [
     // live sync pulled in "Costco will take your old tech and gift you a gift
     // card", which is not AI news by any reading.
     requiresAiFilter: true,
+    // Retired by the publisher, not by us. Measured 2026-09-04: this URL answers
+    // 301 to https://www.zdnet.com/news/rss.xml, which answers 404; so do
+    // /rss.xml, /topic/ai/rss.xml and /blog/rss.xml; and the homepage advertises
+    // no `application/rss+xml` autodiscovery link at all. There is nothing left
+    // to point at.
+    //
+    // Left as a disabled entry rather than deleted, per the note on `enabled`:
+    // the next person to wonder where ZDNET went can see what was tried. Turn it
+    // back on the day they publish a feed again — the only cost of it being here
+    // is this comment.
+    enabled: false,
   },
 ];
 

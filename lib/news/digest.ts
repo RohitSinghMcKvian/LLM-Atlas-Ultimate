@@ -132,9 +132,20 @@ export interface SelectDigestOptions {
  *      the brief is worth sending at all.
  *   2. **One story per cluster.** Five headlines about the same launch is not a
  *      brief, it is a malfunction.
- *   3. **Last 36 hours only.** A "daily brief" whose lead is from Tuesday is not
+ *   3. **At most `maxPerSource` from any one publisher.** One-per-cluster is not
+ *      enough on its own, and the gap is not hypothetical: measured against a
+ *      live corpus, this function returned five Google Developers posts, because
+ *      a first-party source with a high weight that publishes a batch on one
+ *      morning occupies five genuinely distinct clusters and sweeps the brief.
+ *      Five stories from one publisher is a newsletter from that publisher, not
+ *      a brief about AI.
+ *   4. **Last 36 hours only.** A "daily brief" whose lead is from Tuesday is not
  *      a brief. Thirty-six rather than twenty-four so a Monday-morning reader
  *      still gets the weekend's news.
+ *
+ * Rule 3 relaxes rather than ever shortening the brief — see the second pass
+ * below. The same principle as the feed's `imagesOnly` gate: a presentation
+ * preference must never cost the reader content.
  */
 export function selectDigestStories({
   articles,
@@ -163,14 +174,48 @@ export function selectDigestStories({
 
   const chosen: NewsArticle[] = [];
   const seenClusters = new Set<string>();
+  const perSource = new Map<string, number>();
+  const cap = maxPerSource(preferences.maxStories);
+
+  // First pass: the cap is enforced. Highest-ranked story from each publisher
+  // first, because `eligible` is already in rank order.
   for (const article of eligible) {
-    if (seenClusters.has(article.clusterId)) continue;
-    seenClusters.add(article.clusterId);
-    chosen.push(article);
     if (chosen.length >= preferences.maxStories) break;
+    if (seenClusters.has(article.clusterId)) continue;
+    if ((perSource.get(article.sourceId) ?? 0) >= cap) continue;
+    seenClusters.add(article.clusterId);
+    perSource.set(article.sourceId, (perSource.get(article.sourceId) ?? 0) + 1);
+    chosen.push(article);
+  }
+
+  // Second pass: fill any shortfall without the cap.
+  //
+  // A quiet news day, or a narrow topic filter, can leave too few publishers to
+  // fill the brief. Sending three stories instead of five to honour a diversity
+  // rule would be the rule harming the thing it exists to improve — so the cap
+  // yields, and the brief is still ordered by rank.
+  if (chosen.length < preferences.maxStories) {
+    for (const article of eligible) {
+      if (chosen.length >= preferences.maxStories) break;
+      if (seenClusters.has(article.clusterId)) continue;
+      seenClusters.add(article.clusterId);
+      chosen.push(article);
+    }
   }
 
   return chosen;
+}
+
+/**
+ * How many stories one publisher may contribute to a brief of `maxStories`.
+ *
+ * A third, floored at one. At the default of five that is two, which is enough
+ * for a lab that genuinely had two pieces of news and not enough for one that
+ * simply posts a lot. At three stories it is one apiece, because a three-story
+ * brief has no room to spend two on the same masthead.
+ */
+export function maxPerSource(maxStories: number): number {
+  return Math.max(1, Math.ceil(maxStories / 3));
 }
 
 export interface ComposeDigestOptions {

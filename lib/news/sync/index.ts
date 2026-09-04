@@ -1,7 +1,7 @@
 import { getCatalogSnapshot } from "@/lib/catalog/store";
 import type { CatalogSnapshot } from "@/lib/catalog/snapshot";
 import { activeFeeds, type FeedSource } from "../feeds";
-import type { NewsSnapshotRecord } from "../types";
+import type { NewsSnapshotRecord, SourceImageYield } from "../types";
 import { fetchFeed } from "./adapters/rss";
 import { carriedArticles, mergeNews, type MergeResult } from "./merge";
 import type { FeedFetchOutcome, RawArticle } from "./types";
@@ -111,15 +111,25 @@ export async function runNewsSync(options: RunNewsSyncOptions = {}): Promise<Run
   // coverage would freeze at whatever the cold start happened to manage.
   const carried = carriedArticles(previous);
 
-  const missed = await recoverImages([...outcomes.flatMap((o) => o.articles), ...carried], {
+  const images = await recoverImages([...outcomes.flatMap((o) => o.articles), ...carried], {
     signal,
     elapsedMs: Date.now() - startedAt,
     misses: previous?.imageMisses,
+    sourceYield: previous?.imageYield,
   });
 
   const llmEnriched = await maybeEnrich(outcomes, { now });
 
-  return mergeNews({ outcomes, previous, carried, now, llmEnriched, feeds, imageMissed: missed });
+  return mergeNews({
+    outcomes,
+    previous,
+    carried,
+    now,
+    llmEnriched,
+    feeds,
+    imageMissed: images.missed,
+    imageOutcomes: images.sourceOutcomes,
+  });
 }
 
 /**
@@ -152,15 +162,17 @@ async function recoverImages(
     signal?: AbortSignal;
     elapsedMs: number;
     misses?: Readonly<Record<string, number>>;
+    sourceYield?: Readonly<Record<string, SourceImageYield>>;
   },
-): Promise<string[]> {
-  if (process.env.ATLAS_NEWS_OG_IMAGES === "false") return [];
+): Promise<{ missed: string[]; sourceOutcomes: Record<string, SourceImageYield> }> {
+  const nothing = { missed: [], sourceOutcomes: {} };
+  if (process.env.ATLAS_NEWS_OG_IMAGES === "false") return nothing;
 
   const budgetMs = imageBudgetMs(context.elapsedMs);
   // Below a few seconds there is no point starting: one page load plus its HEAD
   // probe is most of that, and a pass that aborts mid-flight has spent the
   // requests without keeping the answers.
-  if (budgetMs < 4_000) return [];
+  if (budgetMs < 4_000) return nothing;
 
   try {
     const { discoverImages } = await import("./og");
@@ -168,12 +180,13 @@ async function recoverImages(
       signal: context.signal,
       budgetMs,
       misses: context.misses,
+      sourceYield: context.sourceYield,
     });
-    return result.missed;
+    return { missed: result.missed, sourceOutcomes: result.sourceOutcomes };
   } catch {
     // A network failure, an expired budget, a malformed page. The corpus is
     // already complete without this.
-    return [];
+    return nothing;
   }
 }
 

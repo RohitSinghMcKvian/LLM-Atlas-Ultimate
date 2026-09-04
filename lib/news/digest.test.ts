@@ -5,6 +5,7 @@ import {
   isDueForDigest,
   localDayOf,
   localHourOf,
+  maxPerSource,
   selectDigestStories,
 } from "./digest";
 import type { NewsArticle } from "./types";
@@ -470,5 +471,105 @@ describe("composeDigest", () => {
     );
     const payload = composeDigest({ ...base, stories });
     expect(Buffer.byteLength(JSON.stringify(payload), "utf8")).toBeLessThan(3_800);
+  });
+});
+
+// --- Publisher diversity -----------------------------------------------------
+//
+// Found by composing a brief from the live corpus: all five stories came back
+// from Google Developers, which had published a batch that morning. Every one
+// was a genuinely distinct cluster, so the one-per-cluster rule saw nothing
+// wrong — a brief can be perfectly de-duplicated and still be a single
+// publisher's newsletter.
+
+describe("selectDigestStories — publisher diversity", () => {
+  const preferences: PushPreferences = { ...DEFAULT_PUSH_PREFERENCES, maxStories: 5 };
+
+  it("does not let one publisher's batch sweep the brief", () => {
+    const articles = [
+      // Six posts from one source, ranked above everything else, each its own
+      // cluster — exactly the shape that produced the all-Google brief.
+      ...Array.from({ length: 6 }, (_, i) =>
+        article({ title: `Google post ${i}`, sourceId: "google-dev", sourceName: "Google Developers", baseScore: 95 }),
+      ),
+      article({ title: "Anthropic ships something", sourceId: "anthropic", sourceName: "Anthropic", baseScore: 60 }),
+      article({ title: "Meta ships something", sourceId: "meta", sourceName: "Meta AI", baseScore: 55 }),
+      article({ title: "A wire report", sourceId: "wired", sourceName: "WIRED AI", baseScore: 50 }),
+    ];
+
+    const chosen = selectDigestStories({ articles, preferences, now: NOW });
+
+    expect(chosen).toHaveLength(5);
+    const fromGoogle = chosen.filter((a) => a.sourceId === "google-dev");
+    expect(fromGoogle).toHaveLength(maxPerSource(5));
+    expect(new Set(chosen.map((a) => a.sourceId)).size).toBeGreaterThan(1);
+  });
+
+  it("still leads with the best story, cap or no cap", () => {
+    // Diversity must not cost the reader the lead. The top-ranked story is the
+    // notification's title; demoting it to make room for variety would trade the
+    // one line anyone reads for a rule nobody asked for.
+    const articles = [
+      article({ title: "The lead", sourceId: "google-dev", sourceName: "Google Developers", baseScore: 99 }),
+      article({ title: "Second from the same source", sourceId: "google-dev", sourceName: "Google Developers", baseScore: 98 }),
+      article({ title: "Third from the same source", sourceId: "google-dev", sourceName: "Google Developers", baseScore: 97 }),
+      article({ title: "Elsewhere", sourceId: "wired", sourceName: "WIRED AI", baseScore: 10 }),
+    ];
+
+    const chosen = selectDigestStories({ articles, preferences, now: NOW });
+    expect(chosen[0].title).toBe("The lead");
+  });
+
+  it("relaxes the cap rather than sending a shorter brief", () => {
+    // A quiet day with one publisher is still worth five stories. A diversity
+    // rule that shortens the brief is the rule harming what it exists to improve.
+    const articles = Array.from({ length: 7 }, (_, i) =>
+      article({ title: `Only source, post ${i}`, sourceId: "solo", sourceName: "Solo Press" }),
+    );
+
+    const chosen = selectDigestStories({ articles, preferences, now: NOW });
+    expect(chosen).toHaveLength(5);
+  });
+
+  it("keeps the relaxed fill in rank order", () => {
+    const articles = [
+      article({ title: "Best", sourceId: "solo", sourceName: "Solo", baseScore: 99 }),
+      article({ title: "Second", sourceId: "solo", sourceName: "Solo", baseScore: 90 }),
+      article({ title: "Third", sourceId: "solo", sourceName: "Solo", baseScore: 80 }),
+      article({ title: "Fourth", sourceId: "solo", sourceName: "Solo", baseScore: 70 }),
+    ];
+
+    const chosen = selectDigestStories({ articles, preferences, now: NOW });
+    expect(chosen.map((a) => a.title)).toEqual(["Best", "Second", "Third", "Fourth"]);
+  });
+
+  it("never returns the same story twice across both passes", () => {
+    // The second pass walks the same list again, so the cluster guard is what
+    // stops a capped-out story being re-admitted as filler.
+    const articles = [
+      ...Array.from({ length: 4 }, (_, i) =>
+        article({ title: `Batch ${i}`, sourceId: "solo", sourceName: "Solo", baseScore: 90 - i }),
+      ),
+      article({ title: "Other", sourceId: "wired", sourceName: "WIRED AI", baseScore: 10 }),
+    ];
+
+    const chosen = selectDigestStories({ articles, preferences, now: NOW });
+    expect(new Set(chosen.map((a) => a.id)).size).toBe(chosen.length);
+  });
+});
+
+describe("maxPerSource", () => {
+  it("gives a five-story brief room for two from one masthead", () => {
+    expect(maxPerSource(5)).toBe(2);
+  });
+
+  it("allows only one apiece in a three-story brief", () => {
+    // Three stories has no room to spend two on the same publisher.
+    expect(maxPerSource(3)).toBe(1);
+  });
+
+  it("never returns zero", () => {
+    expect(maxPerSource(1)).toBe(1);
+    expect(maxPerSource(0)).toBe(1);
   });
 });

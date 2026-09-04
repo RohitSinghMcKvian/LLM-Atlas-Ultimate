@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { FeedSource } from "../feeds";
-import { computeStats, emptyStats, hashArticles, mergeNews } from "./merge";
+import {
+  accumulateImageYield,
+  computeStats,
+  emptyStats,
+  hashArticles,
+  mergeNews,
+  YIELD_HALF_LIFE,
+} from "./merge";
 import { signatureOf } from "./cluster";
 import type { FeedFetchOutcome, RawArticle } from "./types";
 import type { NewsSnapshotRecord } from "../types";
@@ -572,5 +579,82 @@ describe("mergeNews — image miss bookkeeping", () => {
       imageMissed: ["not-a-real-id"],
     });
     expect(record.imageMisses).toEqual({});
+  });
+});
+
+// --- Per-source image yield --------------------------------------------------
+//
+// The running totals that let the OpenGraph pass spend its budget where images
+// have actually been found. See `NewsSnapshotRecord.imageYield`.
+
+describe("accumulateImageYield", () => {
+  const live = new Set(["techcrunch-ai", "arxiv-cs-lg"]);
+
+  it("adds this run's outcomes to what came before", () => {
+    const merged = accumulateImageYield(
+      { "techcrunch-ai": { tried: 10, resolved: 9 } },
+      { "techcrunch-ai": { tried: 4, resolved: 4 } },
+      live,
+    );
+
+    expect(merged["techcrunch-ai"]).toEqual({ tried: 14, resolved: 13 });
+  });
+
+  it("starts a source that has never been measured", () => {
+    const merged = accumulateImageYield(undefined, { "arxiv-cs-lg": { tried: 40, resolved: 0 } }, live);
+    expect(merged["arxiv-cs-lg"]).toEqual({ tried: 40, resolved: 0 });
+  });
+
+  it("drops sources that are no longer in the registry", () => {
+    // Same treatment `firstSeen` and `imageMisses` get: a retired feed's record
+    // is of no use to anyone and would otherwise sit in the row forever.
+    const merged = accumulateImageYield(
+      { "retired-feed": { tried: 99, resolved: 1 }, "techcrunch-ai": { tried: 2, resolved: 2 } },
+      { "retired-feed": { tried: 5, resolved: 0 } },
+      live,
+    );
+
+    expect(merged["retired-feed"]).toBeUndefined();
+    expect(merged["techcrunch-ai"]).toEqual({ tried: 2, resolved: 2 });
+  });
+
+  it("halves the counts past the half-life, preserving the ratio", () => {
+    // Without decay the totals are a permanent verdict, and a publisher that
+    // starts emitting og:image after ten thousand misses could never climb back
+    // out. Halving keeps a genuinely barren source barren while letting recent
+    // evidence outweigh old.
+    const merged = accumulateImageYield(
+      { "arxiv-cs-lg": { tried: YIELD_HALF_LIFE, resolved: 0 } },
+      { "arxiv-cs-lg": { tried: 100, resolved: 50 } },
+      live,
+    );
+
+    const entry = merged["arxiv-cs-lg"];
+    expect(entry.tried).toBe(Math.round((YIELD_HALF_LIFE + 100) / 2));
+    expect(entry.resolved).toBe(25);
+    // The ratio survives the halving.
+    expect(entry.resolved / entry.tried).toBeCloseTo(50 / (YIELD_HALF_LIFE + 100), 5);
+  });
+
+  it("leaves a source below the half-life untouched", () => {
+    const merged = accumulateImageYield(
+      { "techcrunch-ai": { tried: YIELD_HALF_LIFE - 10, resolved: 400 } },
+      undefined,
+      live,
+    );
+
+    expect(merged["techcrunch-ai"]).toEqual({ tried: YIELD_HALF_LIFE - 10, resolved: 400 });
+  });
+
+  it("does not lose an earned hit to repeated rounding", () => {
+    // `floor` would shave a resolved hit off an odd count on every halving, so a
+    // productive source slowly decays towards barren just by being busy.
+    const merged = accumulateImageYield(
+      { "techcrunch-ai": { tried: YIELD_HALF_LIFE + 1, resolved: 501 } },
+      undefined,
+      live,
+    );
+
+    expect(merged["techcrunch-ai"].resolved).toBe(251);
   });
 });

@@ -315,6 +315,37 @@ export interface NewsSnapshotRecord extends NewsSnapshot {
    * so it cannot outgrow the corpus.
    */
   imageMisses?: Record<string, number>;
+  /**
+   * Source id → how the OpenGraph pass has historically fared on that source.
+   *
+   * `imageMisses` above gives the pass a memory of individual articles, which is
+   * enough to stop it re-proving the same failure forever. It is NOT enough to
+   * stop it re-proving the same *source*: arXiv publishes roughly 120 new
+   * preprints a day, every one of them arrives with `misses: 0`, and its
+   * research-tier weight of 0.85 sorts all of them ahead of every press story.
+   * Their `og:image` is the arXiv logo — the quality gate rejects it, correctly
+   * — so a bounded pass spent its entire budget on candidates that cannot
+   * resolve, and the press sources that do carry artwork were never reached at
+   * all. Measured on a live corpus: TechCrunch, whose every article has a good
+   * `og:image`, sat at 0 of 8.
+   *
+   * So the pass carries a per-source hit rate and spends the budget where images
+   * have actually been found. Deliberately learned rather than declared: a
+   * hand-maintained "this source has no pictures" list is wrong the day a
+   * publisher adds them, and nobody goes back to check.
+   *
+   * Deprioritised, never excluded — a barren source is still tried with whatever
+   * budget is left over, which is what lets it climb back out on its own.
+   */
+  imageYield?: Record<string, SourceImageYield>;
+}
+
+/** Cumulative OpenGraph outcomes for one source. See `imageYield`. */
+export interface SourceImageYield {
+  /** Article pages fetched for this source. */
+  tried: number;
+  /** Of those, how many produced an image that passed the quality gate. */
+  resolved: number;
 }
 
 /** Sort modes offered in the filter bar. */
