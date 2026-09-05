@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ModelLifecycleBadge } from "@/components/catalog/model-lifecycle-badge";
+import { SyncPill } from "@/components/catalog/catalog-updates";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -143,6 +145,10 @@ export function ModelBrowser({
             placeholder={`Search ${snapshot.models.length} models by name, brand, or capability…`}
             className="h-8 border-0 bg-transparent px-0 focus-visible:ring-0"
           />
+          {/* Freshness belongs beside the catalogue itself: this dialog is where
+              someone goes when the model they expected is not in the picker, and
+              "synced 4h ago, 3 new" is usually the answer. */}
+          <SyncPill className="hidden shrink-0 sm:inline-flex" />
           <button
             onClick={() => onOpenChange(false)}
             className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
@@ -353,6 +359,7 @@ const ModelRow = React.memo(function ModelRow({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-foreground">{model.name}</span>
+            <ModelLifecycleBadge model={model} compact className="shrink-0" />
             {active && <Check className="size-3.5 shrink-0 text-action" />}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
@@ -400,21 +407,21 @@ function AccessBadge({ availability }: { availability: Availability }) {
   if (availability.kind === "free") {
     const via = PROVIDERS[availability.route.provider]?.short ?? availability.route.provider;
     return (
-      <Badge variant="success" className="shrink-0">
+      <Badge variant="accent" className="shrink-0">
         Free · {via}
       </Badge>
     );
   }
   if (availability.kind === "your_key") {
     return (
-      <Badge variant="accent" className="shrink-0">
+      <Badge variant="primary" className="shrink-0">
         Your key
       </Badge>
     );
   }
   if (availability.kind === "needs_key") {
     return (
-      <Badge variant="accent" className="shrink-0">
+      <Badge variant="primary" className="shrink-0">
         Needs key
       </Badge>
     );

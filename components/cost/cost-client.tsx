@@ -10,7 +10,6 @@ import {
   Coins,
   Cpu,
   Download,
-  Plus,
   Server,
   TrendingDown,
   X,
@@ -20,6 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
+import { ModelMultiPicker } from "@/components/catalog/model-picker";
+import { ModelHealNotice } from "@/components/catalog/heal-notice";
+import { useHealedModels } from "@/lib/hooks/use-healed-models";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -34,7 +36,6 @@ import {
   getModelById,
   BENCHMARKS,
   getBenchmark,
-  type CatalogModel,
 } from "@/lib/catalog";
 import {
   apiMonthlyCost,
@@ -73,6 +74,10 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
     return base;
   });
   const [axis, setAxis] = React.useState<string>("mmlu");
+
+  // Cost had no repair at all: a comparison built last week silently kept rows
+  // for models the providers have since retired, priced from a stale snapshot.
+  const heal = useHealedModels(selected, setSelected);
 
   // The workload is the whole context here: "is this expensive" has no answer
   // without the volume the person has already typed into the page.
@@ -135,9 +140,10 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
       }));
   }, [axis, deferredWorkload, selected]);
 
-  const available = React.useMemo(
-    () => allModels().filter((m) => m.status !== "upcoming" && !selected.includes(m.id)),
-    [selected],
+  const toggleModel = React.useCallback(
+    (id: string) =>
+      setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])),
+    [],
   );
 
   function exportCSV() {
@@ -306,15 +312,23 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
                 <Cpu className="size-4 text-action" /> Monthly cost by model
               </div>
               <div className="flex items-center gap-2">
-                <AddModel
-                  available={available}
-                  onAdd={(id) => setSelected((s) => [...s, id])}
+                <ModelMultiPicker
+                  selected={selected}
+                  onToggle={toggleModel}
+                  label="Add model"
                 />
                 <Button variant="secondary" size="sm" onClick={exportCSV}>
                   <Download className="size-4" /> CSV
                 </Button>
               </div>
             </div>
+            {heal.notice && (
+              <ModelHealNotice
+                notice={heal.notice}
+                onDismiss={heal.dismiss}
+                className="m-4 mb-0"
+              />
+            )}
             <div className="divide-y divide-border/70">
               {rows.map((r) => (
                 <div
@@ -518,27 +532,3 @@ function SliderField({
   );
 }
 
-function AddModel({
-  available,
-  onAdd,
-}: {
-  available: CatalogModel[];
-  onAdd: (id: string) => void;
-}) {
-  return (
-    <Select value="" onValueChange={(v) => v && onAdd(v)}>
-      <SelectTrigger className="h-9 w-[130px]">
-        <span className="inline-flex items-center gap-1.5 text-sm">
-          <Plus className="size-4" /> Add model
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {available.map((m) => (
-          <SelectItem key={m.id} value={m.id}>
-            {m.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}

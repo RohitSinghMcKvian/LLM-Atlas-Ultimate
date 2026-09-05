@@ -10,13 +10,12 @@ import {
   Activity,
   Check,
   X,
-  ArrowRight,
   Play,
-  ExternalLink,
   Brain,
   Eye,
   Wrench,
   ShieldCheck,
+  KeyRound,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,31 +31,18 @@ import {
   routableModels,
   blendedPrice,
 } from "@/lib/catalog";
-import type { CatalogModel, ProviderId } from "@/lib/catalog/types";
+import type { CatalogModel } from "@/lib/catalog/types";
+import { modelAvailability, type Availability } from "@/lib/catalog/availability";
+import type { RouterCall } from "@/lib/router/telemetry";
 import { useProviders } from "@/lib/hooks/use-providers";
+import { useRouteEnv } from "@/lib/hooks/use-route-env";
+import { useRouterCalls, summarizeRouterCalls } from "@/lib/hooks/use-router-calls";
 import { useMounted } from "@/lib/hooks/use-media-query";
 import { useKeysStore } from "@/lib/store/keys-store";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
 import { postSSE, SSEHttpError } from "@/lib/sse-client";
 import { ACCENT_TEXT } from "@/lib/accent";
-import { cn, formatUSD, formatContext, formatCompact } from "@/lib/utils";
-
-interface LogEntry {
-  id: string;
-  model: string;
-  provider: ProviderId;
-  ms: number;
-  status: "ok" | "fallback" | "cached";
-  cost: number;
-}
-
-const SEED_LOG: LogEntry[] = [
-  { id: "l1", model: "Claude 3.5 Sonnet", provider: "openrouter", ms: 690, status: "ok", cost: 0.0042 },
-  { id: "l2", model: "Llama 3.3 70B", provider: "nvidia", ms: 410, status: "ok", cost: 0.0006 },
-  { id: "l3", model: "DeepSeek V3", provider: "openrouter", ms: 700, status: "cached", cost: 0.0001 },
-  { id: "l4", model: "GPT-4o mini", provider: "openrouter", ms: 380, status: "ok", cost: 0.0003 },
-  { id: "l5", model: "Qwen 2.5 Coder", provider: "nvidia", ms: 360, status: "fallback", cost: 0.0004 },
-];
+import { cn, formatUSD, formatContext } from "@/lib/utils";
 
 export function RouterClient() {
   const providers = useProviders();
@@ -68,52 +54,63 @@ export function RouterClient() {
   const [needReasoning, setNeedReasoning] = React.useState(false);
   const [needVision, setNeedVision] = React.useState(false);
   const [needTools, setNeedTools] = React.useState(true);
-  const [log, setLog] = React.useState<LogEntry[]>(SEED_LOG);
+  const [includeKeyed, setIncludeKeyed] = React.useState(false);
   const [testing, setTesting] = React.useState(false);
   const [testResult, setTestResult] = React.useState<string | null>(null);
+
+  const env = useRouteEnv();
+  const calls = useRouterCalls();
+  const summary = React.useMemo(() => summarizeRouterCalls(calls), [calls]);
+  const streaming = calls.filter((c) => c.status === "streaming").length;
 
   // Indexed once per snapshot rather than rescanning every model's routes for
   // each of the provider cards on every render.
   const routeCounts = modelCountByRouteProvider();
 
-  // simulated live traffic
-  React.useEffect(() => {
-    if (!mounted) return;
-    const rm = routableModels();
-    const t = setInterval(() => {
-      const m = rm[Math.floor(Math.random() * rm.length)];
-      const provider = m.routes[0].provider;
-      const statuses: LogEntry["status"][] = ["ok", "ok", "ok", "cached", "fallback"];
-      setLog((l) =>
-        [
-          {
-            id: `r${Date.now()}`,
-            model: m.name,
-            provider,
-            ms: 250 + Math.round(Math.random() * 800),
-            status: statuses[Math.floor(Math.random() * statuses.length)],
-            cost: +(blendedPrice(m) * (0.5 + Math.random()) * 0.002).toFixed(4),
-          },
-          ...l,
-        ].slice(0, 11),
-      );
-    }, 2600);
-    return () => clearInterval(t);
-  }, [mounted]);
 
-  const { chosen, fallbacks } = React.useMemo(() => {
-    const candidates = routableModels()
-      .filter(
-        (m) =>
-          m.contextWindow >= minContext &&
-          blendedPrice(m) <= maxPrice &&
-          (!needReasoning || m.capabilities.reasoning) &&
-          (!needVision || m.modalities.includes("vision")) &&
-          (!needTools || m.capabilities.toolUse),
-      )
-      .sort((a, b) => blendedPrice(a) - blendedPrice(b));
-    return { chosen: candidates[0] ?? null, fallbacks: candidates.slice(1, 4) };
-  }, [minContext, maxPrice, needReasoning, needVision, needTools]);
+  // Availability is part of the constraint, not an afterthought.
+  //
+  // This used to filter `routableModels()` on capability and price alone, so on
+  // a deployment without an OpenRouter key it confidently recommended a model
+  // that answers 402 — a routing page recommending an unroutable route. It now
+  // asks `modelAvailability`, the same function the server routes on, and says
+  // plainly whether the winner is free or billed to your key.
+  const { chosen, chosenAvailability, fallbacks } = React.useMemo(() => {
+    const none = { chosen: null, chosenAvailability: null, fallbacks: [] as CatalogModel[] };
+    if (!env) return none;
+
+    const scored: { model: CatalogModel; availability: Availability }[] = [];
+    for (const m of routableModels()) {
+      if (m.contextWindow < minContext) continue;
+      if (blendedPrice(m) > maxPrice) continue;
+      if (needReasoning && !m.capabilities.reasoning) continue;
+      if (needVision && !m.modalities.includes("vision")) continue;
+      if (needTools && !m.capabilities.toolUse) continue;
+
+      const availability = modelAvailability(m, env);
+      if (availability.kind === "unavailable") continue;
+      // A model needing a key the visitor has not connected is only a candidate
+      // if they have said they want to see those.
+      if (availability.kind === "needs_key" && !includeKeyed) continue;
+      scored.push({ model: m, availability });
+    }
+
+    // Cheapest first, and free counts as free: a zero-cost route beats a $0.02
+    // one even when the catalog price says otherwise, because the operator is
+    // paying for it.
+    scored.sort((a, b) => {
+      const aFree = a.availability.kind === "free" ? 0 : 1;
+      const bFree = b.availability.kind === "free" ? 0 : 1;
+      return aFree - bFree || blendedPrice(a.model) - blendedPrice(b.model);
+    });
+
+    if (scored.length === 0) return none;
+    return {
+      chosen: scored[0].model,
+      chosenAvailability: scored[0].availability,
+      fallbacks: scored.slice(1, 4).map((s) => s.model),
+    };
+  }, [env, includeKeyed, minContext, maxPrice, needReasoning, needVision, needTools]);
 
   async function testRoute() {
     if (!chosen || testing) return;
@@ -140,19 +137,11 @@ export function RouterClient() {
           return;
         }
       }
+      // No manual log write: the tap in `postSSE` recorded this call — with the
+      // provider that actually served it, not the one we guessed — before the
+      // first token reached this loop.
       const ms = Math.round(performance.now() - t0);
       setTestResult(`"${text.trim()}" · ${ms}ms`);
-      setLog((l) => [
-        {
-          id: `t${Date.now()}`,
-          model: chosen.name,
-          provider: chosen.routes[0].provider,
-          ms,
-          status: "ok" as const,
-          cost: +(blendedPrice(chosen) * 0.002).toFixed(4),
-        },
-        ...l,
-      ].slice(0, 11));
     } catch (e) {
       if (e instanceof SSEHttpError && (e.code === "key_required" || e.status === 402))
         setKeyModalOpen(true);
@@ -176,19 +165,37 @@ export function RouterClient() {
         </p>
       </div>
 
-      {/* Stats */}
+      {/* Stats — this browser's own traffic.
+          These were four invented constants (48,213 requests, 512ms, 34% cache
+          hit rate, $186 spent) on a page whose entire subject is what the router
+          is doing. Real numbers over a small sample beat impressive fiction. */}
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat icon={Activity} tone="ridge" label="Requests / 24h">
-          <CountUp value={48213} />
+        <Stat icon={Activity} tone="ridge" label="Requests this session">
+          {mounted ? <CountUp value={summary.calls} /> : "—"}
         </Stat>
-        <Stat icon={Zap} tone="shelf" label="Avg latency">
-          <CountUp value={512} suffix="ms" />
+        <Stat icon={Zap} tone="shelf" label="Median first token">
+          {mounted && summary.medianTtftMs !== undefined ? (
+            <CountUp value={summary.medianTtftMs} suffix="ms" />
+          ) : (
+            "—"
+          )}
         </Stat>
-        <Stat icon={Database} tone="upland" label="Cache hit rate">
-          <CountUp value={34} suffix="%" />
+        <Stat icon={Database} tone="upland" label="Fell back to a backup">
+          {mounted && summary.calls > 0 ? (
+            <CountUp value={Math.round(summary.fallbackRate * 100)} suffix="%" />
+          ) : (
+            "—"
+          )}
         </Stat>
-        <Stat icon={Coins} tone="success" label="Spend / 24h">
-          <span className="tnum">$<CountUp value={186} /></span>
+        <Stat icon={Coins} tone="success" label="Billed to your key">
+          <span className="tnum">
+            {/* `$0.0000` reads like a rounding artefact. Nothing spent is "$0". */}
+            {!mounted
+              ? "—"
+              : summary.spendUsd === 0
+                ? "$0"
+                : formatUSD(summary.spendUsd, { precise: true })}
+          </span>
         </Stat>
       </div>
 
@@ -271,6 +278,15 @@ export function RouterClient() {
               <Toggle icon={Brain} label="Reasoning" on={needReasoning} set={setNeedReasoning} />
               <Toggle icon={Eye} label="Vision" on={needVision} set={setNeedVision} />
               <Toggle icon={Wrench} label="Tools" on={needTools} set={setNeedTools} />
+              {/* Off by default so the recommendation is something you can run
+                  right now. On, it opens up the frontier models your own key
+                  would pay for. */}
+              <Toggle
+                icon={KeyRound}
+                label="Include models needing your key"
+                on={includeKeyed}
+                set={setIncludeKeyed}
+              />
             </div>
           </div>
 
@@ -286,9 +302,18 @@ export function RouterClient() {
                       {chosen.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {chosen.provider} · {chosen.routes[0]?.provider} ·{" "}
-                      {formatContext(chosen.contextWindow)} ·{" "}
-                      {formatUSD(blendedPrice(chosen), { precise: true })}/Mtok
+                      {chosen.provider} ·{" "}
+                      {/* The provider that would actually serve it, which is
+                          `availability.route` — not `routes[0]`, which is the
+                          catalog's order and can name a provider with no key. */}
+                      {chosenAvailability && "route" in chosenAvailability
+                        ? (PROVIDERS[chosenAvailability.route.provider]?.short ??
+                          chosenAvailability.route.provider)
+                        : "no route"}{" "}
+                      · {formatContext(chosen.contextWindow)} ·{" "}
+                      {chosenAvailability?.kind === "free"
+                        ? "free to run"
+                        : `${formatUSD(blendedPrice(chosen), { precise: true })}/Mtok`}
                     </p>
                   </div>
                   <Button
@@ -323,49 +348,81 @@ export function RouterClient() {
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No model satisfies these constraints — loosen them.
+                {env && !includeKeyed
+                  ? "No model you can run right now satisfies these constraints — loosen them, or include models that need your key."
+                  : "No model satisfies these constraints — loosen them."}
               </p>
             )}
           </div>
         </Card>
 
-        {/* Live log */}
+        {/* Live log — real traffic from this browser. */}
         <Card className="p-5">
           <div className="mb-4 flex items-center gap-2 text-sm font-medium">
-            <Activity className="size-4 text-action" /> Live requests
-            <span className="ml-auto inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-              <span className="size-1.5 animate-pulse-dot rounded-full bg-success" />
-              streaming
-            </span>
+            <Activity className="size-4 text-action" /> Requests
+            {calls.length > 0 && (
+              <span className="ml-auto inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
+                {streaming > 0 ? (
+                  <>
+                    <span className="size-1.5 animate-pulse-dot rounded-full bg-success" />
+                    {streaming} in flight
+                  </>
+                ) : (
+                  `last ${calls.length}`
+                )}
+              </span>
+            )}
           </div>
-          <div className="space-y-1.5">
-            <AnimatePresence initial={false}>
-              {log.map((e) => (
-                <motion.div
-                  key={e.id}
-                  layout
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs"
-                >
-                  <span className="font-mono text-2xs uppercase text-muted-foreground">
-                    {PROVIDERS[e.provider].short}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {e.model}
-                  </span>
-                  <StatusTag status={e.status} />
-                  <span className="font-mono text-2xs text-muted-foreground">
-                    {e.ms}ms
-                  </span>
-                  <span className="w-14 text-right font-mono text-2xs">
-                    {formatUSD(e.cost, { precise: true })}
-                  </span>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+
+          {calls.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Nothing routed yet in this tab.
+              </p>
+              <p className="mx-auto mt-1 max-w-xs text-2xs text-muted-foreground">
+                Every model call Atlas makes — from Chat, Code, Compare, Playground,
+                Bench and Learn — shows up here with the provider that actually
+                served it. Try the route above, or open Chat.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <AnimatePresence initial={false}>
+                {calls.map((c) => (
+                  <motion.div
+                    key={c.id}
+                    layout
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs"
+                  >
+                    <span className="w-8 shrink-0 font-mono text-2xs uppercase text-muted-foreground">
+                      {c.provider ? (PROVIDERS[c.provider]?.short ?? c.provider) : "—"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-medium" title={c.modelId}>
+                      {c.modelName}
+                    </span>
+                    <CallStatus call={c} />
+                    <span className="w-12 shrink-0 text-right font-mono text-2xs text-muted-foreground">
+                      {c.ttftMs !== undefined
+                        ? `${c.ttftMs}ms`
+                        : c.totalMs !== undefined
+                          ? `${c.totalMs}ms`
+                          : ""}
+                    </span>
+                    <span className="w-14 shrink-0 text-right font-mono text-2xs">
+                      {c.costUsd === undefined
+                        ? ""
+                        : c.costUsd === 0
+                          ? "free"
+                          : formatUSD(c.costUsd, { precise: true })}
+                    </span>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
         </Card>
       </div>
     </div>
@@ -385,13 +442,32 @@ const ACCENT: Record<string, string> = {
   orange: "rgb(var(--elev-4))",
 };
 
-function StatusTag({ status }: { status: LogEntry["status"] }) {
-  const map = {
-    ok: { label: "ok", cls: "text-success" },
-    cached: { label: "cached", cls: "text-action" },
-    fallback: { label: "fallback", cls: "text-amber" },
-  }[status];
-  return <span className={cn("text-2xs", map.cls)}>{map.label}</span>;
+/**
+ * What happened to one call.
+ *
+ * "fallback" outranks "ok" deliberately: a request the first provider refused
+ * and a backup served is the Router's whole reason to exist, and it is the one
+ * outcome worth noticing in a list of otherwise identical green rows.
+ */
+function CallStatus({ call }: { call: RouterCall }) {
+  if (call.status === "streaming") {
+    return <span className="text-2xs text-muted-foreground">streaming…</span>;
+  }
+  if (call.status === "error") {
+    return (
+      <span className="text-2xs text-danger" title={call.error}>
+        failed
+      </span>
+    );
+  }
+  if (call.fellBack) {
+    return (
+      <span className="text-2xs text-amber" title="The first provider failed; a backup served it.">
+        fallback
+      </span>
+    );
+  }
+  return <span className="text-2xs text-success">ok</span>;
 }
 
 function Stat({

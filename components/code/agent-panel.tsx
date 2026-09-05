@@ -11,7 +11,6 @@ import {
   User,
   AlertCircle,
   Trash2,
-  ChevronsUpDown,
   History,
   RotateCcw,
   Info,
@@ -31,14 +30,6 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
 import { Markdown } from "@/components/markdown";
 import { ReasoningBlock } from "@/components/reasoning-block";
 import { ToolCall } from "@/components/tool-call";
@@ -59,13 +50,12 @@ import type { TraceEvent } from "@/lib/engine/types";
 import { TASK_TEMPLATES } from "@/lib/engine/templates";
 import { useFlag } from "@/lib/store/flags-store";
 import type { CodeSessionMeta } from "@/lib/code/sessions";
-import { routableModels, getModelById, modelAccess } from "@/lib/catalog";
+import { getModelById } from "@/lib/catalog";
+import { firstPickable } from "@/lib/catalog/picker";
+import { defaultAgentModel } from "@/lib/catalog/defaults";
+import { ModelPicker } from "@/components/catalog/model-picker";
+import { useRouteEnv } from "@/lib/hooks/use-route-env";
 import { timeAgo, cn } from "@/lib/utils";
-
-/** Models the agent can actually drive (needs native tool calling). */
-export function agentModels() {
-  return routableModels().filter((m) => m.capabilities.toolUse);
-}
 
 export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> }) {
   const {
@@ -125,6 +115,7 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = React.useState(true);
   const snapshot = useCatalogSnapshot();
+  const env = useRouteEnv();
 
 
   // Default the model to the first free tool-capable one — but only once the
@@ -133,11 +124,16 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
   React.useEffect(() => {
     const applyDefault = () => {
       const { modelId: current, setModelId: set } = useCodeStore.getState();
-      const models = agentModels();
-      if (!current || !models.some((m) => m.id === current)) {
-        const free = models.find((m) => modelAccess(m) === "free");
-        set((free ?? models[0])?.id ?? "");
-      }
+      // `firstPickable` asks the same question the picker's own rows answer, so
+      // the default can never be a model this deployment cannot serve. The old
+      // `modelAccess` check was env-independent — "could be free for someone" —
+      // which on a deploy without the right key defaulted the agent to a model
+      // every run then failed on.
+      const preferred = firstPickable(env, [current, defaultAgentModel()].filter(Boolean), {
+        tools: true,
+      });
+      if (preferred && preferred !== current) set(preferred);
+      else if (!preferred && !current) set(defaultAgentModel());
     };
     const p = (useCodeStore as any).persist;
     if (!p?.hasHydrated || p.hasHydrated()) {
@@ -145,10 +141,10 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
       return;
     }
     return p.onFinishHydration(applyDefault);
-    // Re-runs on a catalog swap too: the daily sync can retire the selected
-    // agent model mid-session, and an agent run against a dead id just fails.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot]);
+    // Re-runs on a catalog swap and on a provider change: the daily sync can
+    // retire the selected agent model mid-session, and an agent run against a
+    // dead id just fails.
+  }, [snapshot, env]);
 
   React.useEffect(() => {
     if (atBottom)
@@ -501,7 +497,13 @@ export function AgentPanel({ keyHeaders }: { keyHeaders: Record<string, string> 
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <ModeToggle mode={mode} onChange={setMode} disabled={running} />
-              <ModelPicker value={modelId} onChange={setModelId} disabled={running} />
+              <ModelPicker
+                value={modelId}
+                onChange={setModelId}
+                require={{ tools: true }}
+                disabled={running}
+                className="h-8 max-w-[13rem] text-xs"
+              />
             </div>
             {running ? (
               <div className="flex items-center gap-1.5">
@@ -783,67 +785,5 @@ function EventRow({ ev }: { ev: UiEvent }) {
       )}
       {ev.text}
     </div>
-  );
-}
-
-function ModelPicker({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange: (id: string) => void;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const models = React.useMemo(() => agentModels(), []);
-  const active = getModelById(value);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          disabled={disabled}
-          className="inline-flex h-8 max-w-[13rem] items-center gap-1.5 rounded-lg border border-border bg-surface px-2 text-xs disabled:opacity-60"
-        >
-          <span className="truncate">{active?.name ?? "Pick a model"}</span>
-          <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-0">
-        <Command>
-          <CommandInput placeholder="Tool-capable models…" />
-          <CommandList>
-            <CommandEmpty>No tool-capable model.</CommandEmpty>
-            <CommandGroup>
-              {models.map((m) => (
-                <CommandItem
-                  key={m.id}
-                  value={`${m.name} ${m.provider}`}
-                  onSelect={() => {
-                    onChange(m.id);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="truncate">{m.name}</span>
-                  <span className="ml-auto flex items-center gap-1 text-2xs text-muted-foreground">
-                    {modelAccess(m) === "free" ? (
-                      <Badge variant="success" className="px-1 py-0 text-2xs">
-                        free
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="px-1 py-0 text-2xs">
-                        key
-                      </Badge>
-                    )}
-                    {m.provider}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 }

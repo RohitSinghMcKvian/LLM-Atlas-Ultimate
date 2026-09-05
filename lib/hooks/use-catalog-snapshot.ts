@@ -59,6 +59,71 @@ function loadOnce(): void {
     });
 }
 
+// --- Revalidation ---------------------------------------------------------
+//
+// The catalog resyncs daily and models genuinely come and go: the whole point of
+// the sync is that a model a provider retired stops being offered. But
+// `loadOnce` sets `fetched` permanently, so a tab left open on /chat overnight
+// kept serving yesterday's catalog — offering models that no longer exist and
+// missing the ones that now do — until the next full navigation.
+//
+// Checking on focus fixes that for a few hundred bytes: `?fields=stats` is
+// ETag'd, so the common answer is a 304 and no catalog crosses the wire at all.
+// The full snapshot is fetched only when the version has actually moved.
+
+/** How long a snapshot is trusted without asking. Shorter than the sync interval. */
+const REVALIDATE_AFTER_MS = 5 * 60_000;
+
+let lastChecked = 0;
+
+async function revalidate(): Promise<void> {
+  if (inflight) return;
+  if (Date.now() - lastChecked < REVALIDATE_AFTER_MS) return;
+  lastChecked = Date.now();
+
+  try {
+    const res = await fetch("/api/v1/catalog?fields=stats", {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return;
+    const head = (await res.json()) as Pick<CatalogSnapshot, "version">;
+    if (!head?.version || head.version === activeSnapshot().version) return;
+
+    // The catalog moved under us. Now — and only now — pay for the models.
+    fetched = false;
+    loadOnce();
+  } catch {
+    // Offline, or the server is restarting. The installed catalog stays; a later
+    // focus tries again.
+  }
+}
+
+/**
+ * Re-check the catalog when the tab comes back to the foreground.
+ *
+ * Mounted once from `<CatalogHeal />`, which is already in the workspace layout
+ * on every route for exactly this class of repair, so no page has to remember.
+ */
+export function useCatalogRevalidation(): void {
+  React.useEffect(() => {
+    const check = () => {
+      if (document.visibilityState === "visible") void revalidate();
+    };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, []);
+}
+
+/** Test-only: forget when we last checked. */
+export function resetCatalogRevalidation(): void {
+  lastChecked = 0;
+  fetched = false;
+}
+
 /**
  * The snapshot, fetching it once if the server never supplied one.
  *

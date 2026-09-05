@@ -16,6 +16,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ModelLifecycleBadge } from "@/components/catalog/model-lifecycle-badge";
+import { SyncPill } from "@/components/catalog/catalog-updates";
 import { Button } from "@/components/ui/button";
 import {
   freeModels,
@@ -66,16 +68,24 @@ export function HubClient() {
     <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:py-10">
       {/* Hero */}
       <div className="mb-8 overflow-hidden rounded-3xl border border-border bg-action/10 p-6 sm:p-8">
-        <Badge variant="primary" className="mb-3">
-          <Sparkles className="size-3" /> Orchestrator home
-        </Badge>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Badge variant="primary">
+            <Sparkles className="size-3" /> Orchestrator home
+          </Badge>
+          {/* Where the catalog comes from, said out loud. The counts above are a
+              live number that changes daily; without this the reader has no way
+              to know that, or when it last moved. */}
+          <SyncPill />
+        </div>
         <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
           Every model, one workspace
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          <span className="font-medium text-success">{stats.free} open models free</span>{" "}
-          to run, plus {stats.byok} frontier models with your own key. Pick one and
-          jump straight into chat, compare, or cost.
+          <span className="font-medium text-accent">{stats.free} open models free</span>{" "}
+          to run — permanently, on Atlas&apos;s own provider keys — plus {stats.byok}{" "}
+          frontier models with your own key. The list refreshes itself: models a
+          provider adds show up here tagged New, and models a provider retires
+          leave.
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-2.5">
           <Button asChild variant="primary">
@@ -195,7 +205,10 @@ function ModelCard({ model, index }: { model: CatalogModel; index: number }) {
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-medium">{model.name}</p>
+          <p className="flex items-center gap-1.5 truncate font-medium">
+            <span className="truncate">{model.name}</span>
+            <ModelLifecycleBadge model={model} compact className="shrink-0" />
+          </p>
           <p className="truncate text-xs text-muted-foreground">{model.provider}</p>
         </div>
         <Badge variant={free ? "success" : "accent"} className="shrink-0">

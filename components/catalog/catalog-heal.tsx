@@ -5,7 +5,10 @@ import { modelAvailability } from "@/lib/catalog/availability";
 import { defaultChatModel, servableChatModel } from "@/lib/catalog/defaults";
 import { getModelById } from "@/lib/catalog";
 import { resolveModelId } from "@/lib/catalog/resolve";
-import { useCatalogSnapshotLive } from "@/lib/hooks/use-catalog-snapshot";
+import {
+  useCatalogRevalidation,
+  useCatalogSnapshotLive,
+} from "@/lib/hooks/use-catalog-snapshot";
 import { useRouteEnv } from "@/lib/hooks/use-route-env";
 import { useUIStore } from "@/lib/store/ui-store";
 
@@ -39,6 +42,12 @@ import { useUIStore } from "@/lib/store/ui-store";
 export function CatalogHeal() {
   const snapshot = useCatalogSnapshotLive();
   const env = useRouteEnv();
+
+  // Also the natural home for catalog freshness: this component is mounted on
+  // every workspace route precisely because it repairs something global, and a
+  // tab serving yesterday's models is the same class of problem as a tab holding
+  // a retired id.
+  useCatalogRevalidation();
 
   React.useEffect(() => {
     if (snapshot.models.length === 0) return;

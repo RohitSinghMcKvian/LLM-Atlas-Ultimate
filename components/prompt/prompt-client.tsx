@@ -35,6 +35,7 @@ import {
   render,
   type Prompt,
 } from "@/lib/store/prompt-store";
+import { PromptTest } from "@/components/prompt/prompt-test";
 import { useMounted } from "@/lib/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
@@ -264,6 +265,8 @@ export function PromptClient() {
                 </pre>
               </div>
             </Card>
+
+            <PromptTest rendered={rendered} />
 
             {/* Version history */}
             <Card className="p-5">

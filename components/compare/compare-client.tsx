@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { ProviderBanner } from "@/components/provider-banner";
 import { defaultCompareModels } from "@/lib/catalog/defaults";
 import { resolveModelIds } from "@/lib/catalog/resolve";
-import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
+import { ModelHealNotice } from "@/components/catalog/heal-notice";
+import { useHealedModels } from "@/lib/hooks/use-healed-models";
 import { useProviders } from "@/lib/hooks/use-providers";
 import { useRouteEnv } from "@/lib/hooks/use-route-env";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
@@ -51,7 +52,6 @@ import { suggestionsForTurn } from "@/lib/compare/follow-ups";
  */
 
 export function CompareClient({ initialIds }: { initialIds?: string[] }) {
-  const snapshot = useCatalogSnapshot();
   const providers = useProviders();
   const env = useRouteEnv();
   const keyHeaders = useUserKeyHeaders();
@@ -133,15 +133,11 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
   }, []);
 
   // A model can be retired by the daily catalog sync while a link, a bookmark or
-  // this very tab still names it. Drop the dead ones rather than planning a lane
-  // for a model that no longer exists.
-  React.useEffect(() => {
-    setSelected((current) => {
-      const live = resolveModelIds(current);
-      if (live.length === current.length && live.every((id, i) => id === current[i])) return current;
-      return live.length ? live : defaultCompareModels();
-    });
-  }, [snapshot]);
+  // this very tab still names it. The shared repair remaps a superseded model to
+  // its successor, drops one that is genuinely gone, and — unlike the silent
+  // version this replaces — says which, because a comparison that loses a column
+  // without explanation is a comparison the reader will misread.
+  const heal = useHealedModels(selected, setSelected, { fallback: defaultCompareModels });
 
   // Coming back to the page: if a run was left unfinished, offer to continue it
   // rather than silently spending money again on a question the user may have
@@ -372,6 +368,8 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
       )}
 
       {session?.incognito && <IncognitoBanner className="mb-2" />}
+
+      <ModelHealNotice notice={heal.notice} onDismiss={heal.dismiss} className="mb-2" />
 
       <Composer
         question={question}

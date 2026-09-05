@@ -30,6 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BENCHMARK_MAP, modelAccess, producesImages } from "@/lib/catalog";
+import { ModelLifecycleBadge } from "@/components/catalog/model-lifecycle-badge";
 import { useKeysStore } from "@/lib/store/keys-store";
 import type { CatalogModel } from "@/lib/catalog/types";
 import { seriesAt, useChartColors } from "@/lib/charts/palette";
@@ -94,6 +95,9 @@ export function ModelDetail({ model }: { model: CatalogModel }) {
     <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1.1fr_0.9fr]">
       {/* Left: identity + benchmarks */}
       <div className="space-y-5">
+        {/* Lifecycle first: "this arrived last week" and "this is on its way
+            out" both change how you read everything below them. */}
+        <ModelLifecycleBadge model={model} className="w-fit" />
         <p className="text-sm text-muted-foreground">{model.blurb}</p>
 
         <div className="flex flex-wrap gap-2">

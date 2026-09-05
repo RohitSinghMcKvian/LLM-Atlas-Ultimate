@@ -33,17 +33,10 @@ import { FileChips } from "@/components/chat/file-chips";
 import { buildRun } from "@/lib/chat/run-model";
 import { Sources } from "@/components/chat/sources";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
 import { extractArtifact, stripArtifactBlock } from "@/components/chat/artifact-panel";
 import { ArtifactCard, ArtifactPatchNote } from "@/components/chat/artifact-card";
-import { getModelById, routableModels } from "@/lib/catalog";
+import { getModelById } from "@/lib/catalog";
+import { ModelList } from "@/components/catalog/model-picker";
 import { useChatStore } from "@/lib/store/chat-store";
 import { useSettingsStore } from "@/lib/store/settings-store";
 import { isEnabled } from "@/lib/store/flags-store";
@@ -432,10 +425,12 @@ export const MessageBubble = React.memo(function MessageBubble({
   );
 });
 
+/** Nothing is "currently selected" in a retry picker — the point is to change it. */
+const NO_SELECTION: string[] = [];
+
 /** Regenerate button with an optional model-swap picker. */
 export function RegenControl({ onRegenerate }: { onRegenerate: (modelId?: string) => void }) {
   const [open, setOpen] = React.useState(false);
-  const models = React.useMemo(() => routableModels(), []);
   return (
     <div className="inline-flex items-center overflow-hidden rounded-md hover:bg-surface-2">
       <button
@@ -454,28 +449,16 @@ export function RegenControl({ onRegenerate }: { onRegenerate: (modelId?: string
             <ChevronsUpDown className="size-3" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 p-0">
-          <Command>
-            <CommandInput placeholder="Retry with model…" />
-            <CommandList>
-              <CommandEmpty>No models.</CommandEmpty>
-              <CommandGroup>
-                {models.map((m) => (
-                  <CommandItem
-                    key={m.id}
-                    value={`${m.name} ${m.provider}`}
-                    onSelect={() => {
-                      setOpen(false);
-                      onRegenerate(m.id);
-                    }}
-                  >
-                    <span className="truncate">{m.name}</span>
-                    <span className="ml-auto text-2xs text-muted-foreground">{m.provider}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
+        {/* The shared list, so "retry on something else" offers free models
+            first and says which of them costs money — this used to be a flat
+            list of every routable model with only a provider name on each row. */}
+        <PopoverContent align="start" className="w-[min(26rem,calc(100vw-2rem))] p-0">
+          <ModelList
+            selected={NO_SELECTION}
+            onPick={onRegenerate}
+            onAfterPick={() => setOpen(false)}
+            placeholder="Retry with model…"
+          />
         </PopoverContent>
       </Popover>
     </div>

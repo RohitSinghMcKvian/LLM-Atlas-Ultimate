@@ -4,8 +4,6 @@ import { useSurfaceContext } from "@/lib/agent/surface-context";
 import { playgroundSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
 import { defaultPlaygroundModels } from "@/lib/catalog/defaults";
-import { resolveModelIds } from "@/lib/catalog/resolve";
-import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import {
   Play,
   Square,
@@ -44,17 +42,12 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
+import { ModelMultiPicker, SelectedModelChip } from "@/components/catalog/model-picker";
+import { ModelHealNotice } from "@/components/catalog/heal-notice";
+import { useHealedModels } from "@/lib/hooks/use-healed-models";
 import { ExportDialog } from "@/components/playground/export-dialog";
 import { HistoryDialog } from "@/components/playground/history-dialog";
-import { routableModels, getModelById } from "@/lib/catalog";
+import { getModelById } from "@/lib/catalog";
 import { useProviders } from "@/lib/hooks/use-providers";
 import { useKeysStore } from "@/lib/store/keys-store";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
@@ -99,8 +92,6 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const snapshot = useCatalogSnapshot();
-  const all = React.useMemo(() => routableModels(), [snapshot]);
 
   const {
     config,
@@ -157,15 +148,13 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
   // A persisted config can name models the daily sync retired. `migrate` cannot
   // fix this — the catalog is not loaded at rehydration time — so the repair
   // happens here, once the snapshot is installed.
-  React.useEffect(() => {
-    if (snapshot.models.length === 0) return;
-    const live = resolveModelIds(config.models);
-    if (live.length === config.models.length && live.every((id, i) => id === config.models[i])) {
-      return;
-    }
-    setConfig({ models: live.length ? live : defaultPlaygroundModels() });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot]);
+  const setModels = React.useCallback(
+    (models: string[]) => setConfig({ models }),
+    [setConfig],
+  );
+  const heal = useHealedModels(config.models, setModels, {
+    fallback: defaultPlaygroundModels,
+  });
 
   const { system, turns, params, models, toolsJson, variables } = config;
 
@@ -510,54 +499,25 @@ export function PlaygroundClient({ initialPrompt }: { initialPrompt?: string }) 
                 {formatUSD(costPreview, { precise: true })}/run
               </span>
             </div>
+            <ModelHealNotice
+              notice={heal.notice}
+              onDismiss={heal.dismiss}
+              className="mb-2"
+            />
             <div className="flex flex-wrap gap-1.5">
-              {models.map((id) => {
-                const m = getModelById(id);
-                if (!m) return null;
-                return (
-                  <Badge key={id} variant="primary" className="gap-1">
-                    {m.name}
-                    <button onClick={() => toggleModel(id)} disabled={running}>
-                      <X className="size-3" />
-                    </button>
-                  </Badge>
-                );
-              })}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    disabled={running}
-                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground hover:border-action hover:text-foreground disabled:opacity-50"
-                  >
-                    <Plus className="size-3" /> Add
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-72 p-0">
-                  <Command>
-                    <CommandInput placeholder="Add a model…" />
-                    <CommandList>
-                      <CommandEmpty>No model.</CommandEmpty>
-                      <CommandGroup>
-                        {all
-                          .filter((m) => !models.includes(m.id))
-                          .map((m) => (
-                            <CommandItem
-                              key={m.id}
-                              value={`${m.name} ${m.provider}`}
-                              onSelect={() => toggleModel(m.id)}
-                            >
-                              <Sparkles />
-                              {m.name}
-                              <span className="ml-auto text-xs text-muted-foreground">
-                                {m.provider}
-                              </span>
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              {models.map((id) => (
+                <SelectedModelChip
+                  key={id}
+                  modelId={id}
+                  onRemove={toggleModel}
+                  disabled={running}
+                />
+              ))}
+              <ModelMultiPicker
+                selected={models}
+                onToggle={toggleModel}
+                disabled={running}
+              />
             </div>
           </div>
 

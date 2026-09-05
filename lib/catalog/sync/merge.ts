@@ -312,6 +312,28 @@ function matchOverlay(draft: ModelDraft, index: MatchIndex): CatalogModel | unde
   return index.byId.get(draft.atlasId) ?? index.byMatchKey.get(draft.matchKey);
 }
 
+/**
+ * The alias table for this run: what we knew, overlaid with what we learned.
+ *
+ * The one subtlety is the empty-string alias, which `resolveModelId` reads as a
+ * definitive "gone". Those are written when a model is tombstoned and they
+ * persist across runs, so a model a provider lists again would keep its
+ * gravestone: `getModelById` finds it, but any code path reaching for the alias
+ * first would still be told it no longer exists. Clearing the marker for every
+ * id a provider claimed this run keeps the table honest about revivals.
+ */
+function mergeAliases(
+  previous: Record<string, string> | undefined,
+  learned: Record<string, string>,
+  claimedIds: ReadonlySet<string>,
+): Record<string, string> {
+  const merged = { ...(previous ?? {}), ...learned };
+  for (const id of claimedIds) {
+    if (merged[id] === "") delete merged[id];
+  }
+  return merged;
+}
+
 export function mergeSnapshot(input: MergeInput): CatalogSnapshotRecord {
   const { overlay, previous, sources, now } = input;
   const today = now.slice(0, 10);
@@ -509,8 +531,43 @@ export function mergeSnapshot(input: MergeInput): CatalogSnapshotRecord {
   // --- 3. Carry-forward and the removal grace period ---
 
   const missCount: Record<string, number> = {};
-  const tombstones: CatalogTombstone[] = [...(previous?.tombstones ?? [])];
   const newTombstones: CatalogTombstone[] = [];
+
+  // Exactly the ids a provider list claimed this run, frozen before the
+  // carry-forward below starts adding its own. `claimedIds` keeps growing as a
+  // "already handled, do not process twice" guard — the denylist branch adds to
+  // it while *burying* a model — so it stops meaning "live upstream" the moment
+  // this loop begins. Revival has to key off the narrower fact.
+  const listedIds = new Set(claimedIds);
+
+  // Ids a previous run already confirmed gone, and the tombstone list carried
+  // into this one.
+  //
+  // `buried` is load-bearing, not bookkeeping. The carry-forward below draws its
+  // candidates from `previous.models` ∪ `overlay`, and the overlay is a *bundled
+  // constant* — it offers the same curated entry on every run, forever. So a
+  // curated model the providers had retired used to oscillate: deprecated on one
+  // sync (miss 1), removed and tombstoned on the next (miss 2), then re-admitted
+  // from the overlay on the third with its miss counter reset to 1, and removed
+  // again on the fourth. The catalog hash changed on every second run, every
+  // other diff carried a spurious `new_model` + `deprecation` pair for the same
+  // model, and "retired upstream" never actually meant gone — which is the one
+  // thing the removal grace period exists to make true.
+  //
+  // Revival still works, and is decided by the providers rather than by us: a
+  // model that reappears in a provider list is claimed by the draft loop in step
+  // 2, which runs first, so it never reaches the carry-forward at all. That is
+  // exactly why the filter below is on `claimedIds` — being listed again is what
+  // lifts a tombstone, and nothing else is.
+  const tombstones: CatalogTombstone[] = [];
+  const buried = new Set<string>();
+  for (const t of previous?.tombstones ?? []) {
+    // `buried.has` also de-duplicates: before this fix an oscillating model was
+    // re-tombstoned every second run and the list grew without bound.
+    if (listedIds.has(t.id) || buried.has(t.id)) continue;
+    buried.add(t.id);
+    tombstones.push(t);
+  }
 
   // Everything that existed before, preferring the curated version when there is
   // one so editorial fixes still land on carried-forward entries.
@@ -520,6 +577,9 @@ export function mergeSnapshot(input: MergeInput): CatalogSnapshotRecord {
 
   for (const [id, candidate] of carryCandidates) {
     if (claimedIds.has(id)) continue;
+    // Already confirmed gone by an earlier run. The overlay would otherwise
+    // re-offer it forever — see the note on `buried` above.
+    if (buried.has(id)) continue;
 
     // Withdraw anything the denylist now covers. Without this the carry-forward
     // re-admits it every run, so a model that predates a denylist entry — the
@@ -535,6 +595,7 @@ export function mergeSnapshot(input: MergeInput): CatalogSnapshotRecord {
       };
       newTombstones.push(tombstone);
       tombstones.push(tombstone);
+      buried.add(id);
       aliases[id] = "";
       claimedIds.add(id);
       continue;
@@ -584,6 +645,7 @@ export function mergeSnapshot(input: MergeInput): CatalogSnapshotRecord {
     };
     newTombstones.push(tombstone);
     tombstones.push(tombstone);
+    buried.add(id);
     aliases[id] = "";
   }
 
@@ -680,7 +742,7 @@ export function mergeSnapshot(input: MergeInput): CatalogSnapshotRecord {
     origin: enumerable.size > 0 ? "synced" : "baseline",
     models: finalModels,
     stats,
-    aliases: { ...(previous?.aliases ?? {}), ...aliases },
+    aliases: mergeAliases(previous?.aliases, aliases, listedIds),
     diff,
     warnings,
     sources,

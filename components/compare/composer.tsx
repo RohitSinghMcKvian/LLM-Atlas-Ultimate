@@ -150,7 +150,7 @@ export function Composer({
           );
         })}
 
-        <LanePicker selected={selected} onToggle={onToggleModel} env={env} disabled={disabled} />
+        <LanePicker selected={selected} onToggle={onToggleModel} disabled={disabled} />
 
         <button
           onClick={() => fileInput.current?.click()}

@@ -36,7 +36,8 @@ import {
   type FlowEdge,
   type NodeKind,
 } from "@/lib/flow/graph";
-import { routableModels, getModelById } from "@/lib/catalog";
+import { getModelById } from "@/lib/catalog";
+import { ModelPicker } from "@/components/catalog/model-picker";
 import { ACCENT_RGB } from "@/lib/accent";
 import { cn } from "@/lib/utils";
 
@@ -219,7 +220,6 @@ export function FlowClient() {
   }
 
   const selectedNode = nodes.find((n) => n.id === selected) ?? null;
-  const models = routableModels();
 
   function port(id: string, side: "in" | "out") {
     const n = nodes.find((x) => x.id === id)!;
@@ -362,7 +362,6 @@ export function FlowClient() {
         <aside className="hidden w-72 shrink-0 border-l border-border bg-surface/40 lg:block">
           <Inspector
             node={selectedNode}
-            models={models}
             onChange={(patch) => selectedNode && updateNode(selectedNode.id, patch)}
             onDelete={() => selectedNode && deleteNode(selectedNode.id)}
           />
@@ -386,8 +385,7 @@ export function FlowClient() {
             </div>
             <Inspector
               node={selectedNode}
-              models={models}
-              onChange={(patch) => updateNode(selectedNode.id, patch)}
+                onChange={(patch) => updateNode(selectedNode.id, patch)}
               onDelete={() => deleteNode(selectedNode.id)}
             />
           </motion.div>
@@ -478,12 +476,10 @@ function FlowNodeView({
 
 function Inspector({
   node,
-  models,
   onChange,
   onDelete,
 }: {
   node: FlowNode | null;
-  models: ReturnType<typeof routableModels>;
   onChange: (patch: Partial<FlowNode>) => void;
   onDelete: () => void;
 }) {
@@ -526,20 +522,15 @@ function Inspector({
       {node.kind === "agent" && (
         <>
           <label className="mb-1 block text-xs text-muted-foreground">Model</label>
-          <select
+          {/* Tool calling is not optional for an agent node — a model without it
+              cannot drive the graph — so the picker is narrowed rather than
+              letting someone wire in a model the run will refuse. */}
+          <ModelPicker
             value={node.model ?? ""}
-            onChange={(e) => {
-              const m = getModelById(e.target.value);
-              onChange({ model: e.target.value, sub: m?.name });
-            }}
-            className="mb-4 w-full rounded-lg border border-border bg-surface-2/50 px-2.5 py-2 text-sm outline-none focus:border-action/40"
-          >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+            onChange={(id) => onChange({ model: id, sub: getModelById(id)?.name })}
+            require={{ tools: true }}
+            className="mb-4 w-full"
+          />
         </>
       )}
 

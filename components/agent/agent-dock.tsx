@@ -18,6 +18,7 @@ import { describeSurface, useSurfaceStore } from "@/lib/agent/surface-context";
 import { useGraphStore } from "@/lib/store/graph-store";
 import { getOpenrouterKey } from "@/lib/store/keys-store";
 import { useUIStore } from "@/lib/store/ui-store";
+import { ModelPicker } from "@/components/catalog/model-picker";
 import { springSnappy } from "@/lib/motion";
 import { usePrefersReducedMotion } from "@/lib/hooks/use-media-query";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ export function AgentDock({
   const publishGraph = useGraphStore((s) => s.publish);
   const setRun = useGraphStore((s) => s.setRun);
   const modelId = useUIStore((s) => s.activeModelId);
+  const setActiveModel = useUIStore((s) => s.setActiveModel);
   // Without this the panel offered `atlas_news` with no corpus behind it and
   // `atlas_catalog availability` with no idea which providers the person can
   // reach - two tools that could only ever answer "I do not have that", on the
@@ -293,6 +295,19 @@ export function AgentDock({
                     <span className="sr-only">Send</span>
                   </Button>
                 )}
+              </div>
+              {/* The dock answers on whatever the top bar happens to have
+                  selected, and until now said so nowhere — an answer that was
+                  slow, or refused for want of a key, had no visible cause. */}
+              <div className="mt-1.5 flex items-center justify-end">
+                <ModelPicker
+                  value={modelId}
+                  onChange={setActiveModel}
+                  disabled={streaming}
+                  align="end"
+                  className="h-7 max-w-[13rem] border-0 bg-transparent px-1.5 text-2xs text-muted-foreground hover:bg-surface-2"
+                  placeholder="Choose a model"
+                />
               </div>
             </form>
           </motion.aside>

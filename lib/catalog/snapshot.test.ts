@@ -71,7 +71,7 @@ describe("installSnapshot", () => {
     expect(activeSnapshot()).toBe(BASELINE_SNAPSHOT);
   });
 
-  it("notifies subscribers once per real change", () => {
+  it("notifies subscribers once per real change, on the next microtask", async () => {
     let calls = 0;
     const unsubscribe = subscribeSnapshot(() => {
       calls++;
@@ -80,11 +80,21 @@ describe("installSnapshot", () => {
     const s = syntheticSnapshot(6);
     installSnapshot(s);
     installSnapshot(s); // idempotent — must not notify
+
+    // The pointer moves synchronously; the notification does not. `CatalogScope`
+    // installs from its render body, and calling a subscriber mounted elsewhere
+    // in the tree mid-render is React's "cannot update a component while
+    // rendering a different component" — see `notify` in ./snapshot.ts.
+    expect(activeSnapshot()).toBe(s);
+    expect(calls).toBe(0);
+
+    await Promise.resolve();
     expect(calls).toBe(1);
 
     unsubscribe();
     resetSnapshot();
     installSnapshot(syntheticSnapshot(7));
+    await Promise.resolve();
     expect(calls).toBe(1);
   });
 });

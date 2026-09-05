@@ -50,7 +50,7 @@ export function ModelSwitcher({ className }: { className?: string }) {
           <ChevronsUpDown className="size-3.5 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+      <PopoverContent align="end" className="w-[min(26rem,calc(100vw-2rem))] p-0">
         <ModelSwitcherList onPicked={close} />
       </PopoverContent>
     </Popover>

@@ -796,3 +796,82 @@ describe("route ordering", () => {
     }
   });
 });
+
+describe("a retired model stays retired", () => {
+  // The regression these pin down was invisible to the block above because it
+  // empties `overlay` on the second run. A real sync never does: the overlay is
+  // `BASELINE_SNAPSHOT.models`, a bundled constant that offers the same curated
+  // entry on every run forever. So the carry-forward re-admitted a model one run
+  // after burying it, and the catalog oscillated — retired, gone, retired, gone
+  // — churning the version hash and the diff on every second sync. Surfaced by
+  // `sync/live.test.ts`, which could not reach a steady state.
+  const retiring = makeModel({
+    id: "old-model",
+    name: "Old Model",
+    provider: "Acme",
+    routes: [{ provider: "openrouter", model: "acme/old-model" }],
+  });
+  const overlay = overlayOf(retiring);
+
+  const first = merge({ overlay });
+  const second = merge({ overlay, previous: first, now: LATER });
+  const third = merge({ overlay, previous: second, now: LATER_STILL });
+
+  it("is gone after the grace period even though the overlay still offers it", () => {
+    expect(first.models.some((m) => m.id === "old-model")).toBe(true);
+    expect(second.models.some((m) => m.id === "old-model")).toBe(false);
+    expect(third.models.some((m) => m.id === "old-model")).toBe(false);
+  });
+
+  it("does not resurrect on the run after removal", () => {
+    // The oscillation signature: a `new_model` entry for something that was
+    // deprecated two runs earlier.
+    expect(third.diff).toEqual([]);
+    expect(third.missCount["old-model"]).toBeUndefined();
+  });
+
+  it("reaches a steady state — an unchanged upstream hashes identically", () => {
+    expect(third.version).toBe(second.version);
+  });
+
+  it("keeps exactly one tombstone no matter how many syncs run", () => {
+    const fourth = merge({ overlay, previous: third, now: LATER_STILL });
+    expect(fourth.tombstones.filter((t) => t.id === "old-model")).toHaveLength(1);
+  });
+
+  it("stays resolvable as a definitive gone, not a dangling id", () => {
+    expect(third.aliases["old-model"]).toBe("");
+  });
+
+  it("comes back if a provider lists it again", () => {
+    // Revival is the providers' call, not ours: being listed again is the only
+    // thing that lifts a tombstone. `comeback` is buried while OpenRouter does
+    // not list `acme/comeback`, then revived by a run where it does.
+    const comeback = makeModel({
+      id: "comeback",
+      name: "Comeback",
+      provider: "Acme",
+      routes: [{ provider: "openrouter", model: "acme/comeback" }],
+    });
+    const listing = [
+      ...OPENROUTER_SAMPLE,
+      { id: "acme/comeback", name: "Comeback", context_length: 8192 },
+    ];
+
+    const buried1 = merge({ overlay: overlayOf(comeback) });
+    const buried2 = merge({ overlay: overlayOf(comeback), previous: buried1, now: LATER });
+    expect(buried2.tombstones.map((t) => t.id)).toContain("comeback");
+    expect(buried2.aliases.comeback).toBe("");
+
+    const revived = merge({
+      overlay: overlayOf(comeback),
+      openrouter: normalizeOpenRouter(listing, { today: LATER_STILL.slice(0, 10) }),
+      previous: buried2,
+      now: LATER_STILL,
+    });
+    expect(revived.models.some((m) => m.id === "comeback")).toBe(true);
+    expect(revived.tombstones.map((t) => t.id)).not.toContain("comeback");
+    // And the gravestone is cleared, so `resolveModelId` stops reading it as gone.
+    expect(revived.aliases.comeback).toBeUndefined();
+  });
+});

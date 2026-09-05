@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { RichText } from "./rich-text";
 import { useLearnStore } from "@/lib/store/learn-store";
 import { useUIStore } from "@/lib/store/ui-store";
+import { ModelPicker } from "@/components/catalog/model-picker";
 import { useKeysStore } from "@/lib/store/keys-store";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
 import { MAX_CRITERION_SCORE, type Block, type GradeResult } from "@/lib/learn/types";
@@ -37,6 +38,7 @@ export function ExerciseBlock({ block }: { block: ExerciseBlock }) {
   const record = useLearnStore((s) => s.exercises[block.id]);
   const recordGrade = useLearnStore((s) => s.recordGrade);
   const activeModelId = useUIStore((s) => s.activeModelId);
+  const setActiveModel = useUIStore((s) => s.setActiveModel);
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
   const keyHeaders = useUserKeyHeaders();
 
@@ -55,7 +57,7 @@ export function ExerciseBlock({ block }: { block: ExerciseBlock }) {
 
   async function submit() {
     if (!activeModelId) {
-      setError("Select a model in the top bar — grading runs on your chosen model.");
+      setError("Choose a grader model first — the picker is beside the Submit button.");
       return;
     }
     abortRef.current?.abort();
@@ -212,6 +214,17 @@ export function ExerciseBlock({ block }: { block: ExerciseBlock }) {
           <span className="ml-auto font-mono text-2xs tnum text-muted-foreground">
             {wordCount} words
           </span>
+          {/* The grader is a model, so which model it is belongs next to the
+              button that invokes it — not in a top bar the student has to go
+              hunting for after being told to. */}
+          <ModelPicker
+            value={activeModelId}
+            onChange={setActiveModel}
+            disabled={grading}
+            align="end"
+            className="h-8 max-w-[11rem] text-xs"
+            placeholder="Grader model"
+          />
         </div>
 
         <AnimatePresence initial={false}>

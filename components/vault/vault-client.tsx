@@ -45,6 +45,9 @@ import {
 import { Reveal } from "@/components/motion/reveal";
 import { useMounted } from "@/lib/hooks/use-media-query";
 import { useProviders } from "@/lib/hooks/use-providers";
+import { useRouteEnv } from "@/lib/hooks/use-route-env";
+import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
+import { pickerSections } from "@/lib/catalog/picker";
 import { useKeysStore, maskKey } from "@/lib/store/keys-store";
 import {
   useVaultStore,
@@ -121,7 +124,25 @@ interface KeyTestResult {
   isFreeTier?: boolean;
 }
 
+/**
+ * How many models each tier holds, right now, under the connected providers.
+ *
+ * Asked of `pickerSections`, so the numbers on this page are by construction the
+ * same ones the pickers show — a Vault that promises "62 free models" while the
+ * switcher offers 28 is worse than one that promises nothing.
+ */
+function useAccessCounts(): { free: number; byok: number } {
+  const snapshot = useCatalogSnapshot();
+  const env = useRouteEnv();
+  return React.useMemo(
+    () => pickerSections(env).counts,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [snapshot, env],
+  );
+}
+
 function ByokKeyCard() {
+  const counts = useAccessCounts();
   const key = useKeysStore((s) => s.openrouterKey);
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
   const clearKey = useKeysStore((s) => s.clearOpenrouterKey);
@@ -294,7 +315,10 @@ function ByokKeyCard() {
       ) : (
         <div className="mt-4 rounded-xl border border-dashed border-border bg-surface-2/40 p-4 text-center">
           <p className="text-sm text-muted-foreground">
-            No key connected. <span className="text-success">Open models still run free.</span>
+            No key connected.{" "}
+            <span className="text-accent">
+              {counts.free > 0 ? `${counts.free} models still run free.` : "Open models still run free."}
+            </span>
           </p>
           <Button variant="primary" size="sm" className="mt-3" onClick={() => setKeyModalOpen(true)}>
             <KeyRound className="size-3.5" /> Connect OpenRouter key
@@ -317,6 +341,7 @@ function ByokKeyCard() {
 
 function ProvidersPanel() {
   const info = useProviders();
+  const counts = useAccessCounts();
 
   return (
     <Reveal delay={0.05} className="rounded-2xl border border-border bg-surface/60 p-5 shadow-glow sm:p-6">
@@ -375,12 +400,28 @@ function ProvidersPanel() {
         })}
       </div>
 
+      {/* The deal, in numbers rather than adjectives. "Open models run free"
+          is true and says nothing; how many, and how many more a key would
+          unlock, is the thing someone deciding whether to connect one wants. */}
       <p className="mt-3 text-2xs text-muted-foreground">
-        {info.loading
-          ? "Checking operator configuration…"
-          : info.freeReady
-            ? "An operator provider is connected — open models run free for everyone."
-            : "No operator provider connected. Add a key server-side to serve free open models."}
+        {info.loading ? (
+          "Checking operator configuration…"
+        ) : info.freeReady ? (
+          <>
+            <span className="font-medium text-accent">
+              {counts.free} models run free
+            </span>{" "}
+            on Atlas&apos;s own provider keys — permanently, with no key from you.{" "}
+            {counts.byok > 0 && (
+              <>
+                Connecting your OpenRouter key adds {counts.byok} more, billed to
+                your account.
+              </>
+            )}
+          </>
+        ) : (
+          "No operator provider connected. Add a key server-side to serve free open models."
+        )}
       </p>
     </Reveal>
   );

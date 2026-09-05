@@ -201,8 +201,32 @@ export function installSnapshot(next?: CatalogSnapshot | null): boolean {
   if (s.current !== EMPTY_SNAPSHOT && next.syncedAt < s.current.syncedAt) return false;
 
   s.current = next;
-  for (const listener of s.listeners) listener();
+  notify(s);
   return true;
+}
+
+/**
+ * Tell subscribers the pointer moved — on the next microtask, not now.
+ *
+ * `CatalogScope` installs from its *render body*, deliberately, so that the tree
+ * beneath it renders against the same snapshot the server serialized. That is
+ * still exactly what happens: `s.current` moves synchronously above, so anything
+ * rendering below reads the new catalog immediately.
+ *
+ * What cannot happen synchronously is the notification. Subscribers reach the
+ * pointer through `useSyncExternalStore`, and several of them — the topbar
+ * switcher, the command palette, `<CatalogHeal />` — are mounted *elsewhere* in
+ * the tree. Calling their listeners mid-render is React's
+ * "Cannot update a component while rendering a different component", which is a
+ * genuine tearing hazard and not merely a noisy warning. Deferring by one
+ * microtask lands the update in its own pass, after the render that moved the
+ * pointer has committed.
+ */
+function notify(s: PointerState): void {
+  if (s.listeners.size === 0) return;
+  queueMicrotask(() => {
+    for (const listener of s.listeners) listener();
+  });
 }
 
 export function subscribeSnapshot(listener: () => void): () => void {

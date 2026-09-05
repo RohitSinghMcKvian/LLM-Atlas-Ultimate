@@ -95,9 +95,17 @@ export function defaultCostModels(): string[] {
   );
 }
 
-/** Playground's initial models. */
+/**
+ * Playground's initial models. Free, like Bench's.
+ *
+ * These are *defaults*, applied without anyone choosing them, so they have to be
+ * models a visitor with no key can actually run — otherwise the first thing the
+ * surface does is offer two lanes that answer 402. Comparing a paid model
+ * against a free one is a perfectly good thing to want; it is just not something
+ * to decide on the user's behalf before they have picked anything.
+ */
 export function defaultPlaygroundModels(): string[] {
-  return pick(["deepseek-v4-pro", "llama-3-3-70b"], 2);
+  return pick(["gpt-oss-120b", "deepseek-v4-pro", "llama-3-3-70b"], 2, { free: true });
 }
 
 /** Flow agent nodes. Needs tool calling to be useful. */

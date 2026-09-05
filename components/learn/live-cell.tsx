@@ -6,12 +6,11 @@ import dynamic from "next/dynamic";
 import { Play, Square, RotateCcw, ArrowUpRight, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProviderBanner } from "@/components/provider-banner";
-import { getModelById } from "@/lib/catalog";
+import { ModelPicker } from "@/components/catalog/model-picker";
 import { useUIStore } from "@/lib/store/ui-store";
 import { useKeysStore } from "@/lib/store/keys-store";
 import { useProviders } from "@/lib/hooks/use-providers";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
-import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { postSSE, SSEHttpError } from "@/lib/sse-client";
 import { announce } from "@/lib/atlas-events";
 
@@ -59,7 +58,7 @@ export function LiveCell({
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
   const activeModelId = useUIStore((s) => s.activeModelId);
-  const snapshot = useCatalogSnapshot();
+  const setActiveModel = useUIStore((s) => s.setActiveModel);
 
   const [text, setText] = React.useState(prompt);
   const [out, setOut] = React.useState("");
@@ -69,19 +68,13 @@ export function LiveCell({
   const [err, setErr] = React.useState<string | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
 
-  const model = React.useMemo(
-    () => (activeModelId ? getModelById(activeModelId) : undefined),
-    // The catalog is a swappable snapshot; re-resolve when it changes.
-    [activeModelId, snapshot],
-  );
-
   // A stream in flight when the lesson changes would keep writing into an
   // unmounted cell's state.
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
   async function run() {
     if (!activeModelId) {
-      setErr("Select a model in the top bar first.");
+      setErr("Choose a model first — the picker is in this cell's header.");
       setStatus("error");
       return;
     }
@@ -139,9 +132,18 @@ export function LiveCell({
           <Terminal className="size-3" />
         </span>
         <span className="text-xs font-semibold">Run this live</span>
-        <span className="ml-auto truncate font-mono text-2xs text-muted-foreground">
-          {model?.name ?? "no model selected"}
-        </span>
+        {/* Inline rather than "select a model in the top bar": the cell used to
+            name the model and refuse to run without one, while the only control
+            that could fix it was in a different region of the page. It writes to
+            the same global selection, so switching here follows you. */}
+        <ModelPicker
+          value={activeModelId}
+          onChange={setActiveModel}
+          disabled={status === "run"}
+          align="end"
+          className="ml-auto h-7 max-w-[11rem] text-xs"
+          placeholder="Choose a model"
+        />
       </div>
 
       <div className="p-3.5">

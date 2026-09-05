@@ -2,42 +2,27 @@
 
 import * as React from "react";
 import { defaultBenchModels } from "@/lib/catalog/defaults";
-import { resolveModelIds } from "@/lib/catalog/resolve";
-import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Gauge,
   Play,
   Square,
-  Plus,
   X,
   Check,
   AlertCircle,
-  Sparkles,
   ChevronDown,
   Upload,
   Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { ProviderBanner } from "@/components/provider-banner";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
+import { ModelMultiPicker, SelectedModelChip } from "@/components/catalog/model-picker";
+import { ModelHealNotice } from "@/components/catalog/heal-notice";
+import { useHealedModels } from "@/lib/hooks/use-healed-models";
 import { SUITES, grade, type EvalCase } from "@/lib/bench/suites";
-import { routableModels, getModelById } from "@/lib/catalog";
+import { getModelById } from "@/lib/catalog";
 import { useProviders } from "@/lib/hooks/use-providers";
 import { useKeysStore } from "@/lib/store/keys-store";
 import { useUserKeyHeaders } from "@/lib/hooks/use-user-key-headers";
@@ -54,22 +39,12 @@ export function BenchClient() {
   const providers = useProviders();
   const keyHeaders = useUserKeyHeaders();
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const snapshot = useCatalogSnapshot();
-  const all = React.useMemo(() => routableModels(), [snapshot]);
   const [suites, setSuites] = React.useState<Set<string>>(
     new Set(SUITES.map((s) => s.id)),
   );
   const [models, setModels] = React.useState<string[]>(() => defaultBenchModels());
 
-  // The daily sync can retire a selected model mid-session; drop it rather than
-  // dispatching a run against an id no provider serves.
-  React.useEffect(() => {
-    setModels((current) => {
-      const live = resolveModelIds(current);
-      if (live.length === current.length && live.every((id, i) => id === current[i])) return current;
-      return live.length ? live : defaultBenchModels();
-    });
-  }, [snapshot]);
+  const heal = useHealedModels(models, setModels, { fallback: defaultBenchModels });
   const [results, setResults] = React.useState<Record<string, CaseResult>>({});
   const [running, setRunning] = React.useState(false);
   const [progress, setProgress] = React.useState({ done: 0, total: 0, current: "" });
@@ -256,51 +231,21 @@ export function BenchClient() {
 
           <Card className="p-4">
             <p className="mb-2 text-sm font-medium">Models</p>
+            <ModelHealNotice notice={heal.notice} onDismiss={heal.dismiss} className="mb-2" />
             <div className="flex flex-wrap gap-1.5">
-              {models.map((id) => {
-                const m = getModelById(id);
-                if (!m) return null;
-                return (
-                  <Badge key={id} variant="primary" className="gap-1">
-                    {m.name}
-                    <button onClick={() => toggleModel(id)} disabled={running}>
-                      <X className="size-3" />
-                    </button>
-                  </Badge>
-                );
-              })}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    disabled={running}
-                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-strong px-2.5 py-1 text-xs text-muted-foreground hover:border-action hover:text-foreground disabled:opacity-50"
-                  >
-                    <Plus className="size-3" /> Add
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-72 p-0">
-                  <Command>
-                    <CommandInput placeholder="Add a model…" />
-                    <CommandList>
-                      <CommandEmpty>No model.</CommandEmpty>
-                      <CommandGroup>
-                        {all
-                          .filter((m) => !models.includes(m.id))
-                          .map((m) => (
-                            <CommandItem
-                              key={m.id}
-                              value={`${m.name} ${m.provider}`}
-                              onSelect={() => toggleModel(m.id)}
-                            >
-                              <Sparkles />
-                              {m.name}
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              {models.map((id) => (
+                <SelectedModelChip
+                  key={id}
+                  modelId={id}
+                  onRemove={toggleModel}
+                  disabled={running}
+                />
+              ))}
+              <ModelMultiPicker
+                selected={models}
+                onToggle={toggleModel}
+                disabled={running}
+              />
             </div>
           </Card>
 

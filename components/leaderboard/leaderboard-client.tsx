@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge, StatusPill } from "@/components/ui/badge";
+import { ModelLifecycleBadge } from "@/components/catalog/model-lifecycle-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -79,6 +80,8 @@ interface FilterState {
   minContext: number;
   maxPrice: number;
   showUpcoming: boolean;
+  /** Models the providers have stopped serving, on their way out of the catalog. */
+  showRetired: boolean;
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -94,6 +97,10 @@ const DEFAULT_FILTERS: FilterState = {
   minContext: 0,
   maxPrice: 60,
   showUpcoming: true,
+  // Off: "expired at the provider" should mean gone from Atlas. The toggle
+  // exists because the leaderboard is also a record — you may want to see what
+  // was retired this week — but it is not the default view of a catalogue.
+  showRetired: false,
 };
 
 const SORTS: { key: SortKey; label: string }[] = [
@@ -111,6 +118,7 @@ function blended(m: CatalogModel) {
 
 function matches(m: CatalogModel, f: FilterState): boolean {
   if (!f.showUpcoming && m.status === "upcoming") return false;
+  if (!f.showRetired && m.status === "deprecated") return false;
   if (f.access !== "all" && modelAccess(m) !== f.access) return false;
   if (f.license !== "all" && m.license !== f.license) return false;
   if (f.providers.size > 0 && !f.providers.has(m.provider)) return false;
@@ -509,8 +517,13 @@ const ModelRow = React.memo(function ModelRow({
                   Trending
                 </Badge>
               )}
+              <ModelLifecycleBadge model={model} className="hidden shrink-0 sm:inline-flex" />
+              {/* `accent` for free, `action` for BYOK — the product-wide open /
+                  bring-your-own-key convention the pickers, the cost frontier
+                  and the landing plot all use. This row said `success` for free
+                  and `accent` for paid, which inverted it. */}
               <Badge
-                variant={modelAccess(model) === "free" ? "success" : "accent"}
+                variant={modelAccess(model) === "free" ? "accent" : "primary"}
                 className="hidden shrink-0 sm:inline-flex"
               >
                 {modelAccess(model) === "free" ? "Free" : "Your key"}
@@ -766,14 +779,25 @@ function FilterControls({
         </div>
       </div>
 
-      {/* Upcoming */}
-      <label className="flex items-center justify-between gap-2 border-t border-border pt-4">
-        <span>Show upcoming</span>
-        <Switch
-          checked={filters.showUpcoming}
-          onCheckedChange={(v) => set({ showUpcoming: v })}
-        />
-      </label>
+      {/* Lifecycle */}
+      <div className="space-y-3 border-t border-border pt-4">
+        <label className="flex items-center justify-between gap-2">
+          <span>Show upcoming</span>
+          <Switch
+            checked={filters.showUpcoming}
+            onCheckedChange={(v) => set({ showUpcoming: v })}
+          />
+        </label>
+        <label className="flex items-center justify-between gap-2">
+          <span title="Models a provider has stopped serving. They leave the catalog entirely after the next sync confirms it.">
+            Show retired
+          </span>
+          <Switch
+            checked={filters.showRetired}
+            onCheckedChange={(v) => set({ showRetired: v })}
+          />
+        </label>
+      </div>
     </div>
   );
 }
