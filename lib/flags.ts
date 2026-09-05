@@ -169,6 +169,18 @@ export const FLAG_DEFS = {
       "A spoken conversation: the answer is read aloud as it is written, and talking over it interrupts. Answers are shorter and skip anything that only makes sense on screen.",
     defaultOn: false,
   },
+  voiceCommands: {
+    label: "Voice control",
+    description:
+      "Let spoken commands operate Atlas — open a module, pick models, filter a list. Navigation happens straight away; anything that saves or changes your data is read back and waits for a yes.",
+    defaultOn: false,
+  },
+  voiceWake: {
+    label: "Hey Atlas",
+    description:
+      "Listen for the words \"Hey Atlas\" while the app is open, so a conversation can be started without touching anything. Recognition runs in your browser and nothing is recorded, but the microphone is live on every page while this is on.",
+    defaultOn: false,
+  },
 } as const satisfies Record<string, FlagDef>;
 
 export type FlagId = keyof typeof FLAG_DEFS;

@@ -133,3 +133,63 @@ describe("step", () => {
     expect(spokenMs(open(0), 1_000)).toBe(0);
   });
 });
+
+describe("a finalised transcript ends the turn sooner", () => {
+  // `silenceMs` is a bet that more words may be coming. Once the engine has
+  // committed a final result that bet is settled, and the rest of the wait is
+  // dead air the person hears as the assistant being slow.
+  const speak = (state: EndpointState, from: number, ms: number) => {
+    let s = state;
+    for (let t = from; t < from + ms; t += 20) {
+      s = step(s, { speaking: true, now: t }).state;
+    }
+    return s;
+  };
+
+  /** Silence begins on the first silent frame, so the wait is measured from it. */
+  const goQuiet = (
+    state: EndpointState,
+    from: number,
+    ms: number,
+    input: { partial: string; finalized?: boolean },
+  ) => {
+    let s = state;
+    let last: ReturnType<typeof step> = { state: s, action: { kind: "none" } };
+    for (let t = from; t <= from + ms; t += 20) {
+      last = step(s, { speaking: false, now: t, ...input });
+      s = last.state;
+      if (last.action.kind !== "none") return last;
+    }
+    return last;
+  };
+
+  it("commits at the shorter silence when the words are already in", () => {
+    const state = speak(open(0), 0, 600);
+    const r = goQuiet(state, 600, DEFAULT_ENDPOINT.finalizedSilenceMs, {
+      partial: "what does this cost",
+      finalized: true,
+    });
+    expect(r.action).toEqual({ kind: "commit", reason: "silence" });
+  });
+
+  it("still waits the full silence when nothing has been finalised", () => {
+    const state = speak(open(0), 0, 600);
+    const r = goQuiet(state, 600, DEFAULT_ENDPOINT.finalizedSilenceMs, {
+      partial: "what does this cost",
+    });
+    expect(r.action).toEqual({ kind: "none" });
+  });
+
+  it("never cuts off a trailing word, finalised or not", () => {
+    const state = speak(open(0), 0, 600);
+    const r = goQuiet(state, 600, DEFAULT_ENDPOINT.finalizedSilenceMs, {
+      partial: "the cost of",
+      finalized: true,
+    });
+    expect(r.action).toEqual({ kind: "none" });
+  });
+
+  it("is faster than the ordinary wait, which is the whole point", () => {
+    expect(DEFAULT_ENDPOINT.finalizedSilenceMs).toBeLessThan(DEFAULT_ENDPOINT.silenceMs);
+  });
+});

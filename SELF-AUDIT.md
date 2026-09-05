@@ -3457,3 +3457,168 @@ two-account isolation test has never been executed. Running them writes DDL to y
 Supabase project, so it needs your explicit go-ahead; nothing in this phase touched it.
 
 Nothing has been committed.
+
+---
+
+# P21 — Atlas Voice: an assistant that acts
+
+## What was asked
+
+Make the voice assistant fast, capable of operating Atlas, and worth looking at.
+The verdict on the P20 surface was "very basic, very slow, unfunctional", and all
+three were accurate.
+
+## Why it was slow
+
+The chain after someone stopped talking: 600 ms of endpoint silence, then
+`runSessionTurn` building the knowledge graph and running `retrieveGraph` on the
+main thread before the model call, then model TTFT, and only then did `segment.ts`
+wait for a **complete sentence** before the first word of audio. On top of that
+the synthesiser used whatever the OS defaults to — David or Zira on Windows —
+with no voice, rate or pitch control anywhere, no prewarm, and no handling of
+Chrome's fifteen-second cutoff.
+
+Four changes, each in a pure module:
+
+- **`backchannel.ts`** — a short acknowledgement when an answer is late. The gap
+  stops being silence, which is most of what "slow" meant. Never repeats within
+  two turns, and is dropped the instant a real segment is ready.
+- **`segment.ts`** — the *first* piece of an answer cuts at the earliest clause
+  break past a minimum rather than waiting for a full stop. Later pieces keep the
+  sentence rule, because by then the listener is no longer waiting in silence.
+- **`endpoint.ts`** — `finalizedSilenceMs` (380 ms) applies once the recogniser
+  has committed a final result. The bet that more words are coming is settled;
+  the rest of the wait was dead air. `promisesMore` still overrides it entirely.
+- **`voices.ts`** — ranks the installed voices and picks the best, with a
+  `pause()`/`resume()` keepalive for the Chrome cutoff.
+
+And the graph is now built off the render path. It was previously built *during*
+render in `voice-mode.tsx`, blocking the overlay's first paint behind a walk of
+the whole catalog.
+
+## Why it was unfunctional
+
+`voice-mode.tsx` passed no `navigate` port, no `prompts` port and no
+`onApproval`. Every write was refused, so the surface could answer questions and
+do nothing else.
+
+The P20 reasoning — "a spoken turn has no approval prompt anyone can read" — is
+answered rather than overruled. The approval is now **spoken**: Atlas says what
+it is about to do and waits, `VoiceConfirm` shows the same sentence for anyone
+who would rather press something, and the two are the same string rather than two
+descriptions that can drift. Three rules hold: silence is never consent, an
+unclear reply is never consent, and a timed-out confirmation is a refusal.
+
+Navigation is exempt by the user's own decision — the back button undoes it, and
+confirming every navigation aloud makes the fastest thing the assistant does the
+slowest.
+
+## The intent layer
+
+`lib/voice/intent.ts` decides whether an utterance was a command before a model
+is involved. "Open Compare" is a `router.push` in single-digit milliseconds
+against the several seconds the same destination cost through a tool round.
+
+The bias is towards *asking*, everywhere: question openers are rejected outright,
+the navigation verbs are a closed list rather than "any sentence containing a
+module name", a phrase naming two modules with equal weight resolves to nothing,
+and fuzzy model matching needs a clear margin. A missed command costs a
+round-trip; a false one moves the page out from under someone who was reading it.
+
+`surface-commands.ts` is the write half of `surface-context.ts`: "show only free
+models" said on the Leaderboard changes *that* Leaderboard rather than opening a
+second one. A command the current page cannot take is routed to the module whose
+job it is — through `hrefForOpen`, so there is one URL vocabulary in the app
+rather than a second one that drifts.
+
+## "Hey Atlas", and the handover
+
+There is exactly one recogniser alive in the app at any moment. The wake listener
+runs only while the conversation surface is closed, and the mount passes
+`armed={false}` the moment it opens. Two live recognisers means a second
+permission prompt on Safari, an utterance heard twice, and on some builds a
+device the first instance never gives back.
+
+`wake.ts` also returns whatever followed the phrase, so "hey atlas, open compare"
+both wakes and carries the command — waking and then asking someone to repeat
+themselves is the most irritating thing a wake word can do. A bare "atlas" only
+counts at the start of an utterance, because the app is called Atlas and the word
+appears in ordinary sentences about it.
+
+Behind a flag that is off by default, with a preference that is also off by
+default, and the settings sheet says in plain words that the microphone is live.
+
+## Four bugs caught while building
+
+**The wake word could never fire on a monotonic clock.** `firedAt: 0` meant
+"never fired" but was fed straight into `now - firedAt < cooldown`, which is only
+reliably true for a wall-clock epoch. A driver passing `performance.now()` would
+have had its very first wake silently swallowed. Caught by the first test written
+against it; fixed by checking "never" explicitly.
+
+**The first-cut rule cut inside a table.** The clause search accepted a bare
+hyphen as a break, and `| - | - |` is a markdown table separator — so the opening
+"piece" landed in the middle of a table `speech-plan.ts` was about to announce as
+one thing. Caught by an existing narrator test. The early cut is a *prose*
+optimisation and now stops at the first newline, and the ASCII hyphen is excluded
+because it is also a bullet marker.
+
+**`confirm_needed` mixed two clocks.** The reducer took its timeout origin from
+`Date.now()` while every other transition is driven by an injected clock, so the
+confirmation timeout could not be tested against a trace at all. The event now
+carries `now`, like every other timed event in that machine.
+
+**A handler that reported success for doing nothing.** The Leaderboard's filter
+handler returned `true` unconditionally, so a sort word it could not map would
+have had the agent say "sorted by speed" after changing nothing. It now reports
+what it actually applied — and the mapping itself was moved out of the component
+into `sortKeyForSpoken`, because it was the only real logic in that handler and
+sitting in a component put it beyond a node test suite.
+
+## Acceptance evidence
+
+`npm run verify` — **4270 passed | 40 skipped | 1 failed** across 187 files. The
+single failure is `lib/catalog/sync/live.test.ts > reaches a steady state where a
+resync changes nothing`, a live-network test failing identically before this
+phase. Baseline was 4128, so **+142 tests**. Typecheck clean. `npm run build`
+compiled, exit 0.
+
+Driven live on port 3110, both themes, 375 px and desktop.
+
+| | Evidence |
+|---|---|
+| Voice opens from anywhere | ⌘⇧V on `/leaderboard` opened the surface; checked free against ⌘⇧O, ⌘/, ⌘K and ⌘J |
+| The orb renders | Canvas present and drawing; static ring under `prefers-reduced-motion` |
+| The vocabulary is real | The help sheet listed **"Compare Jamba 1.5 Large and Aion-2.0"** — built from the live catalog, not from invented names |
+| Wake degrades honestly | With the flag off: "Turn on the Hey Atlas flag in Settings to use this", switch disabled |
+| Degrades honestly overall | Microphone blocked: "Voice off" plus "Atlas could not open the microphone. Check the site's permissions." |
+| Touch targets at 375 px | All seven controls at or above 44 px, measured |
+| No horizontal scroll | `scrollWidth === clientWidth === 375` |
+| Console | Only the two pre-existing `CatalogHeal` errors |
+
+## What was NOT verified
+
+- **Nothing was heard aloud, again.** Microphone capture is blocked in the
+  browser pane, so the spoken path — wake, endpointing, the backchannel filling a
+  gap, barge-in, the spoken confirmation, a command executing without a model —
+  was never driven live. Every decision in it is unit-tested without an audio
+  device; the wiring between those decisions and a real microphone is not.
+- **The voice ranking could not be shown to help here.** This machine has three
+  voices installed, all of them the legacy Microsoft set the module exists to
+  rank *below* something better. The ranking is tested against a realistic list
+  where a Google voice is present; on this box there is nothing better to pick.
+- **No command was executed end to end in a browser.** `intent.ts`,
+  `surface-commands.ts` and the sort mapping are covered by tests; the seam from a
+  spoken utterance through `onCommand` into a module's `setState` was not driven,
+  because it starts at the microphone.
+- The confirmation card has not been seen on screen for a real tool call.
+- `voiceMode`, `voiceCommands` and `voiceWake` all ship **off**, per `lib/flags.ts`'s
+  own rule that a depth item flips default-on once its phase passes verification.
+  This one did not: the spoken path was never heard.
+
+## The standing ask, unchanged
+
+The RLS migration gate remains closed. Migrations `0005`–`0014` have never been
+run and the two-account isolation test has never been executed. Running them
+writes DDL to your live Supabase project, so it needs explicit go-ahead; nothing
+in this phase touched it.

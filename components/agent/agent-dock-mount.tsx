@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { AgentRail } from "./agent-rail";
 import { AGENT_PANEL_ID } from "@/lib/agent/rail";
 import { useFlag } from "@/lib/store/flags-store";
+import { useVoiceStore } from "@/lib/store/voice-store";
 
 /**
  * The agent's mount point, on every route in the app.
@@ -40,11 +41,26 @@ const VoiceMode = dynamic(() => import("@/components/voice/voice-mode").then((m)
   ssr: false,
 });
 
+/**
+ * A fourth chunk, and the smallest of them.
+ *
+ * The wake listener is one recogniser and a string match — no audio graph, no
+ * detector, no synthesiser — so it can sit on every page while the voice
+ * surface itself stays unloaded. Someone who has turned "Hey Atlas" on has
+ * asked for exactly that.
+ */
+const VoiceWakeListener = dynamic(
+  () => import("@/components/voice/voice-wake").then((m) => m.VoiceWakeListener),
+  { ssr: false },
+);
+
 export function AgentDockMount() {
   // Dark until the flag is turned on, like every other depth item in
   // `lib/flags.ts`.
   const enabled = useFlag("atlasDock");
   const voiceEnabled = useFlag("voiceMode");
+  const wakeEnabled = useFlag("voiceWake");
+  const wakePref = useVoiceStore((s) => s.wakeWord);
   const [open, setOpen] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
   /**
@@ -74,6 +90,14 @@ export function AgentDockMount() {
         setEverOpened(true);
         setOpen((v) => !v);
       }
+      // Voice from anywhere. Checked free against the shortcuts already taken:
+      // `components/shortcuts.tsx` owns ⌘⇧O and ⌘/, the palette owns ⌘K, and
+      // the dock owns ⌘J just above.
+      if (voiceEnabled && (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        setOpen(false);
+        setVoiceOpen((v) => !v);
+      }
       // Escape closes the panel, but never out from under the voice surface -
       // that owns its own Escape, and closing both at once would end a spoken
       // conversation someone was only trying to step back from.
@@ -81,7 +105,7 @@ export function AgentDockMount() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [enabled, voiceOpen]);
+  }, [enabled, voiceOpen, voiceEnabled]);
 
   if (!enabled) return null;
 
@@ -107,6 +131,14 @@ export function AgentDockMount() {
         />
       )}
       {voiceOpen && <VoiceMode open onClose={() => setVoiceOpen(false)} />}
+      {/* Armed only while the conversation surface is closed. The session owns
+          the microphone the moment it opens, and two live recognisers means a
+          second permission prompt on Safari and an utterance heard twice
+          everywhere else. */}
+      <VoiceWakeListener
+        armed={voiceEnabled && wakeEnabled && wakePref && !voiceOpen}
+        onWake={() => setVoiceOpen(true)}
+      />
     </>
   );
 }

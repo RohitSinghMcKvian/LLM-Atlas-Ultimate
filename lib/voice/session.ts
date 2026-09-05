@@ -25,7 +25,17 @@ export type VoicePhase =
   /** The agent is working. */
   | "thinking"
   /** The agent is speaking. */
-  | "speaking";
+  | "speaking"
+  /**
+   * The agent asked whether to go ahead with something that writes, and is
+   * waiting for an answer.
+   *
+   * Its own phase rather than a flag on `listening`, because everything about
+   * turn-taking differs here: what the next utterance *means* is a yes or a no
+   * rather than a question, barge-in must not apply (the agent is asking, not
+   * lecturing), and a timeout means "no" instead of "reopen".
+   */
+  | "confirming";
 
 export interface VoiceState {
   phase: VoicePhase;
@@ -38,16 +48,34 @@ export interface VoiceState {
   bargeFrames: number;
   /** Set when the session stopped for a reason worth showing. */
   note?: string;
+  /** What is waiting to be approved, while `phase` is `confirming`. */
+  pending?: { name: string; question: string };
+  /** True while push-to-talk is held; the endpoint does not close the turn. */
+  held?: boolean;
 }
 
 export type VoiceEvent =
   | { kind: "start"; now: number }
   | { kind: "stop" }
-  | { kind: "frame"; speaking: boolean; now: number; partial?: string }
+  | { kind: "frame"; speaking: boolean; now: number; partial?: string; finalized?: boolean }
   | { kind: "transcribed"; text: string }
   | { kind: "thinking" }
   | { kind: "speaking" }
   | { kind: "spoken" }
+  /**
+   * Something that writes needs approval before it runs.
+   *
+   * Carries `now` rather than reading the clock inside the reducer, because the
+   * confirmation *timeout* is measured from here and a reducer that mixes an
+   * injected clock with `Date.now()` cannot be tested against a trace.
+   */
+  | { kind: "confirm_needed"; name: string; question: string; now: number }
+  /** The answer came back, from speech or from the button. */
+  | { kind: "confirmed"; approved: boolean }
+  /** Push-to-talk pressed: take the floor now, whatever was happening. */
+  | { kind: "ptt_down"; now: number }
+  /** Push-to-talk released: close the turn with whatever was captured. */
+  | { kind: "ptt_up"; now: number }
   | { kind: "error"; message: string };
 
 export type VoiceAction =
@@ -60,6 +88,12 @@ export type VoiceAction =
   | { kind: "barge_in" }
   /** Hand the text to the agent. */
   | { kind: "ask"; text: string }
+  /** A reply to a pending confirmation. The driver parses yes/no/unclear. */
+  | { kind: "confirm_reply"; text: string }
+  /** The pending action was approved and should now run. */
+  | { kind: "run_pending"; name: string }
+  /** The pending action was refused and should be dropped. */
+  | { kind: "drop_pending"; name: string }
   | { kind: "close"; reason: string };
 
 export interface VoiceConfig extends EndpointConfig {
@@ -100,8 +134,83 @@ export function reduce(
     case "frame":
       return onFrame(state, event, cfg);
 
+    case "confirm_needed":
+      // The microphone stays open: the answer is the next thing said.
+      return {
+        state: {
+          ...state,
+          phase: "confirming",
+          endpoint: open(event.now),
+          partial: "",
+          bargeFrames: 0,
+          pending: { name: event.name, question: event.question },
+        },
+        action: { kind: "none" },
+      };
+
+    case "confirmed": {
+      const pending = state.pending;
+      if (!pending) return { state, action: { kind: "none" } };
+      return {
+        state: {
+          ...state,
+          // Approved work resumes as thinking; a refusal hands the floor back.
+          phase: event.approved ? "thinking" : "listening",
+          endpoint: event.approved ? state.endpoint : open(Date.now()),
+          pending: undefined,
+          partial: "",
+        },
+        action: event.approved
+          ? { kind: "run_pending", name: pending.name }
+          : { kind: "drop_pending", name: pending.name },
+      };
+    }
+
+    case "ptt_down":
+      // Takes the floor from whatever was happening, including playback: this
+      // is someone physically holding a key, which is as explicit as intent gets.
+      return {
+        state: {
+          ...state,
+          phase: "listening",
+          endpoint: open(event.now),
+          partial: "",
+          bargeFrames: 0,
+          held: true,
+        },
+        action: state.phase === "speaking" || state.phase === "thinking"
+          ? { kind: "barge_in" }
+          : { kind: "none" },
+      };
+
+    case "ptt_up": {
+      if (!state.held) return { state, action: { kind: "none" } };
+      const heard = state.partial.trim();
+      if (!heard) {
+        return {
+          state: { ...state, held: false, phase: "listening", endpoint: open(event.now) },
+          action: { kind: "reopen", reason: "nothing was heard" },
+        };
+      }
+      return {
+        state: { ...state, held: false, phase: "transcribing" },
+        action: { kind: "transcribe", audio: "captured" },
+      };
+    }
+
     case "transcribed": {
       const text = event.text.trim();
+      // While confirming, the next utterance is an answer rather than a
+      // question. The driver parses it; the machine only routes it.
+      if (state.phase === "confirming") {
+        if (!text) {
+          return {
+            state: { ...state, phase: "confirming", endpoint: open(Date.now()), partial: "" },
+            action: { kind: "none" },
+          };
+        }
+        return { state: { ...state, partial: "" }, action: { kind: "confirm_reply", text } };
+      }
       if (!text) {
         // The transcriber heard nothing usable. Reopening is right; asking the
         // model to answer an empty question is not.
@@ -163,14 +272,31 @@ function onFrame(
     };
   }
 
-  if (state.phase !== "listening") return { state, action: { kind: "none" } };
+  // `confirming` runs the endpoint too: the yes or no is captured exactly the
+  // way any other utterance is.
+  if (state.phase !== "listening" && state.phase !== "confirming") {
+    return { state, action: { kind: "none" } };
+  }
 
-  const r = step(state.endpoint, { speaking: event.speaking, now: event.now, partial: event.partial }, cfg);
+  const r = step(
+    state.endpoint,
+    {
+      speaking: event.speaking,
+      now: event.now,
+      partial: event.partial,
+      finalized: event.finalized,
+    },
+    cfg,
+  );
   const next: VoiceState = {
     ...state,
     endpoint: r.state,
     partial: event.partial ?? state.partial,
   };
+
+  // Push-to-talk owns the turn while it is held: the person is still pressing
+  // the key, so a pause is a pause and not the end of what they are saying.
+  if (state.held) return { state: { ...next, endpoint: state.endpoint }, action: { kind: "none" } };
 
   switch (r.action.kind) {
     case "commit":
@@ -179,8 +305,20 @@ function onFrame(
         action: { kind: "transcribe", audio: "captured" },
       };
     case "cancel":
+      // A confirmation that nobody answered is a refusal, never an approval.
+      if (state.phase === "confirming" && r.action.reason === "timeout") {
+        return {
+          state: { ...next, phase: "listening", endpoint: open(event.now), partial: "", pending: undefined },
+          action: { kind: "drop_pending", name: state.pending?.name ?? "" },
+        };
+      }
       return {
-        state: { ...next, phase: "listening", endpoint: open(event.now), partial: "" },
+        state: {
+          ...next,
+          phase: state.phase === "confirming" ? "confirming" : "listening",
+          endpoint: open(event.now),
+          partial: "",
+        },
         action: {
           kind: "reopen",
           reason: r.action.reason === "timeout" ? "no one spoke" : "that was too short",
@@ -198,6 +336,7 @@ export const PHASE_LABELS: Record<VoicePhase, string> = {
   transcribing: "Getting that down",
   thinking: "Working on it",
   speaking: "Speaking",
+  confirming: "Waiting for you to confirm",
 };
 
 /** True while the microphone should be open. */

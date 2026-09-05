@@ -20,6 +20,16 @@ export interface EndpointConfig {
    * there is the single most irritating thing a voice interface does.
    */
   trailingSilenceMs: number;
+  /**
+   * Silence that ends a turn the recogniser has already finalised.
+   *
+   * `silenceMs` is a bet that more words may still be coming. Once the engine
+   * has emitted a *final* result for the utterance, that bet is settled — the
+   * words are in — and the rest of the wait is dead air the person hears as the
+   * assistant being slow. Still non-zero: a final can land mid-thought, and
+   * `promisesMore` continues to override this entirely.
+   */
+  finalizedSilenceMs: number;
   /** Below this, the utterance is a cough or a click, not a turn. */
   minUtteranceMs: number;
   /** Above this, close anyway - something is holding the microphone open. */
@@ -30,6 +40,7 @@ export interface EndpointConfig {
 
 export const DEFAULT_ENDPOINT: EndpointConfig = {
   silenceMs: 600,
+  finalizedSilenceMs: 380,
   trailingSilenceMs: 1_400,
   minUtteranceMs: 250,
   maxUtteranceMs: 60_000,
@@ -99,6 +110,13 @@ export interface EndpointInput {
   now: number;
   /** Interim transcript, when the backend supplies one. */
   partial?: string;
+  /**
+   * Whether the recogniser has emitted a final result for this utterance.
+   *
+   * Separate from `partial` being non-empty: an interim transcript is a guess
+   * that keeps changing, a final one is the engine committing.
+   */
+  finalized?: boolean;
 }
 
 /**
@@ -148,7 +166,14 @@ export function step(
   const silentFor = input.now - next.silenceSince;
   const trailing = promisesMore(partial);
   next.status = trailing ? "trailing" : "listening";
-  const needed = trailing ? cfg.trailingSilenceMs : cfg.silenceMs;
+  // Trailing wins over finalised: "so..." with a final result behind it is
+  // still someone mid-thought, and cutting them there is the single most
+  // irritating thing this module can do.
+  const needed = trailing
+    ? cfg.trailingSilenceMs
+    : input.finalized
+      ? Math.min(cfg.finalizedSilenceMs, cfg.silenceMs)
+      : cfg.silenceMs;
 
   if (silentFor < needed) return { state: next, action: { kind: "none" } };
 

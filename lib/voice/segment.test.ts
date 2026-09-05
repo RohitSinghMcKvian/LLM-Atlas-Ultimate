@@ -98,3 +98,54 @@ describe("feed", () => {
     expect(stream("")).toEqual([]);
   });
 });
+
+describe("the opening piece cuts early", () => {
+  // Time-to-first-word is what a spoken interface is judged on. Waiting for a
+  // full stop spends the entire opening clause of an answer that is already
+  // streaming; a comma is a place a listener expects a pause anyway.
+  const LONG_OPENER =
+    "The cheapest of the two is Qwen3 Coder at thirty cents per million tokens, " +
+    "which is roughly a third of what the other one costs at the same volume.";
+
+  it("starts speaking at a clause rather than waiting for the sentence", () => {
+    const first = feed(initSegmenter(), LONG_OPENER).segments[0];
+    expect(first).toBe("The cheapest of the two is Qwen3 Coder at thirty cents per million tokens,");
+  });
+
+  it("only the first piece gets the short budget", () => {
+    // Once the agent is talking the listener is no longer waiting in silence,
+    // so later pieces wait for an ordinary boundary instead of cutting at the
+    // next comma.
+    const r = feed(initSegmenter(), LONG_OPENER);
+    expect(r.segments).toHaveLength(1);
+    expect(r.state.emitted).toBe(true);
+
+    const rest = feed({ buffer: "", emitted: true }, "It is cheaper still at volume, once the discount tier applies to the whole month");
+    expect(rest.segments).toEqual([]);
+  });
+
+  it("still prefers a real sentence boundary when there is one in range", () => {
+    const r = feed(initSegmenter(), "The Qwen3 Coder model is cheaper. It costs thirty cents per million.");
+    expect(r.segments[0]).toBe("The Qwen3 Coder model is cheaper.");
+  });
+
+  it("does not cut a short opener that has not finished arriving", () => {
+    expect(feed(initSegmenter(), "The cheapest is").segments).toEqual([]);
+  });
+
+  it("can be turned off, restoring sentence-only behaviour", () => {
+    expect(feed(initSegmenter(), LONG_OPENER, { firstCutChars: 0 }).segments).toEqual([]);
+  });
+
+  it("never emits a clipped fragment below the minimum", () => {
+    const r = feed(initSegmenter(), "Yes, absolutely right, that is the cheaper one by some way.", {
+      firstCutChars: 20,
+    });
+    for (const s of r.segments) expect(s.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("marks emitted on flush, so a flushed opener is not re-cut", () => {
+    const state = feed(initSegmenter(), "Short answer").state;
+    expect(flush(state).state.emitted).toBe(true);
+  });
+});

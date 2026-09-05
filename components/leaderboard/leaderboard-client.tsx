@@ -4,6 +4,7 @@ import * as React from "react";
 import { useCatalogSnapshot } from "@/lib/hooks/use-catalog-snapshot";
 import { useInfiniteReveal } from "@/lib/hooks/use-infinite-reveal";
 import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { sortKeyForSpoken, useSurfaceCommands } from "@/lib/agent/surface-commands";
 import { leaderboardSurface } from "@/lib/agent/surface-summaries";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -217,6 +218,46 @@ export function LeaderboardClient({
       expandedId: expanded,
       compareIds,
     }),
+  );
+
+  // Spoken commands, on the page they were spoken on. "Show only free models"
+  // said here changes *this* list rather than opening a second one, which is
+  // the whole difference between voice control and voice navigation.
+  useSurfaceCommands(
+    React.useMemo(
+      () => ({
+        moduleId: "leaderboard",
+        // Selection is Compare's job; a spoken "compare these two" from here is
+        // routed there by `resolveCommand` rather than half-handled.
+        accepts: ["filter" as const],
+        run: (command) => {
+          if (command.kind !== "filter") return false;
+          if (command.clear) {
+            setFilters(DEFAULT_FILTERS);
+            setSort("intelligence");
+            return true;
+          }
+          // Reports what it actually did. Returning true regardless would have
+          // the agent say "sorted by speed" after changing nothing.
+          let applied = false;
+          if (command.access) {
+            setFilters((f) => ({ ...f, access: command.access ?? "all" }));
+            applied = true;
+          }
+          if (command.openWeights) {
+            setFilters((f) => ({ ...f, license: "open" }));
+            applied = true;
+          }
+          const sortKey = sortKeyForSpoken(command.sort);
+          if (sortKey) {
+            setSort(sortKey as SortKey);
+            applied = true;
+          }
+          return applied;
+        },
+      }),
+      [],
+    ),
   );
 
   // Stable identities so the memoized rows aren't invalidated on every

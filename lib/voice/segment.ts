@@ -15,6 +15,14 @@
 export interface SegmentState {
   /** Text received but not yet emitted. */
   buffer: string;
+  /**
+   * Whether anything has been spoken yet this answer.
+   *
+   * Only the *first* piece is allowed to cut early (see `firstCutChars`): once
+   * the agent is talking, the listener is no longer waiting in silence and
+   * ordinary sentence boundaries read better.
+   */
+  emitted: boolean;
 }
 
 export interface SegmentOptions {
@@ -27,10 +35,21 @@ export interface SegmentOptions {
   maxChars?: number;
   /** Never emit a fragment shorter than this; it reads as clipped. */
   minChars?: number;
+  /**
+   * Budget for the *first* piece only, cut at a clause break.
+   *
+   * Time-to-first-word is the number a spoken interface is judged on, and
+   * waiting for a full sentence spends the whole opening clause of an answer
+   * that is already streaming. A comma is a place a listener expects a pause,
+   * so cutting there costs nothing and starts the reply roughly twice as fast.
+   * Set to 0 to keep the old sentence-only behaviour.
+   */
+  firstCutChars?: number;
 }
 
 export const DEFAULT_MAX_CHARS = 240;
 export const DEFAULT_MIN_CHARS = 24;
+export const DEFAULT_FIRST_CUT_CHARS = 70;
 
 /** Abbreviations whose full stop does not end a sentence. */
 const ABBREVIATIONS = [
@@ -51,7 +70,7 @@ const ABBREVIATIONS = [
 ];
 
 export function initSegmenter(): SegmentState {
-  return { buffer: "" };
+  return { buffer: "", emitted: false };
 }
 
 /**
@@ -134,6 +153,33 @@ export interface SegmentResult {
   segments: string[];
 }
 
+/**
+ * The first clause break at or after `from`, or -1.
+ *
+ * Used only for the opening piece. A comma, semicolon, colon or dash is a place
+ * a listener already expects a pause, so cutting there is free; cutting at an
+ * arbitrary space ("at thirty cents per million" / "tokens, which is…") is not,
+ * which is why this returns -1 rather than falling back to one.
+ */
+export function earliestClause(text: string, from: number): number {
+  // Only within the opening line. An early cut is a *prose* optimisation, and
+  // past the first newline the answer may be a table, a list or a heading —
+  // `| - | - |` reads as a dash clause break and cutting there lands inside a
+  // table that `speech-plan.ts` was about to announce as one thing.
+  const firstBreak = text.indexOf("\n");
+  const line = firstBreak === -1 ? text : text.slice(0, firstBreak);
+
+  for (let i = Math.max(0, from); i < line.length - 1; i++) {
+    const ch = line[i];
+    if (!/\s/.test(line[i + 1])) continue;
+    if (ch === "," || ch === ";" || ch === ":") return i + 1;
+    // An em or en dash used as a clause break. The ASCII hyphen is excluded on
+    // purpose: it is also a bullet marker and a table rule.
+    if ((ch === "—" || ch === "–") && /\s/.test(line[i - 1] ?? "")) return i + 1;
+  }
+  return -1;
+}
+
 export function feed(
   state: SegmentState,
   chunk: string,
@@ -141,8 +187,10 @@ export function feed(
 ): SegmentResult {
   const maxChars = opts.maxChars ?? DEFAULT_MAX_CHARS;
   const minChars = opts.minChars ?? DEFAULT_MIN_CHARS;
+  const firstCutChars = opts.firstCutChars ?? DEFAULT_FIRST_CUT_CHARS;
 
   let buffer = state.buffer + chunk;
+  let emitted = state.emitted;
   const segments: string[] = [];
 
   for (;;) {
@@ -184,6 +232,16 @@ export function feed(
       cut = fence.start;
     }
 
+    // The opening piece cuts at the *earliest* natural pause past the minimum,
+    // not the latest one that fits: nothing has been said yet, so every
+    // character waited for is silence the listener hears. Later pieces do the
+    // opposite — the agent is already talking, so they fill the budget.
+    if (cut === -1 && !emitted && firstCutChars > 0) {
+      const window = buffer.slice(0, Math.min(limit, maxChars));
+      const clause = earliestClause(window, Math.max(minChars, firstCutChars - 40));
+      if (clause > 0) cut = clause;
+    }
+
     if (cut === -1) {
       if (limit <= maxChars) break;
       // Over budget with no full stop in sight: fall back to the last clause
@@ -192,6 +250,7 @@ export function feed(
       const clause = Math.max(
         window.lastIndexOf(", "),
         window.lastIndexOf("; "),
+        window.lastIndexOf(": "),
         window.lastIndexOf(" - "),
       );
       cut = clause > minChars ? clause + 1 : window.lastIndexOf(" ");
@@ -199,15 +258,21 @@ export function feed(
     }
 
     const piece = buffer.slice(0, cut).trim();
-    if (piece) segments.push(piece);
+    if (piece) {
+      segments.push(piece);
+      emitted = true;
+    }
     buffer = buffer.slice(cut);
   }
 
-  return { state: { buffer }, segments };
+  return { state: { buffer, emitted }, segments };
 }
 
 /** Emit whatever is left. Called when the answer is finished. */
 export function flush(state: SegmentState): SegmentResult {
   const piece = state.buffer.trim();
-  return { state: { buffer: "" }, segments: piece ? [piece] : [] };
+  return {
+    state: { buffer: "", emitted: state.emitted || piece.length > 0 },
+    segments: piece ? [piece] : [],
+  };
 }

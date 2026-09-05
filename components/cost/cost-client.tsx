@@ -1,6 +1,7 @@
 "use client";
 
 import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { useSurfaceCommands } from "@/lib/agent/surface-commands";
 import { costSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
 import { defaultCostModels } from "@/lib/catalog/defaults";
@@ -83,6 +84,34 @@ export function CostClient({ initialModelId }: { initialModelId?: string }) {
       outputPerMonth: workload.requestsPerDay * workload.avgOutputTokens * 30,
       axis,
     }),
+  );
+
+  // "Add Claude" and "drop that one" priced against the workload already on
+  // screen, rather than navigating to a fresh Cost page that has forgotten it.
+  useSurfaceCommands(
+    React.useMemo(
+      () => ({
+        moduleId: "cost",
+        accepts: ["select" as const],
+        run: (command) => {
+          if (command.kind !== "select") return false;
+          setSelected((current) => {
+            switch (command.op) {
+              case "clear":
+                return [];
+              case "set":
+                return [...command.modelIds];
+              case "add":
+                return [...new Set([...current, ...command.modelIds])];
+              case "remove":
+                return current.filter((id) => !command.modelIds.includes(id));
+            }
+          });
+          return true;
+        },
+      }),
+      [],
+    ),
   );
 
   const w = (patch: Partial<Workload>) => setWorkload((s) => ({ ...s, ...patch }));

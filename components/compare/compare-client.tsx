@@ -1,6 +1,7 @@
 "use client";
 
 import { useSurfaceContext } from "@/lib/agent/surface-context";
+import { useSurfaceCommands } from "@/lib/agent/surface-commands";
 import { compareSurface } from "@/lib/agent/surface-summaries";
 import * as React from "react";
 import { ArrowLeftRight, GitCompareArrows, Info, RotateCw, Unlock } from "lucide-react";
@@ -197,6 +198,36 @@ export function CompareClient({ initialIds }: { initialIds?: string[] }) {
   // streaming, so the state of the run is part of the summary rather than only
   // the models in it.
   useSurfaceContext(compareSurface({ modelIds: selected, running, question }));
+
+  // The surface selection is spoken about more than any other: "compare these
+  // two", "add Gemini", "drop the last one". Handled here rather than by
+  // navigating to a fresh `/compare?models=…`, which would throw away the
+  // question, the run and everything else already set up.
+  useSurfaceCommands(
+    React.useMemo(
+      () => ({
+        moduleId: "compare",
+        accepts: ["select" as const],
+        run: (command) => {
+          if (command.kind !== "select") return false;
+          setSelected((current) => {
+            switch (command.op) {
+              case "clear":
+                return [];
+              case "set":
+                return command.modelIds.slice(0, MAX_LANES);
+              case "add":
+                return [...new Set([...current, ...command.modelIds])].slice(0, MAX_LANES);
+              case "remove":
+                return current.filter((id) => !command.modelIds.includes(id));
+            }
+          });
+          return true;
+        },
+      }),
+      [],
+    ),
+  );
 
   const toggleModel = React.useCallback((id: string) => {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id].slice(0, MAX_LANES)));
