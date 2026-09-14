@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import {
   streamChatEvents,
-  resolveRoute,
+  resolveServableCandidates,
   RouterError,
   type ChatMessage,
   type StreamParams,
@@ -9,6 +9,8 @@ import {
 } from "@/lib/router";
 import { sse, SSE_HEADERS } from "@/lib/router/sse";
 import { getCatalogSnapshot } from "@/lib/catalog/store";
+import { readUserKeys } from "@/lib/router/user-keys";
+import { RateLimiter, callerKey } from "@/lib/compare/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +31,26 @@ export const dynamic = "force-dynamic";
  * as before — the ceiling just moved down with the plan.
  */
 export const maxDuration = 300;
+
+/**
+ * Per-caller cap on requests that spend the OPERATOR's credential.
+ *
+ * Until now this route had no limit at all: any anonymous POST spent the
+ * operator's provider budget, and `middleware.ts` has gating disabled. The
+ * quota ledger stops the operator's free tier being burned through in total;
+ * this stops one caller doing it alone.
+ *
+ * Deliberately NOT applied when the request carries the user's own key — they
+ * are spending their own allowance, and rate-limiting that would be pure
+ * friction. See `lib/quota/index.ts` for why the two are separate problems.
+ *
+ * Same mitigation-not-authentication caveat as `lib/compare/rate-limit.ts`:
+ * `callerKey` reads a spoofable header and the bucket is per-instance.
+ */
+const chatLimiter = new RateLimiter({
+  capacity: Number(process.env.ATLAS_CHAT_BURST ?? 40) || 40,
+  windowMs: 5 * 60 * 1000,
+});
 
 interface Body {
   modelId: string;
@@ -67,21 +89,55 @@ export async function POST(req: NextRequest) {
   await getCatalogSnapshot();
 
   // BYOK: user's OpenRouter key arrives per-request. Do NOT log or persist it.
-  const orKey = req.headers.get("x-openrouter-key") ?? undefined;
-  const userKeys: UserKeys = orKey ? { openrouter: orKey } : {};
+  const userKeys: UserKeys = readUserKeys(req.headers);
 
-  // Validate routing up-front so we can return a clean error. resolveRoute
-  // emits `key_required` (402) for closed models without a user key and
-  // `no_provider_configured` (503) for free models with no operator key.
+  // Validate routing up-front so we can return a clean HTTP error rather than a
+  // 200 carrying an error frame. Emits `key_required` (402) for closed models
+  // without a user key, `no_provider_configured` (503) for free models with no
+  // operator key, and `quota_exhausted` (429) when every free lane's allowance
+  // is spent — the last of these consults the ledger, which is why it is async.
   let providerId: string;
+  let operatorFunded: boolean;
   try {
-    providerId = resolveRoute(body.modelId, userKeys).route.provider;
+    const candidates = await resolveServableCandidates(body.modelId, userKeys);
+    providerId = candidates[0].route.provider;
+    operatorFunded = candidates[0].runtime.credential === "operator";
   } catch (e) {
     const err = e as RouterError;
     return Response.json(
       { error: err.message, code: err.code },
-      { status: err.status ?? 400 },
+      {
+        status: err.status ?? 400,
+        // Standard, machine-readable, and understood by proxies and clients
+        // that never look at our JSON body.
+        headers: err.retryAfterMs
+          ? { "Retry-After": String(Math.ceil(err.retryAfterMs / 1000)) }
+          : undefined,
+      },
     );
+  }
+
+  // Only requests on the operator's dime are capped; see `chatLimiter`.
+  if (operatorFunded) {
+    const decision = chatLimiter.check(callerKey(req.headers), 1);
+    if (!decision.ok) {
+      return Response.json(
+        {
+          // Deliberately does NOT suggest connecting a key: on a free route
+          // `runtimeFor` prefers the operator's credential even when the user
+          // has their own, so this particular limit would still apply and the
+          // advice would be false. (When the operator's *allowance* runs out,
+          // that is a different code and a user key genuinely does take over —
+          // see `dropExhaustedCandidates`.)
+          error: "Too many requests in a short window. Give it a moment and try again.",
+          code: "rate_limited",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(decision.retryAfterMs / 1000)) },
+        },
+      );
+    }
   }
 
   const encoder = new TextEncoder();
