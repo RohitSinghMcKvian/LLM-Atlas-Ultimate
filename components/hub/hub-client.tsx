@@ -32,7 +32,7 @@ import { cn, formatContext } from "@/lib/utils";
 
 export function HubClient() {
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const hasKey = useKeysStore((s) => s.keyPresent);
+  const hasKey = useKeysStore((s) => s.keysPresent.length > 0);
 
   // One subscription drives every rail: a synced snapshot is a new object
   // identity, so all five memos below recompute exactly once when it lands.

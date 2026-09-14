@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getProviderRuntime, type UserKeys } from "@/lib/router";
 import type { ProviderId } from "@/lib/catalog/types";
+import { readUserKeys } from "@/lib/router/user-keys";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,8 +44,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const orKey = req.headers.get("x-openrouter-key")?.trim();
-  const userKeys: UserKeys = orKey ? { openrouter: orKey } : {};
+  const userKeys: UserKeys = readUserKeys(req.headers);
 
   // Pick the requested provider, else the first one that is actually configured.
   const providerId =

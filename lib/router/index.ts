@@ -1,12 +1,23 @@
 // Atlas Router — a unified, OpenAI-compatible inference gateway.
-// Server-only. Free (open) models run on operator env keys; closed (BYOK)
-// models run on the USER's own OpenRouter key, passed per-request and never
-// persisted or logged.
+// Server-only. Free routes prefer the operator's env keys; metered ones run on
+// the USER's own key for that provider, passed per-request and never persisted
+// or logged. A user key can stand in for a missing operator key on any
+// provider, which is what makes someone's own free Groq or Z.ai tier usable.
 import { PROVIDERS, PROVIDER_LIST, getModelById } from "@/lib/catalog";
 import { modelAvailability, type RouteEnv } from "@/lib/catalog/availability";
 import type { CatalogModel, ProviderId, ModelRoute } from "@/lib/catalog/types";
 import { MAX_IMAGES_PER_TURN, readImages, type GeneratedImage } from "./images";
+import { userKeyProviders, type UserKeys } from "./user-keys";
+import {
+  buildAnthropicBody,
+  endpointFor,
+  newFrameState,
+  normalizeFrame,
+  protocolHeaders,
+  type WireProtocol,
+} from "./protocol";
 import { rejectsTools } from "@/lib/chat/tool-support";
+import { dropExhausted, recordSpend as recordLaneSpend } from "@/lib/quota";
 
 /** A single part of a multimodal message (vision). */
 export type ChatContentPart =
@@ -95,16 +106,29 @@ export type RouterEvent =
 /**
  * User-supplied keys, forwarded from the browser for a single request.
  * SECURITY: never persist these, never log them, never echo them in responses.
+ *
+ * Defined in `./user-keys` because the browser has to build the headers this
+ * type describes, and that module is importable from both sides. Re-exported
+ * here so the ~20 existing `from "@/lib/router"` imports keep working.
  */
-export interface UserKeys {
-  openrouter?: string;
-}
+export type { UserKeys } from "./user-keys";
 
 export interface ProviderRuntime {
   id: ProviderId;
   baseUrl: string;
   apiKey?: string;
   headers: Record<string, string>;
+  /** Wire shape this upstream speaks. See `./protocol`. */
+  protocol: WireProtocol;
+  /**
+   * Whose allowance this attempt spends.
+   *
+   * The quota ledger meters `"operator"` only: when the user brought their own
+   * key the quota is theirs, and the operator's counters have no authority over
+   * it. `runtimeFor` decides which key is preferred; this records the outcome so
+   * nothing downstream has to re-derive it from `userKeys` and get it wrong.
+   */
+  credential: "operator" | "user";
 }
 
 export interface ResolvedRoute {
@@ -136,10 +160,16 @@ export class RouterError extends Error {
     | "no_credit"
     /** Every route answered 404 — the provider no longer serves it. */
     | "route_dead"
-    /** Every route answered 401/403 — an operator key is bad. */
+    /** Every route answered 401/403 — the key that carried them is bad. */
     | "provider_key_invalid"
     /** Every route answered 429 — free tiers cap requests per minute. */
     | "rate_limited"
+    /**
+     * Every free route's allowance is already spent for this window, so none
+     * was attempted. Distinct from `rate_limited`, which is the provider
+     * refusing after the fact — this one never left the building.
+     */
+    | "quota_exhausted"
     /** Every route hung. */
     | "all_routes_timed_out"
     /** Mixed failures across every route. */
@@ -147,6 +177,11 @@ export class RouterError extends Error {
   status: number;
   /** Populated when the failure happened after routing, one entry per try. */
   attempts?: RouteAttempt[];
+  /**
+   * How long until the request could succeed, when that is knowable. Lets the
+   * client say *when* rather than only *no*.
+   */
+  retryAfterMs?: number;
   constructor(
     code: RouterError["code"],
     message: string,
@@ -166,17 +201,29 @@ export class RouterError extends Error {
  * or a log.
  */
 function scrubSecrets(text: string): string {
+  // One pattern per credential shape that can reach an upstream. Any provider's
+  // key can now arrive as a user credential, so this list tracks `PROVIDERS`:
+  // adding a provider without adding its key shape here means a rejected key can
+  // be echoed back inside a provider's own error body.
   return text
     .replace(/nvapi-[A-Za-z0-9_-]{8,}/g, "nvapi-***")
     .replace(/sk-or-v1-[A-Za-z0-9]{8,}/g, "sk-or-v1-***")
-    .replace(/sk-[A-Za-z0-9]{16,}/g, "sk-***")
+    .replace(/sk-ant-[A-Za-z0-9_-]{8,}/g, "sk-ant-***")
+    // Covers OpenAI, DeepSeek and DashScope, which all use a bare `sk-` prefix.
+    // Hyphens and underscores are in the class so a segmented key (`sk-ant-…`,
+    // `sk-or-v1-…`) is matched whole rather than truncated at the first dash.
+    .replace(/sk-[A-Za-z0-9_-]{16,}/g, "sk-***")
+    .replace(/gsk_[A-Za-z0-9]{16,}/g, "gsk_***")
+    .replace(/xai-[A-Za-z0-9]{16,}/g, "xai-***")
+    .replace(/csk-[A-Za-z0-9_-]{16,}/g, "csk-***")
     .replace(/Bearer\s+[A-Za-z0-9._-]{8,}/gi, "Bearer ***");
 }
 
 /**
  * Build a runtime for a provider, or null if it isn't configured.
- * For OpenRouter a per-request user key (BYOK) takes precedence over the
- * operator env key; other providers are operator-env only.
+ * A per-request user key (BYOK) takes precedence over the operator env key for
+ * any provider — which is what lets someone bring their own free-tier Groq or
+ * Z.ai key and not depend on what the operator chose to fund.
  */
 export function getProviderRuntime(
   id: ProviderId,
@@ -187,10 +234,11 @@ export function getProviderRuntime(
     process.env[`${id.toUpperCase()}_BASE_URL`] || meta.defaultBaseUrl;
   let apiKey = meta.apiKeyEnv ? process.env[meta.apiKeyEnv] : undefined;
 
-  // BYOK: the user's OpenRouter key (when present) is used in place of env.
-  if (id === "openrouter" && userKeys?.openrouter) {
-    apiKey = userKeys.openrouter;
-  }
+  // BYOK: the user's own key for this provider (when present) replaces the
+  // operator's. `runtimeFor` decides *whether* to prefer it; this just makes it
+  // available for every provider rather than OpenRouter alone.
+  const userKey = userKeys?.[id];
+  if (userKey) apiKey = userKey;
 
   // Local is only considered available when a base URL is explicitly provided.
   if (id === "local") {
@@ -199,14 +247,26 @@ export function getProviderRuntime(
     return null;
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+  const protocol: WireProtocol = meta.protocol ?? "openai";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    // Anthropic authenticates with `x-api-key` and requires a dated
+    // `anthropic-version`; everyone else takes a bearer token.
+    ...protocolHeaders(protocol, apiKey),
+  };
   if (id === "openrouter") {
     headers["HTTP-Referer"] =
       process.env.OPENROUTER_SITE_URL || "https://llmatlas.xyz";
     headers["X-Title"] = process.env.OPENROUTER_SITE_NAME || "LLM Atlas";
   }
-  return { id, baseUrl, apiKey, headers };
+  return {
+    id,
+    baseUrl,
+    apiKey,
+    headers,
+    protocol,
+    credential: userKey ? "user" : "operator",
+  };
 }
 
 export function configuredProviderIds(): ProviderId[] {
@@ -223,7 +283,7 @@ export function isAnyProviderConfigured(): boolean {
 export function routeEnv(userKeys?: UserKeys): RouteEnv {
   return {
     configured: configuredProviderIds(),
-    userOpenRouterKey: Boolean(userKeys?.openrouter),
+    userKeys: userKeyProviders(userKeys),
     servePaid: process.env.OPERATOR_SERVE_PAID === "true",
     freeCeilingPerM: Number(process.env.ATLAS_FREE_OPEN_CEILING_PER_M ?? 0) || 0,
   };
@@ -314,9 +374,91 @@ export function resolveCandidates(
  * The single route that would serve a model right now. Thin wrapper over
  * {@link resolveCandidates} kept for the API routes that only need the provider
  * name for a pre-flight check.
+ *
+ * Deliberately does NOT consult the quota ledger: it is a synchronous naming
+ * helper, and a route it names may still be skipped by
+ * {@link resolveServableCandidates} when the turn is actually spent.
  */
 export function resolveRoute(modelId: string, userKeys?: UserKeys): ResolvedRoute {
   return resolveCandidates(modelId, userKeys)[0];
+}
+
+/** "45s" / "12m" / "3h" — enough to answer "when", not a duration library. */
+function humanizeMs(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.ceil(s / 60);
+  if (m < 60) return `${m}m`;
+  return `${Math.ceil(m / 60)}h`;
+}
+
+/**
+ * Candidates that are both routable and still have allowance left.
+ *
+ * `resolveCandidates` is synchronous and pure; reading the ledger is neither,
+ * which is why this is a separate async step rather than a condition inside it.
+ *
+ * An exhausted lane is **skipped, never attempted**. That is the entire reason
+ * to keep a ledger instead of reacting to 429s: reacting costs a round trip,
+ * and on a provider that counts rejected requests it digs the hole deeper.
+ *
+ * Only operator-funded lanes can be blocked — a route carrying the user's own
+ * key spends their allowance, which Atlas neither owns nor can observe.
+ */
+export async function dropExhaustedCandidates(
+  candidates: ResolvedRoute[],
+  userKeys?: UserKeys,
+  now: number = Date.now(),
+): Promise<ResolvedRoute[]> {
+  const { blocked, retryAfterMs } = await dropExhausted(
+    candidates.map((cand) => ({
+      cand,
+      provider: cand.route.provider,
+      operatorFunded: cand.runtime.credential === "operator",
+    })),
+    now,
+  );
+
+  const spent = new Set(blocked);
+  const keep: ResolvedRoute[] = [];
+  for (const cand of candidates) {
+    if (!(cand.runtime.credential === "operator" && spent.has(cand.route.provider))) {
+      keep.push(cand);
+      continue;
+    }
+    // The operator's allowance on this lane is gone — but the user may hold
+    // their own key for it, and that quota is untouched.
+    //
+    // `runtimeFor` deliberately prefers the operator's key on a free route, so
+    // a BYOK user's key normally sits unused. That is right while the operator
+    // can still pay and wrong the moment they cannot: without this the app
+    // would tell someone to connect a key they had already connected. Rebuilt
+    // in place so failover order is preserved.
+    const runtime = getProviderRuntime(cand.route.provider, userKeys);
+    if (runtime?.credential === "user") keep.push({ ...cand, runtime });
+  }
+  if (keep.length > 0) return keep;
+
+  const model = candidates[0].model;
+  const lanes = blocked.map((id) => PROVIDERS[id].name).join(", ");
+  const err = new RouterError(
+    "quota_exhausted",
+    `${model.name} has used up the free allowance on ${lanes} for now. ` +
+      `It resets in about ${humanizeMs(retryAfterMs)} — or connect your own ` +
+      `key in the Vault to keep going straight away.`,
+    429,
+  );
+  err.retryAfterMs = retryAfterMs;
+  throw err;
+}
+
+/** Resolve and filter in one step, for callers that need no other view. */
+export async function resolveServableCandidates(
+  modelId: string,
+  userKeys?: UserKeys,
+  now: number = Date.now(),
+): Promise<ResolvedRoute[]> {
+  return dropExhaustedCandidates(resolveCandidates(modelId, userKeys), userKeys, now);
 }
 
 export interface StreamParams {
@@ -595,8 +737,18 @@ async function readWithTimeout(
   }
 }
 
-/** Turn the recorded attempts into one error a user can act on. */
-function aggregateFailure(model: CatalogModel, attempts: RouteAttempt[]): RouterError {
+/**
+ * Turn the recorded attempts into one error a user can act on.
+ *
+ * `userKeys` is needed only to say *whose* credential was rejected. Now that any
+ * provider can be dialled with the user's own key, blaming "the operator key"
+ * unconditionally sends someone to check an env var they do not control.
+ */
+function aggregateFailure(
+  model: CatalogModel,
+  attempts: RouteAttempt[],
+  userKeys?: UserKeys,
+): RouterError {
   const list = attempts
     .map((a) => {
       const what = a.error ? `${a.error} after ${Math.round(a.ms)}ms` : `HTTP ${a.status}`;
@@ -664,9 +816,15 @@ function aggregateFailure(model: CatalogModel, attempts: RouteAttempt[]): Router
     );
   }
   if (every((a) => a.status === 401 || a.status === 403)) {
+    // Whose key actually carried these attempts? If every provider that answered
+    // was dialled with the user's own credential, the operator cannot help.
+    const rejected = [...new Set(answered.map((a) => a.provider))];
+    const allUserKeyed = rejected.length > 0 && rejected.every((id) => Boolean(userKeys?.[id]));
     return new RouterError(
       "provider_key_invalid",
-      `The operator key for ${answeredProviders()} was rejected. Check the provider API key.`,
+      allUserKeyed
+        ? `Your ${answeredProviders()} key was rejected. Check it in the Vault, or reconnect it.`
+        : `The operator key for ${answeredProviders()} was rejected. Check the provider API key.`,
       502,
       attempts,
     );
@@ -704,9 +862,15 @@ function aggregateFailure(model: CatalogModel, attempts: RouteAttempt[]): Router
 export async function* streamChatEvents(
   params: StreamParams,
 ): AsyncGenerator<RouterEvent, void, unknown> {
-  const candidates = resolveCandidates(params.modelId, params.userKeys);
+  const resolved = resolveCandidates(params.modelId, params.userKeys);
+  // Taken BEFORE the ledger filter, deliberately. `preferred` exists to tell the
+  // client when the serving provider differs from what its own pre-flight
+  // `resolveRoute` predicted — and that prediction is unfiltered. Reading it off
+  // the filtered list would make a ledger-skipped lane look like the intended
+  // one and silently suppress the `provider` event.
+  const preferred = resolved[0].route.provider;
+  const candidates = await dropExhaustedCandidates(resolved, params.userKeys);
   const model = candidates[0].model;
-  const preferred = candidates[0].route.provider;
 
   const attempts: RouteAttempt[] = [];
 
@@ -717,6 +881,10 @@ export async function* streamChatEvents(
     first: Uint8Array[];
     /** The committed attempt ran without the `tools` the caller supplied. */
     toolsDropped: boolean;
+    /** This attempt spent the operator's allowance, so the ledger counts it. */
+    operatorFunded: boolean;
+    /** Upstream response headers, read for the provider's own quota figures. */
+    responseHeaders: Headers;
   }
   interface QueueItem {
     cand: ResolvedRoute;
@@ -737,6 +905,11 @@ export async function* streamChatEvents(
     | { kind: "slow"; parked: ParkedRoute };
 
   let committed: Committed | null = null;
+
+  // Token spend for the quota ledger, accumulated across the stream. Requests
+  // are counted at commit; tokens cannot be, because nothing knows them yet.
+  let billedPrompt = 0;
+  let billedCompletion = 0;
 
   // A work queue rather than a plain loop, so one candidate can be re-queued with
   // a reduced body (see `rejectsStreamOptions`) without duplicating the attempt
@@ -776,10 +949,14 @@ export async function* streamChatEvents(
 
     // Settled into a value rather than left to reject, so `raceDeadline` can
     // report "still waiting" without also having to catch.
-    const fetching = fetch(`${cand.runtime.baseUrl}/chat/completions`, {
+    const fetching = fetch(endpointFor(cand.runtime.protocol, cand.runtime.baseUrl), {
       method: "POST",
       headers: cand.runtime.headers,
-      body: JSON.stringify(buildBody(cand.route, params, omitStreamOptions, omitTools)),
+      body: JSON.stringify(
+        cand.runtime.protocol === "anthropic"
+          ? buildAnthropicBody(cand.route, params, omitTools)
+          : buildBody(cand.route, params, omitStreamOptions, omitTools),
+      ),
       signal: ac.signal,
     }).then(
       (res) => ({ res }) as const,
@@ -813,6 +990,8 @@ export async function* streamChatEvents(
           provider: cand.route.provider,
           first: read.chunks,
           toolsDropped: omitTools && !!params.tools?.length,
+          operatorFunded: cand.runtime.credential === "operator",
+          responseHeaders: res.headers,
         },
       };
     };
@@ -954,7 +1133,7 @@ export async function* streamChatEvents(
 
   if (!committed) {
     for (const p of parked) p.abandon();
-    throw aggregateFailure(model, attempts);
+    throw aggregateFailure(model, attempts, params.userKeys);
   }
 
   const readUsage = (u: any): Usage | null => {
@@ -993,6 +1172,10 @@ export async function* streamChatEvents(
     const reader = c.reader;
     const decoder = new TextDecoder();
     let buffer = "";
+    // Anthropic streams a block's identity once and then only its deltas, so
+    // the translation needs memory across frames. Inert for OpenAI.
+    const frameState = newFrameState();
+    const committedProtocol: WireProtocol = PROVIDERS[c.provider].protocol ?? "openai";
 
     // Reasoning models (DeepSeek R1/V4, o-series, gpt-oss, …) stream their
     // visible text in `reasoning_content`/`reasoning`; we surface it as a
@@ -1056,7 +1239,11 @@ export async function* streamChatEvents(
         for (const raw of lines) {
           const line = raw.trim();
           if (!line || !line.startsWith("data:")) continue;
-          const data = line.slice(5).trim();
+          // Translate the frame into the OpenAI chunk shape. Identity for
+          // OpenAI providers, so this path is unchanged for every existing
+          // model; `null` means a frame that carries nothing (keepalives).
+          const data = normalizeFrame(committedProtocol, line.slice(5).trim(), frameState);
+          if (data === null) continue;
           if (data === "[DONE]") {
             yield* flushTools();
             if (!answered) return BARREN;
@@ -1125,7 +1312,16 @@ export async function* streamChatEvents(
             }
 
             const usage = readUsage(json.usage);
-            if (usage) yield { type: "usage", usage };
+            if (usage) {
+              // Remembered rather than counted here: providers differ in how
+              // many usage frames they send and which fields each carries
+              // (Anthropic splits prompt and completion across two), so the
+              // running maximum of each field is the only shape that is right
+              // for all of them. Counted once, after the stream ends.
+              billedPrompt = Math.max(billedPrompt, usage.promptTokens ?? 0);
+              billedCompletion = Math.max(billedCompletion, usage.completionTokens ?? 0);
+              yield { type: "usage", usage };
+            }
           } catch (e) {
             if (e instanceof RouterError) throw e;
             // partial JSON across chunks — ignore; it'll arrive next read
@@ -1150,6 +1346,19 @@ export async function* streamChatEvents(
   // free route won the race with keepalives and an error frame while the NVIDIA
   // route that would have produced the page sat parked and was discarded.
   for (;;) {
+    // Count the spend the moment a route commits, not when it finishes: the
+    // request has already been made by then, and a caller that disconnects
+    // mid-stream still cost the operator's allowance. Awaiting a counter while
+    // a stream is waiting to be read would be the wrong trade, so this is
+    // fire-and-forget by contract — see `bumpUsage`.
+    //
+    // Once per committed route, which is exactly right: a BARREN failover
+    // re-enters this loop with a different `committed`, and that second route
+    // really was a second request.
+    if (committed.operatorFunded) {
+      void recordLaneSpend(committed.provider, committed.responseHeaders, { requests: 1 });
+    }
+
     if (committed.provider !== preferred) {
       yield { type: "provider", provider: committed.provider };
     }
@@ -1172,9 +1381,19 @@ export async function* streamChatEvents(
     const next = parked.length ? await parked.shift()!.resume() : null;
     if (!next) {
       for (const p of parked) p.abandon();
-      throw aggregateFailure(model, attempts);
+      throw aggregateFailure(model, attempts, params.userKeys);
     }
     committed = next;
+  }
+
+  // Tokens, now that the stream has reported them. A second write rather than a
+  // larger first one: a caller who disconnects mid-stream never reaches here,
+  // and their request must still have been counted. Best-effort by design —
+  // token ceilings (Groq's tpm, Mistral's whole tpMonth tier) would otherwise
+  // read zero forever, which is worse than reading slightly low.
+  const billedTokens = billedPrompt + billedCompletion;
+  if (committed.operatorFunded && billedTokens > 0) {
+    void recordLaneSpend(committed.provider, undefined, { requests: 0, tokens: billedTokens });
   }
 
   for (const p of parked) p.abandon();

@@ -55,6 +55,9 @@ import {
   type AuditEntry,
 } from "@/lib/store/vault-store";
 import { PROVIDER_LIST } from "@/lib/catalog";
+import type { ProviderMeta } from "@/lib/catalog/providers";
+import { tierLabel, tierSummary, type TierLabel } from "@/lib/catalog/free-tier-copy";
+import { bindingWindow, useQuota, type QuotaLane } from "@/lib/hooks/use-quota";
 import { ACCENT_TEXT } from "@/lib/accent";
 import { cn, formatUSD, timeAgo } from "@/lib/utils";
 
@@ -122,9 +125,9 @@ interface KeyTestResult {
 }
 
 function ByokKeyCard() {
-  const key = useKeysStore((s) => s.openrouterKey);
+  const key = useKeysStore((s) => s.providerKeys.openrouter ?? "");
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const clearKey = useKeysStore((s) => s.clearOpenrouterKey);
+  const clearProviderKey = useKeysStore((s) => s.clearProviderKey);
   const log = useVaultStore((s) => s.log);
 
   const [reveal, setReveal] = React.useState(false);
@@ -239,7 +242,7 @@ function ByokKeyCard() {
               size="sm"
               className="text-danger hover:bg-danger/10 hover:text-danger"
               onClick={() => {
-                clearKey();
+                clearProviderKey("openrouter");
                 setResult(null);
                 log("removed", "OpenRouter key");
               }}
@@ -315,8 +318,28 @@ function ByokKeyCard() {
 /* Operator provider status (server truth, keys never exposed)         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The connect surface — one row per provider, and the place a user actually
+ * turns a brand on.
+ *
+ * This used to be an operator status readout: thirteen rows saying "Connected"
+ * or "Not set" and nothing a visitor could act on. Every lane is now
+ * connectable with the user's own key, so each row carries what that lane
+ * costs, where to get a key, and how much of it is left.
+ *
+ * Free-tier wording comes from `lib/catalog/free-tier-copy.ts` rather than
+ * being written here, so the Vault and the model picker cannot end up making
+ * different claims about the same tier.
+ */
 function ProvidersPanel() {
   const info = useProviders();
+  const quota = useQuota();
+  const keysPresent = useKeysStore((s) => s.keysPresent);
+
+  const quotaFor = React.useMemo(
+    () => new Map(quota.lanes.map((l) => [l.id, l])),
+    [quota.lanes],
+  );
 
   return (
     <Reveal delay={0.05} className="rounded-2xl border border-border bg-surface/60 p-5 shadow-glow sm:p-6">
@@ -325,54 +348,24 @@ function ProvidersPanel() {
           <Server className="size-4" />
         </span>
         <div>
-          <h2 className="font-medium">Operator inference providers</h2>
+          <h2 className="font-medium">Model providers</h2>
           <p className="text-xs text-muted-foreground">
-            Server-side keys from <code className="font-mono">.env.local</code> — status only, values never leave the server.
+            Connect your own key to any lane, or run on the operator&rsquo;s where one is set.
           </p>
         </div>
       </div>
 
       <div className="mt-4 space-y-2.5">
-        {PROVIDER_LIST.map((p) => {
-          const on = info.configured.includes(p.id);
-          return (
-            <div
-              key={p.id}
-              className="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 p-3"
-            >
-              <span
-                className={cn(
-                  "grid size-8 shrink-0 place-items-center rounded-lg text-xs font-semibold",
-                  on ? "bg-success/15 text-success" : "bg-surface-3 text-muted-foreground",
-                )}
-              >
-                {p.short}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{p.name}</p>
-                <code className="font-mono text-2xs text-muted-foreground">
-                  {p.apiKeyEnv || "LOCAL_BASE_URL"}
-                </code>
-              </div>
-              {info.loading ? (
-                <Loader2 className="size-4 animate-spin text-muted-foreground" />
-              ) : on ? (
-                <Badge variant="success">
-                  <CircleCheck className="size-3" /> Connected
-                </Badge>
-              ) : (
-                <a
-                  href={p.docsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <CircleDashed className="size-3.5" /> Not set
-                </a>
-              )}
-            </div>
-          );
-        })}
+        {PROVIDER_LIST.map((p) => (
+          <ProviderRow
+            key={p.id}
+            meta={p}
+            operatorOn={info.configured.includes(p.id)}
+            userOn={keysPresent.includes(p.id)}
+            lane={quotaFor.get(p.id)}
+            loading={info.loading}
+          />
+        ))}
       </div>
 
       <p className="mt-3 text-2xs text-muted-foreground">
@@ -380,10 +373,238 @@ function ProvidersPanel() {
           ? "Checking operator configuration…"
           : info.freeReady
             ? "An operator provider is connected — open models run free for everyone."
-            : "No operator provider connected. Add a key server-side to serve free open models."}
+            : "No operator provider connected. Connect your own key above to run models."}
       </p>
     </Reveal>
   );
+}
+
+function ProviderRow({
+  meta,
+  operatorOn,
+  userOn,
+  lane,
+  loading,
+}: {
+  meta: ProviderMeta;
+  operatorOn: boolean;
+  userOn: boolean;
+  lane?: QuotaLane;
+  loading: boolean;
+}) {
+  const setProviderKey = useKeysStore((s) => s.setProviderKey);
+  const clearProviderKey = useKeysStore((s) => s.clearProviderKey);
+  const log = useVaultStore((s) => s.log);
+
+  const [open, setOpen] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
+  const [testing, setTesting] = React.useState(false);
+  const [result, setResult] = React.useState<{ ok: boolean; error?: string; label?: string } | null>(
+    null,
+  );
+
+  const label = tierLabel(meta);
+  const on = operatorOn || userOn;
+
+  async function saveAndTest() {
+    const key = draft.trim();
+    if (!key) return;
+    setTesting(true);
+    setResult(null);
+    try {
+      const res = await fetch(`/api/v1/keys/test?provider=${meta.id}`, {
+        method: "POST",
+        headers: { [`x-atlas-key-${meta.id}`]: key },
+      });
+      const data = await res.json();
+      setResult(data);
+      if (data.ok) {
+        // Only stored once the provider itself has accepted it — saving a
+        // rejected key just moves the failure to the next chat turn.
+        setProviderKey(meta.id, key);
+        log("created", `${meta.name} key`);
+        setDraft("");
+        setOpen(false);
+      }
+    } catch {
+      setResult({ ok: false, error: "Network error" });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface-2/40">
+      <div className="flex items-center gap-3 p-3">
+        <span
+          className={cn(
+            "grid size-8 shrink-0 place-items-center rounded-lg text-xs font-semibold",
+            on ? "bg-success/15 text-success" : "bg-surface-3 text-muted-foreground",
+          )}
+        >
+          {meta.short}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="truncate text-sm font-medium">{meta.name}</p>
+            <TierChip label={label} />
+          </div>
+          <p className="truncate text-2xs text-muted-foreground">{tierSummary(meta)}</p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {loading ? (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          ) : userOn ? (
+            <Badge variant="success">
+              <CircleCheck className="size-3" /> Your key
+            </Badge>
+          ) : operatorOn ? (
+            <Badge variant="success">
+              <CircleCheck className="size-3" /> Operator
+            </Badge>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
+              <Plus className="size-3.5" /> Connect
+            </Button>
+          )}
+          {userOn && (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Disconnect ${meta.name}`}
+              onClick={() => {
+                clearProviderKey(meta.id);
+                log("removed", `${meta.name} key`);
+              }}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Only for the operator's lanes: a user's own quota is theirs, and the
+          server has no way to observe it. */}
+      {lane && operatorOn && !userOn && <LaneMeter lane={lane} />}
+
+      <AnimatePresence initial={false}>
+        {open && !on && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-border"
+          >
+            <div className="space-y-2 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && saveAndTest()}
+                  placeholder={meta.keyPrefix ? `${meta.keyPrefix}…` : "Paste your API key"}
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="min-w-0 flex-1 font-mono text-xs"
+                />
+                <Button size="sm" onClick={saveAndTest} disabled={!draft.trim() || testing}>
+                  {testing ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                  Verify &amp; save
+                </Button>
+              </div>
+
+              {result && !result.ok && (
+                <p className="text-2xs text-danger">{result.error ?? "Key was rejected"}</p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 text-2xs text-muted-foreground">
+                <a
+                  href={meta.consoleUrl ?? meta.freeTier?.signupUrl ?? meta.docsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-action hover:underline"
+                >
+                  Get a key <ExternalLink className="size-3" />
+                </a>
+                <span>
+                  Stored in this browser only, sent per request — never written to Atlas servers.
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * The one-word verdict. Never invented here — `tierLabel` owns the rule that a
+ * grant may not read as "Free".
+ */
+function TierChip({ label }: { label: TierLabel }) {
+  if (label === "Free") {
+    return (
+      <span className="rounded px-1.5 py-0.5 text-2xs font-medium text-accent ring-1 ring-inset ring-accent/30">
+        Free
+      </span>
+    );
+  }
+  if (label === "Credits") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium text-amber ring-1 ring-inset ring-amber/30">
+        <CreditCard className="size-2.5" /> Credits
+      </span>
+    );
+  }
+  return (
+    <span className="rounded px-1.5 py-0.5 text-2xs font-medium text-muted-foreground ring-1 ring-inset ring-border">
+      Your key
+    </span>
+  );
+}
+
+/** How much of the operator's free allowance is left on this lane. */
+function LaneMeter({ lane }: { lane: QuotaLane }) {
+  const w = bindingWindow(lane);
+  if (!w) return null;
+
+  const pct = w.limit > 0 ? Math.min(100, Math.round((w.used / w.limit) * 100)) : 0;
+  const spent = w.remaining === 0;
+
+  return (
+    <div className="border-t border-border px-3 py-2">
+      <div className="flex items-center justify-between gap-2 text-2xs">
+        <span className={cn("tabular-nums", spent ? "text-danger" : "text-muted-foreground")}>
+          {w.remaining.toLocaleString("en-US")} of {w.limit.toLocaleString("en-US")}{" "}
+          {w.unit === "requests" ? "requests" : "tokens"} left this {w.window}
+        </span>
+        <span className="text-muted-foreground">
+          {spent ? `resets ${timeUntil(w.resetsAt)}` : ""}
+        </span>
+      </div>
+      {/* A bar is data, so it may use the elevation ramp; it turns to the
+          danger hue only once the lane is actually spent. */}
+      <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-3">
+        <div
+          className={cn("h-full rounded-full transition-all", spent ? "bg-danger" : "bg-accent")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** "in 14s" / "in 6m" / "in 3h" — enough to answer "when", nothing more. */
+function timeUntil(at: number): string {
+  const ms = Math.max(0, at - Date.now());
+  const s = Math.ceil(ms / 1000);
+  if (s < 60) return `in ${s}s`;
+  const m = Math.ceil(s / 60);
+  if (m < 60) return `in ${m}m`;
+  return `in ${Math.ceil(m / 60)}h`;
 }
 
 /* ------------------------------------------------------------------ */

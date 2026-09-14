@@ -77,7 +77,7 @@ function CapChip({
 
 export function ModelDetail({ model }: { model: CatalogModel }) {
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const hasKey = useKeysStore((s) => s.keyPresent);
+  const hasKey = useKeysStore((s) => s.keysPresent.length > 0);
   const free = modelAccess(model) === "free";
   const c = useChartColors();
   const chartData = model.benchmarks.map((b) => ({

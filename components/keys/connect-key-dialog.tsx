@@ -14,19 +14,26 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useKeysStore, maskKey } from "@/lib/store/keys-store";
+import { PROVIDERS } from "@/lib/catalog";
+import { tierSummary } from "@/lib/catalog/free-tier-copy";
 
 /**
- * Global "Connect your OpenRouter key" dialog. Mounted once (in the topbar) and
- * driven by the keys store so a `key_required` error anywhere can open it.
- * The key is stored only in this browser and sent per-request to Atlas, which
- * forwards it to OpenRouter and never stores it.
+ * Global "connect a key" dialog. Mounted once (in the topbar) and driven by the
+ * keys store, so a `key_required` error anywhere can open it — now pointed at
+ * the provider that would actually unblock the request, rather than always
+ * asking for OpenRouter. The key is stored only in this browser and sent
+ * per-request; Atlas forwards it once and never stores it.
  */
 export function ConnectKeyDialog() {
   const open = useKeysStore((s) => s.keyModalOpen);
   const setOpen = useKeysStore((s) => s.setKeyModalOpen);
-  const savedKey = useKeysStore((s) => s.openrouterKey);
-  const setKey = useKeysStore((s) => s.setOpenrouterKey);
-  const clearKey = useKeysStore((s) => s.clearOpenrouterKey);
+  const provider = useKeysStore((s) => s.keyModalProvider);
+  const savedKey = useKeysStore((s) => s.providerKeys[provider] ?? "");
+  const setProviderKey = useKeysStore((s) => s.setProviderKey);
+  const clearProviderKey = useKeysStore((s) => s.clearProviderKey);
+
+  const meta = PROVIDERS[provider];
+  const keyUrl = meta.consoleUrl ?? meta.freeTier?.signupUrl ?? meta.docsUrl;
 
   const [draft, setDraft] = React.useState("");
   const [reveal, setReveal] = React.useState(false);
@@ -39,7 +46,7 @@ export function ConnectKeyDialog() {
   const connected = savedKey.length > 0;
 
   function save() {
-    setKey(draft);
+    setProviderKey(provider, draft);
     setOpen(false);
   }
 
@@ -51,18 +58,17 @@ export function ConnectKeyDialog() {
             <span className="grid size-9 place-items-center rounded-xl bg-accent/15 text-accent">
               <KeyRound className="size-4" />
             </span>
-            <DialogTitle>Connect your OpenRouter key</DialogTitle>
+            <DialogTitle>Connect your {meta.name} key</DialogTitle>
           </div>
           <DialogDescription>
-            Open-source models are <span className="text-success">free</span>. To run
-            closed/paid models (GPT, Claude, Gemini, Grok…) bring your own{" "}
+            {tierSummary(meta)}.{" "}
             <a
-              href="https://openrouter.ai/keys"
+              href={keyUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-0.5 text-action hover:underline"
             >
-              OpenRouter key <ExternalLink className="size-3" />
+              Get a {meta.name} key <ExternalLink className="size-3" />
             </a>
             .
           </DialogDescription>
@@ -70,14 +76,14 @@ export function ConnectKeyDialog() {
 
         <div className="space-y-2">
           <label className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-            OpenRouter API key
+            {meta.name} API key
           </label>
           <div className="relative">
             <Input
               type={reveal ? "text" : "password"}
               autoComplete="off"
               spellCheck={false}
-              placeholder="sk-or-v1-…"
+              placeholder={meta.keyPrefix ? `${meta.keyPrefix}…` : "Paste your API key"}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -104,8 +110,8 @@ export function ConnectKeyDialog() {
         <p className="flex items-start gap-2 rounded-xl border border-border bg-surface-2/50 p-2.5 text-2xs text-muted-foreground">
           <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-success" />
           <span>
-            Stored only in this browser. Sent per-request to call paid models through
-            your own OpenRouter account — never saved on Atlas servers.
+            Stored only in this browser. Sent per-request so models run through your
+            own {meta.name} account — never saved on Atlas servers.
           </span>
         </p>
 
@@ -114,7 +120,7 @@ export function ConnectKeyDialog() {
             <Button
               variant="ghost"
               onClick={() => {
-                clearKey();
+                clearProviderKey(provider);
                 setDraft("");
               }}
             >
@@ -133,9 +139,9 @@ export function ConnectKeyDialog() {
 /** Small badge/button that opens the dialog and reflects connection state. */
 export function ConnectKeyButton({ className }: { className?: string }) {
   const setOpen = useKeysStore((s) => s.setKeyModalOpen);
-  // `keyPresent`, not `openrouterKey`: the key itself is decrypted async, and
+  // `keysPresent`, not the key itself: that is decrypted async, and
   // this badge only needs to know whether one exists.
-  const connected = useKeysStore((s) => s.keyPresent);
+  const connected = useKeysStore((s) => s.keysPresent.length > 0);
   return (
     <button
       onClick={() => setOpen(true)}

@@ -336,7 +336,7 @@ export function ChatClient({ initialModelId }: { initialModelId?: string }) {
   const activeModelId = useUIStore((s) => s.activeModelId);
   const setActiveModel = useUIStore((s) => s.setActiveModel);
   const keyHeaders = useUserKeyHeaders();
-  const hasKey = useKeysStore((s) => s.keyPresent);
+  const hasKey = useKeysStore((s) => s.keysPresent.length > 0);
   const setKeyModalOpen = useKeysStore((s) => s.setKeyModalOpen);
   const searchKey = useKeysStore((s) => s.searchKey);
   const githubKey = useKeysStore((s) => s.githubKey);

@@ -13,6 +13,7 @@ import {
 } from "@/components/keys/connect-key-dialog";
 import { SyncButton } from "@/components/auth/sync-dialog";
 import { CompareRunPill } from "@/components/compare/run-pill";
+import { QuotaMeter } from "@/components/quota/quota-meter";
 import { AccountMenu } from "@/components/auth/account-menu";
 import {
   DropdownMenu,
@@ -93,6 +94,9 @@ export function Topbar() {
       {/* A comparison keeps running after you leave /compare, so it needs to be
           visible from wherever you went. Renders nothing when none is live. */}
       <CompareRunPill className="hidden sm:inline-flex" />
+
+      {/* Renders nothing unless an operator lane has a countable allowance. */}
+      <QuotaMeter className="hidden lg:inline-flex" />
 
       <ModelSwitcher className="hidden md:inline-flex" />
 

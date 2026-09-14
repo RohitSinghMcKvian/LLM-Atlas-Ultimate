@@ -33,6 +33,7 @@ import {
   blendedPrice,
 } from "@/lib/catalog";
 import type { CatalogModel, ProviderId } from "@/lib/catalog/types";
+import type { ProviderMeta } from "@/lib/catalog/providers";
 import { useProviders } from "@/lib/hooks/use-providers";
 import { useMounted } from "@/lib/hooks/use-media-query";
 import { useKeysStore } from "@/lib/store/keys-store";
@@ -373,14 +374,22 @@ export function RouterClient() {
 }
 
 /**
- * Provider tints. Keyed by the `accent` names in `lib/catalog/providers.ts`,
- * which predate the elevation ramp — the keys are legacy labels, the values are
- * bands. Five providers, five bands, so every provider is distinguishable.
+ * Provider tints, one elevation band per `accent` name in
+ * `lib/catalog/providers.ts`.
+ *
+ * The keys used to be `cyan / violet / amber / blue / orange` while the provider
+ * table had already moved to `ridge / shelf / upland / blue / orange`, so three
+ * of the five providers looked up `undefined` and rendered untinted. Typed as
+ * `Record<ProviderMeta["accent"], string>` rather than `Record<string, string>`
+ * precisely so that drift cannot come back silently.
+ *
+ * There are more providers than bands, so bands repeat. That is fine: the band
+ * separates adjacent rows, it does not identify a provider.
  */
-const ACCENT: Record<string, string> = {
-  cyan: "rgb(var(--elev-1))",
-  violet: "rgb(var(--elev-0))",
-  amber: "rgb(var(--elev-3))",
+const ACCENT: Record<ProviderMeta["accent"], string> = {
+  ridge: "rgb(var(--elev-1))",
+  shelf: "rgb(var(--elev-0))",
+  upland: "rgb(var(--elev-3))",
   blue: "rgb(var(--elev-2))",
   orange: "rgb(var(--elev-4))",
 };

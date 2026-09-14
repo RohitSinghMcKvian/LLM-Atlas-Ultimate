@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeModel, makeSnapshot } from "@/lib/catalog/__fixtures__/snapshots";
 import { installSnapshot, resetSnapshot } from "@/lib/catalog/snapshot";
+import { resetLedgerMemory } from "@/lib/quota";
 import {
   CONNECT_TIMEOUT_MS,
   FIRST_CHUNK_TIMEOUT_MS,
@@ -167,6 +168,10 @@ function stream(modelId: string, extra: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  // The ledger is process-global (see lib/quota/ledger.ts). Without this,
+  // spend from earlier tests accumulates and a later one can be refused
+  // for quota it never used — OpenRouter's free tier is only 20 rpm.
+  resetLedgerMemory();
   resetSnapshot();
   installSnapshot(makeSnapshot([twoRoute, meteredOnly]));
   process.env.NVIDIA_API_KEY = "nvapi-test";
@@ -541,8 +546,13 @@ describe("caller abort", () => {
     const p = drain(stream("two-route", { signal: ac.signal }));
     ac.abort();
     await expect(p).rejects.toMatchObject({ name: "AbortError" });
-    // Crucially: the second route was never dialled.
-    expect(seen).toHaveLength(1);
+    // Crucially: an abort is not a route failure, so it must never advance to
+    // the backup route. Asserted by naming that route rather than by counting
+    // dials — the quota ledger is consulted before the first fetch, so a
+    // synchronous abort can now land before even route one goes out. Zero dials
+    // and one dial are both correct here; two would be the bug.
+    expect(seen.some((u) => u.includes("openrouter"))).toBe(false);
+    expect(seen.length).toBeLessThanOrEqual(1);
   });
 });
 

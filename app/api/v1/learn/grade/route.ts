@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { completeChat, RouterError } from "@/lib/router";
+import { readUserKeys } from "@/lib/router/user-keys";
 import {
   GRADER_SYSTEM,
   buildGraderPrompt,
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "modelId is required" }, { status: 400 });
   }
 
-  const userKey = req.headers.get("x-openrouter-key")?.trim();
+  const userKeys = readUserKeys(req.headers);
 
   try {
     const raw = await completeChat({
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
       maxTokens: 1400,
       responseFormat: { type: "json_object" },
       signal: req.signal,
-      userKeys: userKey ? { openrouter: userKey } : undefined,
+      userKeys,
     });
 
     const result = parseGrade(raw, exercise.rubric);

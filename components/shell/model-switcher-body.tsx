@@ -14,6 +14,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { modelAvailability, type Availability } from "@/lib/catalog/availability";
 import { PROVIDERS, getModelById, type CatalogModel } from "@/lib/catalog";
+import type { ProviderId } from "@/lib/catalog/types";
+import { laneHeadroom, useQuota } from "@/lib/hooks/use-quota";
 import {
   SEARCH_LIMIT,
   modelShortlist,
@@ -227,6 +229,22 @@ const ModelOption = React.memo(function ModelOption({
  * placeholder rather than guessing — a Free badge that later turns out to be
  * wrong is worse than a moment of "…".
  */
+/**
+ * The remaining free allowance, shown ONLY when it is running out.
+ *
+ * The topbar already carries a permanent meter; repeating the number on every
+ * row would be noise. A count that appears only below 20% is a signal, and it
+ * appears exactly when it starts to affect what the user should pick.
+ */
+function FreeHeadroom({ provider }: { provider: ProviderId }) {
+  const { lanes } = useQuota();
+  const head = laneHeadroom(lanes, provider);
+  if (!head || !head.low) return null;
+  return (
+    <span className="tabular-nums opacity-80">· {head.remaining.toLocaleString("en-US")} left</span>
+  );
+}
+
 function AccessPill({ availability }: { availability: Availability | null }) {
   if (!availability) {
     return (
@@ -241,6 +259,7 @@ function AccessPill({ availability }: { availability: Availability | null }) {
       <Badge variant="success" className="hidden sm:inline-flex gap-1">
         <Sparkles className="size-3" />
         {via}
+        <FreeHeadroom provider={availability.route.provider} />
       </Badge>
     );
   }

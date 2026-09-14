@@ -3,6 +3,7 @@ import { completeChat, RouterError, type UserKeys } from "@/lib/router";
 import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { BRIEF_SCHEMA, BRIEF_SYSTEM, briefPrompt, fallbackBrief, parseBrief } from "@/lib/compare/brief";
 import { callerKey, compareLimiter } from "@/lib/compare/rate-limit";
+import { readUserKeys } from "@/lib/router/user-keys";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,8 +56,7 @@ export async function POST(req: NextRequest) {
 
   await getCatalogSnapshot();
 
-  const orKey = req.headers.get("x-openrouter-key") ?? undefined;
-  const userKeys: UserKeys = orKey ? { openrouter: orKey } : {};
+  const userKeys: UserKeys = readUserKeys(req.headers);
 
   try {
     const raw = await completeChat({

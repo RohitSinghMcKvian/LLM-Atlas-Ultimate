@@ -4,6 +4,7 @@ import { getCatalogSnapshot } from "@/lib/catalog/store";
 import { buildJudgePrompt, JUDGE_SYSTEM, judgeSchema, parseJudgeScores } from "@/lib/compare/judge";
 import { callerKey, compareLimiter } from "@/lib/compare/rate-limit";
 import type { EvidencePack, LaneState, Rubric } from "@/lib/compare/types";
+import { readUserKeys } from "@/lib/router/user-keys";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,8 +58,7 @@ export async function POST(req: NextRequest) {
 
   await getCatalogSnapshot();
 
-  const orKey = req.headers.get("x-openrouter-key") ?? undefined;
-  const userKeys: UserKeys = orKey ? { openrouter: orKey } : {};
+  const userKeys: UserKeys = readUserKeys(req.headers);
 
   const { prompt, mapping, labels } = buildJudgePrompt({
     task: body.task,

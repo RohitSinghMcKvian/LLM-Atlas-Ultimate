@@ -27,24 +27,25 @@ import { useKeysStore } from "@/lib/store/keys-store";
  */
 export function useRouteEnv(): RouteEnv | null {
   const providers = useProviders();
-  const hasUserKey = useKeysStore((s) => s.keyPresent);
+  const userKeys = useKeysStore((s) => s.keysPresent);
 
-  // `configured` is a fresh array on every provider fetch, so memoize on its
-  // contents rather than its identity.
+  // Both are fresh arrays on every fetch/write, so memoize on their contents
+  // rather than their identity.
   const configuredKey = providers.configured.join(",");
+  const userKey = userKeys.join(",");
 
   return React.useMemo(() => {
     if (providers.loading) return null;
     return {
       configured: configuredKey ? (configuredKey.split(",") as RouteEnv["configured"]) : [],
-      userOpenRouterKey: hasUserKey,
+      userKeys: userKey ? (userKey.split(",") as RouteEnv["configured"]) : [],
       servePaid: providers.servePaid,
       freeCeilingPerM: providers.freeCeilingPerM,
     };
   }, [
     providers.loading,
     configuredKey,
-    hasUserKey,
+    userKey,
     providers.servePaid,
     providers.freeCeilingPerM,
   ]);
