@@ -3,7 +3,8 @@ import { makeModel } from "../__fixtures__/snapshots";
 import { BASELINE_SNAPSHOT } from "../baseline";
 import type { CatalogSnapshotRecord, CatalogSourceResult } from "../snapshot";
 import { modelAccess } from "../stats";
-import type { CatalogModel } from "../types";
+import { PROVIDERS } from "../providers";
+import type { CatalogModel, ProviderId } from "../types";
 import { STRIKE_LIMIT, healthKey } from "./probe";
 import { NVIDIA_SAMPLE, OPENROUTER_SAMPLE } from "./__fixtures__/providers";
 import { REMOVAL_GRACE_SYNCS, ROUTE_PRIORITY, mergeSnapshot, type MergeInput } from "./merge";
@@ -794,5 +795,33 @@ describe("route ordering", () => {
       });
       expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
     }
+  });
+});
+
+describe("ROUTE_PRIORITY completeness", () => {
+  it("ranks every provider Atlas can dial", () => {
+    // `routeRank()` sends anything missing from the list to position 99, behind
+    // `local`. That is a silent demotion, not an error, so adding a provider to
+    // `ProviderId` without adding it here would quietly bury every route it
+    // serves. This test is the loud failure that omission otherwise lacks.
+    const ranked = new Set(ROUTE_PRIORITY);
+    const all = Object.keys(PROVIDERS) as ProviderId[];
+    expect([...all].filter((id) => !ranked.has(id))).toEqual([]);
+  });
+
+  it("lists each provider exactly once", () => {
+    expect(ROUTE_PRIORITY.length).toBe(new Set(ROUTE_PRIORITY).size);
+  });
+
+  it("puts operator-funded providers ahead of metered ones", () => {
+    // The ordering claim the doc comment makes, held to account.
+    const firstMetered = ROUTE_PRIORITY.findIndex(
+      (id) => PROVIDERS[id].billing === "metered",
+    );
+    const lastFunded = ROUTE_PRIORITY.reduce(
+      (acc, id, i) => (PROVIDERS[id].billing === "operator-funded" && id !== "local" ? i : acc),
+      -1,
+    );
+    expect(firstMetered).toBeGreaterThan(lastFunded);
   });
 });

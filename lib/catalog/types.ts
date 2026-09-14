@@ -1,4 +1,35 @@
-export type ProviderId = "nvidia" | "openrouter" | "local" | "google" | "groq";
+/**
+ * Every upstream Atlas can dial.
+ *
+ * Grouped by why they are here, because the list is otherwise just a pile:
+ *
+ *   * Aggregators and operator lanes — `nvidia`, `openrouter`, `google`, `groq`,
+ *     `local`. The original five; these carry the operator-funded free catalog.
+ *   * First-party lanes with a real free tier — `zai`, `mistral`. Reachable at
+ *     no cost on the user's own key.
+ *   * First-party lanes with expiring credits — `deepseek`, `xai`, `cerebras`,
+ *     `dashscope`. Free to start, not free forever; see `FreeTier.quota.kind`.
+ *   * First-party lanes with no free tier at all — `openai`, `anthropic`. Present
+ *     so a user can bring their own paid key, never labelled free.
+ *
+ * Adding an id here is not enough on its own: `PROVIDERS` in `./providers` is an
+ * exhaustive record (so TypeScript will demand an entry), and `ROUTE_PRIORITY`
+ * in `./sync/merge` must list it or `routeRank()` sorts it behind everything.
+ */
+export type ProviderId =
+  | "nvidia"
+  | "openrouter"
+  | "local"
+  | "google"
+  | "groq"
+  | "zai"
+  | "deepseek"
+  | "xai"
+  | "cerebras"
+  | "mistral"
+  | "dashscope"
+  | "openai"
+  | "anthropic";
 export type License = "open" | "proprietary";
 export type ModelStatus = "ga" | "preview" | "upcoming" | "deprecated";
 /**

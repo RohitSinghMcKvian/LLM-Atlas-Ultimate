@@ -5,6 +5,7 @@ import {
   intrinsicAccess,
   modelAvailability,
   routeCost,
+  unavailableReason,
   type RouteEnv,
 } from "./availability";
 import { BASELINE_SNAPSHOT } from "./baseline";
@@ -133,7 +134,7 @@ describe("modelAvailability", () => {
   it("returns needs_key for a metered-only model with nobody paying", () => {
     // command-a: the picker must say "your key", never "free".
     const a = modelAvailability(model([orPaid]), env(["openrouter"]));
-    expect(a).toEqual({ kind: "needs_key" });
+    expect(a).toEqual({ kind: "needs_key", providers: ["openrouter"] });
   });
 
   it("returns your_key once the user supplies an OpenRouter key", () => {
@@ -169,7 +170,7 @@ describe("modelAvailability", () => {
   it("ignores routes whose provider has no key", () => {
     // gemini-2.5-flash: google route unusable, openrouter route metered.
     const m = model([google, orPaid]);
-    expect(modelAvailability(m, env(["openrouter"]))).toEqual({ kind: "needs_key" });
+    expect(modelAvailability(m, env(["openrouter"]))).toEqual({ kind: "needs_key", providers: ["openrouter"] });
     expect(modelAvailability(m, env(["google", "openrouter"])).kind).toBe("free");
   });
 
@@ -183,7 +184,7 @@ describe("modelAvailability", () => {
     // and send the user to a key modal that cannot help.
     const m = model([orPaid], { license: "proprietary" });
     const a = modelAvailability(m, env(["openrouter"]));
-    expect(a).toEqual({ kind: "needs_key" });
+    expect(a).toEqual({ kind: "needs_key", providers: ["openrouter"] });
   });
 });
 
@@ -222,6 +223,12 @@ describe("the free invariant holds across the whole catalog", () => {
     env(["nvidia", "openrouter"], { userOpenRouterKey: true }),
     env(["nvidia", "openrouter", "groq", "google"]),
     env(["openrouter"], { servePaid: true, freeCeilingPerM: 0.5 }),
+    // The lanes that only exist once a user brings their own key: no operator
+    // credential at all, reachability coming entirely from `userKeys`.
+    env([], { userKeys: ["groq"] }),
+    env([], { userKeys: ["openrouter"] }),
+    env([], { userKeys: ["groq", "google", "openrouter"] }),
+    env(["nvidia"], { userKeys: ["openrouter"] }),
   ];
 
   // Property, not example: whatever the env, a `free` verdict may only offer
@@ -237,6 +244,7 @@ describe("the free invariant holds across the whole catalog", () => {
           expect(routeCost(r, m, e)).toBe("free");
           const reachable =
             e.configured.includes(r.provider) ||
+            (e.userKeys ?? []).includes(r.provider) ||
             (r.provider === "openrouter" && e.userOpenRouterKey === true);
           expect(reachable).toBe(true);
         }
@@ -269,5 +277,50 @@ describe("the free invariant holds across the whole catalog", () => {
     for (const m of BASELINE_SNAPSHOT.models) {
       expect(modelAvailability(m, NO_PROVIDERS).kind).not.toBe("free");
     }
+  });
+});
+
+describe("the user's own provider keys", () => {
+  it("makes a provider reachable with no operator credential at all", () => {
+    // The capability that did not exist before: the operator has funded nothing,
+    // and the user's own free Groq key alone carries the request.
+    const m = model([groq]);
+    expect(modelAvailability(m, env([])).kind).toBe("unavailable");
+    const a = modelAvailability(m, env([], { userKeys: ["groq"] }));
+    expect(a.kind).toBe("free");
+    expect(a.kind === "free" && a.candidates).toEqual([groq]);
+  });
+
+  it("still honours the deprecated userOpenRouterKey boolean", () => {
+    // Normalised in by `userKeySet`, so callers mid-migration keep working.
+    const a = modelAvailability(model([orPaid]), env([], { userOpenRouterKey: true }));
+    expect(a.kind).toBe("your_key");
+  });
+
+  it("treats userKeys and the legacy boolean as the same thing", () => {
+    const m = model([orPaid]);
+    expect(modelAvailability(m, env([], { userKeys: ["openrouter"] }))).toEqual(
+      modelAvailability(m, env([], { userOpenRouterKey: true })),
+    );
+  });
+
+  // THE invariant the eight new providers depend on. A key for one metered
+  // provider must never authorise spending on a different one — otherwise
+  // connecting OpenRouter would silently unlock billing against Anthropic.
+  // Today OpenRouter is the only metered provider, so this cannot yet fail;
+  // it is here so that it fails loudly the moment a second one is added.
+  it("never pays for a metered route with another provider's key", () => {
+    const m = model([orPaid]);
+    const a = modelAvailability(m, env(["openrouter"], { userKeys: ["groq"] }));
+    expect(a.kind).toBe("needs_key");
+    expect(a.kind === "needs_key" && a.providers).toEqual(["openrouter"]);
+  });
+
+  it("names the providers that would unlock a needs_key model", () => {
+    // Feeds the connect dialog, so it can open pointed at a provider that can
+    // actually help rather than at whichever one happens to be hardcoded.
+    const a = modelAvailability(model([orPaid]), env(["openrouter"]));
+    expect(a.kind === "needs_key" && a.providers).toEqual(["openrouter"]);
+    expect(unavailableReason(a)).toBe("Connect your OpenRouter key to use this model.");
   });
 });

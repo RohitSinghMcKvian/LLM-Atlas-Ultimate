@@ -2,7 +2,13 @@ import { getProviderRuntime, type ProviderRuntime } from "@/lib/router";
 import { BASELINE_SNAPSHOT } from "../baseline";
 import type { CatalogSnapshotRecord, CatalogSourceResult } from "../snapshot";
 import type { ProviderId } from "../types";
+import { modelsEndpointFor } from "@/lib/router/protocol";
 import { fetchJson } from "./fetch";
+import {
+  FIRST_PARTY_PROVIDERS,
+  attachFirstPartyRoutes,
+  type ProviderListings,
+} from "./first-party";
 import { mergeSnapshot } from "./merge";
 import { normalizeNvidia } from "./nvidia";
 import { normalizeOpenRouter } from "./openrouter";
@@ -46,6 +52,13 @@ export {
   type ProbeVerdict,
 } from "./probe";
 export { NON_CHAT_RULES, META_ROUTER_RULES, isDeniedAtlasId } from "./denylist";
+export {
+  attachFirstPartyRoutes,
+  firstPartyIdFor,
+  FIRST_PARTY_VENDORS,
+  FIRST_PARTY_PROVIDERS,
+  type ProviderListings,
+} from "./first-party";
 
 /** Blended $/Mtok ceiling below which an open-weight model is served free. */
 function freeOpenCeiling(): number {
@@ -73,7 +86,9 @@ async function fetchProviderModels<T>(
   const startedAt = Date.now();
   try {
     const body = await fetchJson<{ data?: T[] } | T[]>(
-      `${runtime.baseUrl}/models`,
+      // Protocol-aware: Anthropic's listing lives under `/v1/models`, and its
+      // base URL is written both with and without the version segment.
+      modelsEndpointFor(runtime.protocol, runtime.baseUrl),
       runtime.headers,
       { signal },
     );
@@ -107,6 +122,36 @@ async function fetchProviderModels<T>(
 }
 
 /**
+ * Ask every configured first-party provider what it actually serves.
+ *
+ * Only providers with a credential are polled, and a failure is silently skipped
+ * rather than recorded in `sources`: unlike the OpenRouter and NVIDIA lists,
+ * these do not decide what may be *removed* from the catalog, only what may be
+ * added. A provider that is down this run simply contributes no routes, and the
+ * next run picks them up.
+ */
+async function fetchFirstPartyListings(signal?: AbortSignal): Promise<ProviderListings> {
+  const configured = FIRST_PARTY_PROVIDERS.filter((p) => getProviderRuntime(p) !== null);
+  if (configured.length === 0) return {};
+
+  const results = await Promise.all(
+    configured.map(async (provider) => {
+      const { data } = await fetchProviderModels<{ id?: string }>(provider, signal);
+      if (!data) return [provider, null] as const;
+      const ids = new Set<string>();
+      for (const entry of data) {
+        if (typeof entry?.id === "string" && entry.id) ids.add(entry.id);
+      }
+      return [provider, ids.size > 0 ? ids : null] as const;
+    }),
+  );
+
+  const listings: ProviderListings = {};
+  for (const [provider, ids] of results) if (ids) listings[provider] = ids;
+  return listings;
+}
+
+/**
  * Zero-cost routes probed per run.
  *
  * Bounded so one sync cannot make hundreds of inference calls or blow a
@@ -133,6 +178,8 @@ export interface RunSyncResult {
   probed: Record<string, ProbeVerdict>;
   /** Providers that rate-limited the probe stage. */
   rateLimited: ProviderId[];
+  /** First-party routes discovered this run, one entry per route added. */
+  firstPartyRoutes: { id: string; provider: ProviderId; model: string }[];
 }
 
 /**
@@ -147,9 +194,10 @@ export async function runSync(options: RunSyncOptions = {}): Promise<RunSyncResu
   const now = options.now ?? new Date().toISOString();
   const today = now.slice(0, 10);
 
-  const [or, nv] = await Promise.all([
+  const [or, nv, firstPartyListings] = await Promise.all([
     fetchProviderModels<OpenRouterModel>("openrouter", options.signal),
     fetchProviderModels<NvidiaModel>("nvidia", options.signal),
+    fetchFirstPartyListings(options.signal),
   ]);
 
   let openrouterDrafts: ModelDraft[] | null = null;
@@ -177,8 +225,13 @@ export async function runSync(options: RunSyncOptions = {}): Promise<RunSyncResu
     signal: options.signal,
   });
 
+  // Attached to the overlay rather than to the merged output, so the new routes
+  // go through `mergeSnapshot`'s own ordering and dedupe instead of a second
+  // copy of those rules living here.
+  const firstParty = attachFirstPartyRoutes(BASELINE_SNAPSHOT.models, firstPartyListings);
+
   const record = mergeSnapshot({
-    overlay: BASELINE_SNAPSHOT.models,
+    overlay: firstParty.models,
     openrouter: openrouterDrafts,
     nvidia: nvidiaChat,
     previous: options.previous ?? null,
@@ -193,6 +246,7 @@ export async function runSync(options: RunSyncOptions = {}): Promise<RunSyncResu
     excludedNonChat,
     probed: probed.verdicts,
     rateLimited: probed.rateLimited,
+    firstPartyRoutes: firstParty.added,
   };
 }
 

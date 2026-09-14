@@ -183,6 +183,8 @@ describe("probeModels", () => {
     id: "nvidia",
     baseUrl: "https://nim.test/v1",
     headers: { "Content-Type": "application/json" },
+    protocol: "openai",
+    credential: "operator",
   };
 
   function stub(byModel: Record<string, number>) {

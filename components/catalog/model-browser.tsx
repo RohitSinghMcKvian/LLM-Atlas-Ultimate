@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { unavailableReason, type Availability } from "@/lib/catalog/availability";
 import { PROVIDERS, producesImages, type CatalogModel, type ProviderId } from "@/lib/catalog";
+import { laneHeadroom, useQuota } from "@/lib/hooks/use-quota";
 import { browseModels, type AccessTab, type BrowseRow } from "@/lib/catalog/search";
 import { useCatalogSnapshotLive } from "@/lib/hooks/use-catalog-snapshot";
 import { useInfiniteReveal } from "@/lib/hooks/use-infinite-reveal";
@@ -395,6 +396,20 @@ const ModelRow = React.memo(function ModelRow({
   );
 });
 
+/**
+ * The remaining free allowance, shown ONLY when it is running out — see the
+ * twin of this component in `components/shell/model-switcher-body.tsx`. The two
+ * badge implementations are separate by history, so both need the change.
+ */
+function FreeHeadroom({ provider }: { provider: ProviderId }) {
+  const { lanes } = useQuota();
+  const head = laneHeadroom(lanes, provider);
+  if (!head || !head.low) return null;
+  return (
+    <span className="tabular-nums opacity-80"> · {head.remaining.toLocaleString("en-US")} left</span>
+  );
+}
+
 /** What it costs, and via which provider — the answer the user is really after. */
 function AccessBadge({ availability }: { availability: Availability }) {
   if (availability.kind === "free") {
@@ -402,6 +417,7 @@ function AccessBadge({ availability }: { availability: Availability }) {
     return (
       <Badge variant="success" className="shrink-0">
         Free · {via}
+        <FreeHeadroom provider={availability.route.provider} />
       </Badge>
     );
   }

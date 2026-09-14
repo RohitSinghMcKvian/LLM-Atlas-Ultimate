@@ -36,12 +36,29 @@ import type { ModelDraft, NvidiaModel } from "./types";
  * providers first, the user's own key last.
  */
 export const ROUTE_PRIORITY: ProviderId[] = [
+  // Operator-funded: free to the end user whenever the operator has a key.
   "nvidia",
   "groq",
   "google",
+  // First-party lanes with a recurring free tier on the user's own key.
+  "zai",
+  "mistral",
+  // First-party lanes whose free allowance is a finite or expiring grant.
+  "cerebras",
+  "dashscope",
+  "deepseek",
+  "xai",
+  // The aggregator: metered, but carries the `:free` variants.
   "openrouter",
+  // First-party paid-only.
+  "openai",
+  "anthropic",
   "local",
 ];
+
+// Every id must appear above. `routeRank()` sends anything missing to position
+// 99 — behind `local` — so an omission here silently buries a whole provider
+// rather than failing loudly. `merge.test.ts` asserts the list stays complete.
 
 /**
  * Providers whose full model list the sync engine can enumerate. Only these are

@@ -1,4 +1,4 @@
-import { PROVIDERS } from "./providers";
+import { PROVIDERS, inFreeTier } from "./providers";
 import type { CatalogModel, ModelAccess, ModelRoute, ProviderId } from "./types";
 
 // Can the person in front of the app actually run this model, and who pays?
@@ -18,7 +18,7 @@ import type { CatalogModel, ModelAccess, ModelRoute, ProviderId } from "./types"
 //     moment a fifth appears.
 //
 // So it is derived, and it costs no extra bytes on the wire: zero-cost-ness is a
-// pure function of `(provider, route id)` given `ProviderMeta.billing`, and route
+// pure function of `(provider, route id)` given `ProviderMeta`, and route
 // *health* never ships at all — `lib/catalog/sync/merge.ts` prunes dead routes,
 // so a route present in `routes[]` is presumed live. That is the only claim a
 // client could act on anyway.
@@ -38,7 +38,18 @@ import type { CatalogModel, ModelAccess, ModelRoute, ProviderId } from "./types"
 export interface RouteEnv {
   /** Providers with a usable operator credential. */
   configured: readonly ProviderId[];
-  /** The user has supplied their own OpenRouter key. */
+  /**
+   * Providers the user has supplied their own key for.
+   *
+   * A user's key makes that provider reachable exactly the way an operator
+   * credential does. What differs is who pays — see `runtimeFor` in
+   * `lib/router/index.ts` — not whether the route can be dialled at all.
+   */
+  userKeys?: readonly ProviderId[];
+  /**
+   * @deprecated Superseded by `userKeys`. Normalised in by `userKeySet` so
+   * callers that have not migrated keep working; delete after one release.
+   */
   userOpenRouterKey?: boolean;
   /** `OPERATOR_SERVE_PAID` — the operator will pay for metered routes. */
   servePaid?: boolean;
@@ -60,6 +71,13 @@ export const ALL_PROVIDERS: RouteEnv = {
   configured: Object.keys(PROVIDERS) as ProviderId[],
 };
 
+/** The providers this user can dial with their own credential. */
+function userKeySet(env: RouteEnv): ReadonlySet<ProviderId> {
+  const keys = new Set(env.userKeys ?? []);
+  if (env.userOpenRouterKey) keys.add("openrouter");
+  return keys;
+}
+
 export type RouteCost = "free" | "metered";
 
 /**
@@ -72,9 +90,6 @@ export type RouteCost = "free" | "metered";
  */
 export type RoutableModel = Pick<CatalogModel, "routes" | "license" | "pricing">;
 
-/** OpenRouter marks its zero-priced variants with this suffix. */
-const FREE_VARIANT_SUFFIX = ":free";
-
 function blendedPerM(model: RoutableModel): number {
   // Matches the 3:1 input:output weighting the sync engine uses, so a route the
   // sync called free is called free here too.
@@ -85,21 +100,32 @@ function blendedPerM(model: RoutableModel): number {
 /**
  * What this one route costs the end user.
  *
- * Operator-funded providers are free by definition — that is what the operator's
- * key is for. OpenRouter is metered unless the route id names a `:free` variant,
- * which is the only thing that works on a zero-credit key.
+ * Deliberately does NOT ask whether anyone holds a credential for the provider —
+ * that is `modelAvailability`'s `usable` filter. Keeping the two questions apart
+ * is what lets `intrinsicAccess` ask "could this ever be free for someone" by
+ * passing `ALL_PROVIDERS`.
  */
 export function routeCost(
   route: ModelRoute,
   model: RoutableModel,
   env: RouteEnv = NO_PROVIDERS,
 ): RouteCost {
-  if (PROVIDERS[route.provider]?.billing === "operator-funded") return "free";
-  if (route.model.endsWith(FREE_VARIANT_SUFFIX)) return "free";
+  const meta = PROVIDERS[route.provider];
 
-  // A genuinely zero-priced listing costs nothing to call, `:free` suffix or not.
-  // These are two separate OpenRouter mechanisms: the suffix is a rate-limited
-  // free tier of an otherwise paid model, while a $0 price is just $0.
+  // Operator-funded providers are free by definition — that is what the
+  // operator's key is for.
+  if (meta?.billing === "operator-funded") return "free";
+
+  // The provider's own free tier covers this route. Descriptor-driven, so
+  // OpenRouter's `:free` suffix and Z.ai's named Flash models are one mechanism
+  // rather than two rules. Only a `"recurring"` allowance qualifies: a grant of
+  // signup credits runs out, and a badge that expires is exactly the class of
+  // lie this module exists to prevent.
+  if (inFreeTier(meta?.freeTier, route.model)) return "free";
+
+  // A genuinely zero-priced listing costs nothing to call. Distinct from the
+  // tier above: that is a rate-limited free lane on an otherwise paid model,
+  // this is simply a $0 price.
   if (blendedPerM(model) === 0) return "free";
 
   // A priced route can still be "free" to the user when the operator has opted
@@ -117,8 +143,12 @@ export type Availability =
   | { kind: "free"; route: ModelRoute; candidates: ModelRoute[] }
   /** Runnable, billed to whoever's key is in play. */
   | { kind: "your_key"; route: ModelRoute; candidates: ModelRoute[] }
-  /** Metered routes exist but nobody is paying — the user must connect a key. */
-  | { kind: "needs_key" }
+  /**
+   * Metered routes exist but nobody is paying — the user must connect a key.
+   * `providers` names the ones that would unlock it, so the connect dialog can
+   * open pointed at a provider that can actually help.
+   */
+  | { kind: "needs_key"; providers: ProviderId[] }
   /** Nothing can serve it here. */
   | {
       kind: "unavailable";
@@ -130,28 +160,31 @@ export type Availability =
  *
  * Guarantees the rest of the system relies on:
  *
- *   1. `kind: "free"` ⇒ **every** route in `candidates` is `routeCost === "free"`
- *      and its provider is configured. A model the user picked as free can never
- *      fall through onto a metered route. The cost of that promise is real: if
- *      every free route fails, the request fails rather than quietly billing.
+ *   1. `kind: "free"` implies **every** route in `candidates` is
+ *      `routeCost === "free"` and its provider is reachable. A model the user
+ *      picked as free can never fall through onto a metered route. The cost of
+ *      that promise is real: if every free route fails, the request fails rather
+ *      than quietly billing.
  *   2. `candidates` is ordered zero-cost first, so the cheapest working route
  *      wins even when the catalog's own route order disagrees.
+ *   3. `kind: "your_key"` implies every candidate is one somebody has actually
+ *      agreed to pay for — the user's own key for *that* provider, or
+ *      `servePaid`.
  */
 export function modelAvailability(model: RoutableModel, env: RouteEnv): Availability {
   const routes = model.routes ?? [];
   if (routes.length === 0) return { kind: "unavailable", reason: "no_routes" };
 
   const configured = new Set(env.configured);
+  const userKeys = userKeySet(env);
 
   const free: ModelRoute[] = [];
   const metered: ModelRoute[] = [];
   let sawConfigured = false;
 
   for (const route of routes) {
-    const usable =
-      configured.has(route.provider) ||
-      // The user's own OpenRouter key stands in for an operator credential.
-      (route.provider === "openrouter" && env.userOpenRouterKey === true);
+    // A user's own key makes a provider reachable exactly like an operator one.
+    const usable = configured.has(route.provider) || userKeys.has(route.provider);
     if (!usable) continue;
     sawConfigured = true;
     (routeCost(route, model, env) === "free" ? free : metered).push(route);
@@ -165,13 +198,25 @@ export function modelAvailability(model: RoutableModel, env: RouteEnv): Availabi
     return { kind: "free", route: free[0], candidates: free };
   }
 
-  // Metered only. Somebody has to be willing to pay.
-  if (env.userOpenRouterKey === true || env.servePaid === true) {
-    return { kind: "your_key", route: metered[0], candidates: metered };
+  // Metered only. Somebody has to be willing to pay, and specifically for THIS
+  // route's provider: holding a key for one metered provider must never
+  // authorise spending on a different one.
+  const payable = metered.filter(
+    (r) => userKeys.has(r.provider) || env.servePaid === true,
+  );
+  if (payable.length > 0) {
+    return { kind: "your_key", route: payable[0], candidates: payable };
   }
 
-  // A metered OpenRouter route the user could unlock by connecting a key.
-  if (metered.some((r) => r.provider === "openrouter")) return { kind: "needs_key" };
+  // Reachable metered routes exist, but only on the operator's credential and
+  // the operator has not opted to pay. Connecting a key for one of these
+  // providers is what unlocks it.
+  if (metered.length > 0) {
+    return {
+      kind: "needs_key",
+      providers: [...new Set(metered.map((r) => r.provider))],
+    };
+  }
 
   return { kind: "unavailable", reason: "no_free_route" };
 }
@@ -196,7 +241,9 @@ export function intrinsicAccess(model: RoutableModel): ModelAccess {
 /** Human-readable one-liner for why a model cannot be run. */
 export function unavailableReason(a: Availability): string | undefined {
   if (a.kind === "needs_key") {
-    return "Connect your OpenRouter key to use this model.";
+    const names = a.providers.map((p) => PROVIDERS[p]?.name ?? p);
+    if (names.length === 0) return "Connect a provider key to use this model.";
+    return `Connect your ${names.join(" or ")} key to use this model.`;
   }
   if (a.kind !== "unavailable") return undefined;
   switch (a.reason) {
